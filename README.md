@@ -34,3 +34,10 @@ pnpm start
 - [x] Endpoints produits/catégories/sync (stubs)
 - [x] Schéma SQLite local (Drizzle)
 - [x] Cache MMKV et moteur de sync (interfaces)
+
+
+## Progrès supplémentaires
+
+- Backend exposé en librairie (`src/lib.rs`) pour faciliter les tests d'intégration.
+- Test smoke API ajouté (`backend/tests/api_smoke.rs`).
+- Hook mobile `useOfflineSync` ajouté pour brancher le moteur de synchronisation.

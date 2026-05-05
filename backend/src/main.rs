@@ -1,14 +1,6 @@
-mod config;
-mod error;
-mod handlers;
-mod models;
-mod routes;
-mod state;
-
 use std::net::SocketAddr;
 
-use config::Config;
-use routes::create_router;
+use shopping_list_backend::{config::Config, routes::create_router, state::AppState};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -21,7 +13,7 @@ async fn main() {
         .init();
 
     let config = Config::from_env();
-    let state = state::AppState::new(config.clone());
+    let state = AppState::new(config.clone());
     let app = create_router(state);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port)
