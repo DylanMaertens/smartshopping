@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct ProductResponse {
     pub barcode: String,
     pub product_name: String,

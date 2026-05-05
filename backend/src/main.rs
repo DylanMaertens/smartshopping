@@ -3,6 +3,7 @@ mod error;
 mod handlers;
 mod models;
 mod routes;
+mod state;
 
 use std::net::SocketAddr;
 
@@ -20,7 +21,8 @@ async fn main() {
         .init();
 
     let config = Config::from_env();
-    let app = create_router(config.clone());
+    let state = state::AppState::new(config.clone());
+    let app = create_router(state);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port)
         .parse()
