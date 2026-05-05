@@ -49,3 +49,9 @@
 4. Brancher le flux sync réel (pending changes + conflits LWW).
 5. Ajouter authentification anonyme durable (mapping device_id côté backend persistant).
 6. Ajouter observabilité (request-id, métriques latence, cache hit ratio).
+
+## Mise à jour récente
+- Ajout d'un client Open Food Facts backend (`reqwest`) avec timeout et user-agent.
+- Intégration optionnelle du proxy OFF dans `/api/v1/products/:barcode` via `ENABLE_OFF_PROXY`.
+- En cas de cache miss et OFF activé, la réponse est enrichie depuis OFF puis mise en cache mémoire.
+- OFF reste désactivé par défaut pour garder un mode local/maîtrisé en développement.

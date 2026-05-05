@@ -5,6 +5,8 @@ pub struct Config {
     pub cache_ttl_seconds: u64,
     pub allowed_origin: String,
     pub enable_sync_endpoint: bool,
+    pub off_base_url: String,
+    pub enable_off_proxy: bool,
 }
 
 impl Config {
@@ -22,6 +24,12 @@ impl Config {
             allowed_origin: std::env::var("ALLOWED_ORIGIN")
                 .unwrap_or_else(|_| "http://localhost:8081".to_string()),
             enable_sync_endpoint: std::env::var("ENABLE_SYNC_ENDPOINT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(false),
+            off_base_url: std::env::var("OFF_BASE_URL")
+                .unwrap_or_else(|_| "https://world.openfoodfacts.org/api/v2".to_string()),
+            enable_off_proxy: std::env::var("ENABLE_OFF_PROXY")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(false),

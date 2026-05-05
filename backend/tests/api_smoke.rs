@@ -55,6 +55,8 @@ async fn sync_requires_device_id_when_enabled() {
         cache_ttl_seconds: 60,
         allowed_origin: "http://localhost:8081".into(),
         enable_sync_endpoint: true,
+        off_base_url: "https://world.openfoodfacts.org/api/v2".into(),
+        enable_off_proxy: false,
     };
 
     let state = AppState::new(config);

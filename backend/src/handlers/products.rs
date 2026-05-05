@@ -14,6 +14,28 @@ pub async fn get_product(
         return Ok(Json(found));
     }
 
+    if state.config.enable_off_proxy {
+        if let Ok(Some(remote)) = state.off_client.get_product(&barcode).await {
+            let remote_response = ProductResponse {
+                barcode: barcode.clone(),
+                product_name: remote.name,
+                categories: remote.categories,
+                image_url: remote.image_url,
+                cached: false,
+                stale: false,
+                source: "openfoodfacts".to_string(),
+                ttl_seconds: state.config.cache_ttl_seconds,
+            };
+
+            state
+                .products_cache
+                .write()
+                .await
+                .insert(barcode.clone(), remote_response.clone());
+            return Ok(Json(remote_response));
+        }
+    }
+
     let seeded = ProductResponse {
         barcode: barcode.clone(),
         product_name: "Produit à enrichir".to_string(),
