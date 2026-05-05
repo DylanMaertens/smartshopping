@@ -1,13 +1,17 @@
 use axum::{extract::{Path, State}, Json};
 
-use crate::{models::product::ProductResponse, state::AppState};
+use crate::{error::ApiError, models::product::ProductResponse, state::AppState};
 
 pub async fn get_product(
     State(state): State<AppState>,
     Path(barcode): Path<String>,
-) -> Json<ProductResponse> {
+) -> Result<Json<ProductResponse>, ApiError> {
+    if !is_valid_barcode(&barcode) {
+        return Err(ApiError::bad_request("Invalid barcode format"));
+    }
+
     if let Some(found) = state.products_cache.read().await.get(&barcode).cloned() {
-        return Json(found);
+        return Ok(Json(found));
     }
 
     let seeded = ProductResponse {
@@ -21,6 +25,16 @@ pub async fn get_product(
         ttl_seconds: state.config.cache_ttl_seconds,
     };
 
-    state.products_cache.write().await.insert(barcode.clone(), seeded.clone());
-    Json(seeded)
+    state
+        .products_cache
+        .write()
+        .await
+        .insert(barcode.clone(), seeded.clone());
+    Ok(Json(seeded))
+}
+
+fn is_valid_barcode(barcode: &str) -> bool {
+    let len_ok = (8..=14).contains(&barcode.len());
+    let digit_only = barcode.chars().all(|c| c.is_ascii_digit());
+    len_ok && digit_only
 }

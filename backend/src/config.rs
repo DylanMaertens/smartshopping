@@ -3,6 +3,8 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub cache_ttl_seconds: u64,
+    pub allowed_origin: String,
+    pub enable_sync_endpoint: bool,
 }
 
 impl Config {
@@ -17,6 +19,12 @@ impl Config {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(604800),
+            allowed_origin: std::env::var("ALLOWED_ORIGIN")
+                .unwrap_or_else(|_| "http://localhost:8081".to_string()),
+            enable_sync_endpoint: std::env::var("ENABLE_SYNC_ENDPOINT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(false),
         }
     }
 }
