@@ -1,0 +1,35 @@
+mod config;
+mod error;
+mod handlers;
+mod models;
+mod routes;
+
+use std::net::SocketAddr;
+
+use config::Config;
+use routes::create_router;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let config = Config::from_env();
+    let app = create_router(config.clone());
+
+    let addr: SocketAddr = format!("{}:{}", config.host, config.port)
+        .parse()
+        .expect("invalid bind address");
+
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("failed to bind");
+
+    tracing::info!("backend listening on {}", addr);
+    axum::serve(listener, app).await.expect("server error");
+}
