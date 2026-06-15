@@ -71,3 +71,8 @@
 - L'écran d'accueil mobile permet maintenant d'ajouter un article manuellement.
 - Les articles sont classés localement par rayon avec la taxonomie magasin.
 - La liste est groupée par rayon et les articles peuvent être cochés/décochés, ce qui prépare un premier test utilisateur sans backend obligatoire.
+
+## Mise à jour persistance locale
+- La liste locale est désormais persistée dans MMKV et restaurée au lancement.
+- Les articles peuvent être supprimés et leur quantité peut être augmentée/diminuée.
+- Un bouton permet de vider la liste locale pour faciliter les tests rapides sur Expo.

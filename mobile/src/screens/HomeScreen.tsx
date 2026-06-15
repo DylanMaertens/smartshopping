@@ -1,21 +1,27 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { CategorySection } from '@/components/CategorySection';
 import { classifyProductLocally, STORE_CATEGORIES } from '@/services/categorization/categoryService';
+import { ShoppingListStorage } from '@/services/storage/shoppingListStorage';
 import type { CategorySection as CategorySectionType, ShoppingItem } from '@/types';
 
 const DEMO_LIST_ID = 'local-demo-list';
 
 export function HomeScreen() {
   const [inputValue, setInputValue] = useState('');
-  const [items, setItems] = useState<ShoppingItem[]>([
-    createShoppingItem('Lait demi-écrémé'),
-    createShoppingItem('Pommes'),
-    createShoppingItem('Lessive'),
-  ]);
+  const [items, setItems] = useState<ShoppingItem[]>(() => {
+    const persistedItems = ShoppingListStorage.getCurrentList();
+    if (persistedItems.length > 0) return persistedItems;
+
+    return [createShoppingItem('Lait demi-écrémé'), createShoppingItem('Pommes'), createShoppingItem('Lessive')];
+  });
 
   const sections = useMemo(() => groupItemsByCategory(items), [items]);
   const remainingCount = items.filter((item) => !item.checked).length;
+
+  useEffect(() => {
+    ShoppingListStorage.saveCurrentList(items);
+  }, [items]);
 
   function addItem() {
     const name = inputValue.trim();
@@ -31,6 +37,32 @@ export function HomeScreen() {
         item.id === id ? { ...item, checked: !item.checked, updatedAt: Date.now() } : item,
       ),
     );
+  }
+
+  function increaseQuantity(id: string) {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, quantity: item.quantity + 1, updatedAt: Date.now() } : item,
+      ),
+    );
+  }
+
+  function decreaseQuantity(id: string) {
+    setItems((current) =>
+      current.map((item) => {
+        if (item.id !== id) return item;
+        return { ...item, quantity: Math.max(1, item.quantity - 1), updatedAt: Date.now() };
+      }),
+    );
+  }
+
+  function removeItem(id: string) {
+    setItems((current) => current.filter((item) => item.id !== id));
+  }
+
+  function resetList() {
+    ShoppingListStorage.clearCurrentList();
+    setItems([]);
   }
 
   return (
@@ -87,8 +119,21 @@ export function HomeScreen() {
         </View>
       </View>
 
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+        <Pressable onPress={resetList} style={{ paddingVertical: 8 }}>
+          <Text style={{ color: '#dc2626', fontWeight: '700' }}>Vider la liste</Text>
+        </Pressable>
+      </View>
+
       {sections.map((section) => (
-        <CategorySection key={section.categoryName} section={section} onToggleItem={toggleItem} />
+        <CategorySection
+          key={section.categoryName}
+          onDecreaseQuantity={decreaseQuantity}
+          onIncreaseQuantity={increaseQuantity}
+          onRemoveItem={removeItem}
+          onToggleItem={toggleItem}
+          section={section}
+        />
       ))}
     </ScrollView>
   );
