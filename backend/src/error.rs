@@ -26,6 +26,13 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
-        (self.status, Json(ErrorBody { code: self.code, message: self.message })).into_response()
+        (
+            self.status,
+            Json(ErrorBody {
+                code: self.code,
+                message: self.message,
+            }),
+        )
+            .into_response()
     }
 }

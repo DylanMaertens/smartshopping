@@ -1,9 +1,16 @@
-import { getProduct } from '../api/backend';
+import { getProduct, syncList } from '../api/backend';
 
 export type ConnectivityProbe = () => Promise<boolean>;
 
+export type SyncEngineConfig = {
+  getDeviceId: () => Promise<string>;
+};
+
 export class SyncEngine {
-  constructor(private readonly isOnline: ConnectivityProbe) {}
+  constructor(
+    private readonly isOnline: ConnectivityProbe,
+    private readonly config?: SyncEngineConfig,
+  ) {}
 
   async performSyncIfOnline(barcodeProbe: string) {
     const online = await this.isOnline();
@@ -13,5 +20,20 @@ export class SyncEngine {
 
     await getProduct(barcodeProbe);
     return { synced: true as const, reason: 'ok' as const };
+  }
+
+  async syncListIfOnline(listId: string, lastSync: number) {
+    const online = await this.isOnline();
+    if (!online) {
+      return { synced: false as const, reason: 'offline' as const };
+    }
+
+    if (!this.config) {
+      return { synced: false as const, reason: 'missing_device_id_provider' as const };
+    }
+
+    const deviceId = await this.config.getDeviceId();
+    const response = await syncList(deviceId, { list_id: listId, last_sync: lastSync });
+    return { synced: true as const, reason: 'ok' as const, response };
   }
 }

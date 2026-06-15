@@ -1,6 +1,11 @@
-use axum::{extract::{Path, State}, Json};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 
-use crate::{error::ApiError, models::product::ProductResponse, state::AppState};
+use crate::{
+    error::ApiError, models::product::ProductResponse, services::categories, state::AppState,
+};
 
 pub async fn get_product(
     State(state): State<AppState>,
@@ -10,16 +15,17 @@ pub async fn get_product(
         return Err(ApiError::bad_request("Invalid barcode format"));
     }
 
-    if let Some(found) = state.products_cache.read().await.get(&barcode).cloned() {
+    if let Some(found) = state.products_cache.get(&barcode).await {
         return Ok(Json(found));
     }
 
     if state.config.enable_off_proxy {
         if let Ok(Some(remote)) = state.off_client.get_product(&barcode).await {
+            let category_match = categories::classify_product(&remote.name, &remote.categories);
             let remote_response = ProductResponse {
                 barcode: barcode.clone(),
                 product_name: remote.name,
-                categories: remote.categories,
+                categories: vec![category_match.category_name],
                 image_url: remote.image_url,
                 cached: false,
                 stale: false,
@@ -29,9 +35,8 @@ pub async fn get_product(
 
             state
                 .products_cache
-                .write()
-                .await
-                .insert(barcode.clone(), remote_response.clone());
+                .insert(barcode.clone(), remote_response.clone())
+                .await;
             return Ok(Json(remote_response));
         }
     }
@@ -39,7 +44,7 @@ pub async fn get_product(
     let seeded = ProductResponse {
         barcode: barcode.clone(),
         product_name: "Produit à enrichir".to_string(),
-        categories: vec!["non-categorise".to_string()],
+        categories: vec!["À classer".to_string()],
         image_url: None,
         cached: true,
         stale: false,
@@ -49,9 +54,8 @@ pub async fn get_product(
 
     state
         .products_cache
-        .write()
-        .await
-        .insert(barcode.clone(), seeded.clone());
+        .insert(barcode.clone(), seeded.clone())
+        .await;
     Ok(Json(seeded))
 }
 

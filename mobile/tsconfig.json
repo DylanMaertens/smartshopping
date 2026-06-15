@@ -4,9 +4,24 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
-    "jsx": "react-jsx",
+    "jsx": "react-native",
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    },
+    "ignoreDeprecations": "5.0",
+    "skipLibCheck": true,
+    "lib": [
+      "ES2020"
+    ],
+    "types": [
+      "react",
+      "react-native"
+    ]
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

@@ -55,3 +55,14 @@
 - Intégration optionnelle du proxy OFF dans `/api/v1/products/:barcode` via `ENABLE_OFF_PROXY`.
 - En cas de cache miss et OFF activé, la réponse est enrichie depuis OFF puis mise en cache mémoire.
 - OFF reste désactivé par défaut pour garder un mode local/maîtrisé en développement.
+
+## Mise à jour du 15 juin 2026
+- Le cache backend produit est passé d'un `HashMap` manuel à Moka avec TTL et capacité configurable.
+- Le client Open Food Facts applique maintenant une temporisation entre appels, un nombre de retries configurable et un backoff simple.
+- Le schéma SQLite mobile couvre désormais listes, items, catégories, cache produits et journal `sync_ops`.
+- Le client mobile sait appeler `/sync` avec `X-Device-Id`, et le `SyncEngine` expose une méthode dédiée à la sync de liste.
+
+## Mise à jour catégories magasin
+- L'API expose désormais une taxonomie de rayons génériques de supermarché (fruits & légumes, boulangerie, crémerie, boucherie/poissonnerie, surgelés, épiceries, boissons, hygiène, entretien, bébé, animaux, non alimentaire).
+- La catégorisation backend et mobile partage les mêmes règles simples par mots-clés pour préparer le test de bout en bout.
+- L'écran d'accueil mobile affiche les rayons pour valider visuellement la taxonomie lors des prochains essais.
