@@ -1,0 +1,24 @@
+{
+  "name": "shopping-list-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "^50.0.0",
+    "expo-sqlite": "~14.0.0",
+    "react": "18.2.0",
+    "react-native": "0.73.0",
+    "react-native-mmkv": "^2.11.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/react": "~18.2.79",
+    "typescript": "^5.4.5"
+  }
+}
