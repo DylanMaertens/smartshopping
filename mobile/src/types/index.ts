@@ -8,3 +8,9 @@ export type ShoppingItem = {
   checked: boolean;
   updatedAt: number;
 };
+
+export type CategorySection = {
+  categoryName: string;
+  orderIndex: number;
+  items: ShoppingItem[];
+};
