@@ -1,6 +1,6 @@
-import { MMKV } from 'react-native-mmkv';
+import { createMMKV } from 'react-native-mmkv';
 
-const storage = new MMKV({ id: 'product-cache' });
+const storage = createMMKV({ id: 'product-cache' });
 
 type CacheEntry<T> = {
   data: T;
@@ -22,7 +22,7 @@ export class ProductCache {
     if (!raw) return null;
     const entry = JSON.parse(raw) as CacheEntry<T>;
     if (Date.now() > entry.expiresAt) {
-      storage.delete(key);
+      storage.remove(key);
       return null;
     }
     return entry.data;
