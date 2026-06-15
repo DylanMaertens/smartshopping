@@ -23,9 +23,6 @@ importers:
       react-native:
         specifier: 0.81.4
         version: 0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0)
-      react-native-mmkv:
-        specifier: ^4.3.1
-        version: 4.3.1(react-native-nitro-modules@0.35.9(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -2407,19 +2404,6 @@ packages:
 
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
-
-  react-native-mmkv@4.3.1:
-    resolution: {integrity: sha512-APyGGaaHtayVgT18dBM8QGGZKr9pGfSTiBwbbPNzhGGfJQSU7awLGRGq879OqYl31HmVks9hOBLCs+qfgacRZg==}
-    peerDependencies:
-      react: '*'
-      react-native: '*'
-      react-native-nitro-modules: '*'
-
-  react-native-nitro-modules@0.35.9:
-    resolution: {integrity: sha512-yCO6eJ85SPPUo4a4an7H5oj6wPCSIT72fbjr5WZ/20n6zswaJ2gNNpnWtg2We0AZwkAOjSqkOJ0Vjc05p6kGiA==}
-    peerDependencies:
-      react: '*'
-      react-native: '*'
 
   react-native@0.81.4:
     resolution: {integrity: sha512-bt5bz3A/+Cv46KcjV0VQa+fo7MKxs17RCcpzjftINlen4ZDUl0I6Ut+brQ2FToa5oD0IB0xvQHfmsg2EDqsZdQ==}
@@ -6115,17 +6099,6 @@ snapshots:
     optional: true
 
   react-is@18.3.1: {}
-
-  react-native-mmkv@4.3.1(react-native-nitro-modules@0.35.9(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
-    dependencies:
-      react: 19.1.0
-      react-native: 0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0)
-      react-native-nitro-modules: 0.35.9(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
-
-  react-native-nitro-modules@0.35.9(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
-    dependencies:
-      react: 19.1.0
-      react-native: 0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0)
 
   react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@12.1.1)(@types/react@19.1.17)(react@19.1.0):
     dependencies:

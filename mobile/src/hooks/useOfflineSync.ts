@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { SyncEngine } from '@/services/sync/syncEngine';
 
 async function getAnonymousDeviceId() {
-  // TODO: persist this value in secure/MMKV storage during the device identity task.
+  // TODO: persist this value in secure/local storage during the device identity task.
   return '00000000-0000-4000-8000-000000000000';
 }
 

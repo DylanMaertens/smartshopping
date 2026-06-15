@@ -81,3 +81,8 @@
 - Ajout du module Expo Camera compatible SDK 54.
 - L'écran d'accueil peut ouvrir un scanner EAN/UPC/code128, demander la permission caméra et ajouter un produit scanné.
 - Après scan, l'app tente d'enrichir le produit via le backend; en cas d'échec, elle ajoute un article hors-ligne basé sur le code-barres.
+
+## Correctif Expo Go / NitroModules
+- Suppression de `react-native-mmkv` du runtime mobile car sa version NitroModules nécessite un build natif/dev-client et déclenche une erreur dans Expo Go.
+- Ajout d’un stockage clé-valeur TypeScript sans module natif pour garder l’app lançable immédiatement dans Expo Go.
+- Le stockage natif persistant pourra être réintroduit plus tard via Expo Prebuild/dev-client ou remplacé par SQLite pour la persistance de production.
