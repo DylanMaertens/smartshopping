@@ -4,6 +4,22 @@
     "slug": "shopping-list-app",
     "version": "0.1.0",
     "orientation": "portrait",
-    "platforms": ["android", "ios"]
+    "platforms": ["android", "ios"],
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Autoriser SmartShopping à scanner les codes-barres de vos produits."
+        }
+      ]
+    ],
+    "android": {
+      "permissions": ["CAMERA"]
+    },
+    "ios": {
+      "infoPlist": {
+        "NSCameraUsageDescription": "Autoriser SmartShopping à scanner les codes-barres de vos produits."
+      }
+    }
   }
 }

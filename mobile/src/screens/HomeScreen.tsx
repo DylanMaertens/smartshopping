@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { BarcodeScannerPanel } from '@/components/BarcodeScannerPanel';
 import { CategorySection } from '@/components/CategorySection';
 import { classifyProductLocally, STORE_CATEGORIES } from '@/services/categorization/categoryService';
+import { getProduct } from '@/services/api/backend';
 import { ShoppingListStorage } from '@/services/storage/shoppingListStorage';
 import type { CategorySection as CategorySectionType, ShoppingItem } from '@/types';
 
@@ -9,6 +11,8 @@ const DEMO_LIST_ID = 'local-demo-list';
 
 export function HomeScreen() {
   const [inputValue, setInputValue] = useState('');
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
   const [items, setItems] = useState<ShoppingItem[]>(() => {
     const persistedItems = ShoppingListStorage.getCurrentList();
     if (persistedItems.length > 0) return persistedItems;
@@ -29,6 +33,26 @@ export function HomeScreen() {
 
     setItems((current) => [createShoppingItem(name), ...current]);
     setInputValue('');
+  }
+
+  async function addItemFromBarcode(barcode: string) {
+    setScannerVisible(false);
+    setScanStatus(`Code-barres scanné : ${barcode}`);
+
+    try {
+      const product = await getProduct(barcode);
+      setItems((current) => [
+        createShoppingItem(product.product_name, {
+          barcode: product.barcode,
+          category: product.categories[0],
+        }),
+        ...current,
+      ]);
+      setScanStatus(`Produit ajouté : ${product.product_name}`);
+    } catch {
+      setItems((current) => [createShoppingItem(`Produit ${barcode}`, { barcode }), ...current]);
+      setScanStatus(`Produit ajouté hors-ligne avec le code ${barcode}`);
+    }
   }
 
   function toggleItem(id: string) {
@@ -117,7 +141,20 @@ export function HomeScreen() {
             <Text style={{ color: '#ffffff', fontWeight: '700' }}>Ajouter</Text>
           </Pressable>
         </View>
+        <Pressable
+          onPress={() => setScannerVisible((visible) => !visible)}
+          style={{ alignItems: 'center', backgroundColor: '#2563eb', borderRadius: 12, padding: 12 }}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '700' }}>
+            {scannerVisible ? 'Masquer le scanner' : 'Scanner un code-barres'}
+          </Text>
+        </Pressable>
+        {scanStatus ? <Text style={{ color: '#475569' }}>{scanStatus}</Text> : null}
       </View>
+
+      {scannerVisible ? (
+        <BarcodeScannerPanel onCancel={() => setScannerVisible(false)} onScanned={addItemFromBarcode} />
+      ) : null}
 
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Pressable onPress={resetList} style={{ paddingVertical: 8 }}>
@@ -139,7 +176,10 @@ export function HomeScreen() {
   );
 }
 
-function createShoppingItem(name: string): ShoppingItem {
+function createShoppingItem(
+  name: string,
+  overrides: Pick<Partial<ShoppingItem>, 'barcode' | 'category'> = {},
+): ShoppingItem {
   const category = classifyProductLocally(name);
   const now = Date.now();
 
@@ -147,7 +187,8 @@ function createShoppingItem(name: string): ShoppingItem {
     id: `${now}-${Math.random().toString(36).slice(2)}`,
     listId: DEMO_LIST_ID,
     name,
-    category: category.categoryName,
+    barcode: overrides.barcode,
+    category: overrides.category ?? category.categoryName,
     quantity: 1,
     checked: false,
     updatedAt: now,

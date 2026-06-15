@@ -76,3 +76,8 @@
 - La liste locale est désormais persistée dans MMKV et restaurée au lancement.
 - Les articles peuvent être supprimés et leur quantité peut être augmentée/diminuée.
 - Un bouton permet de vider la liste locale pour faciliter les tests rapides sur Expo.
+
+## Mise à jour lecteur code-barres
+- Ajout du module Expo Camera compatible SDK 54.
+- L'écran d'accueil peut ouvrir un scanner EAN/UPC/code128, demander la permission caméra et ajouter un produit scanné.
+- Après scan, l'app tente d'enrichir le produit via le backend; en cas d'échec, elle ajoute un article hors-ligne basé sur le code-barres.
