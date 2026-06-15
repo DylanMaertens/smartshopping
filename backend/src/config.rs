@@ -39,7 +39,7 @@ impl Config {
             enable_off_proxy: std::env::var("ENABLE_OFF_PROXY")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(false),
+                .unwrap_or(true),
             off_rate_limit_per_minute: std::env::var("OFF_RATE_LIMIT_PER_MINUTE")
                 .ok()
                 .and_then(|v| v.parse().ok())

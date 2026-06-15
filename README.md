@@ -27,13 +27,15 @@ pnpm install
 pnpm start
 ```
 
+Par défaut, l'app utilise `http://10.0.2.2:3000/api/v1` sur émulateur Android et `http://127.0.0.1:3000/api/v1` ailleurs. Sur un téléphone physique, lance Expo avec `EXPO_PUBLIC_API_BASE_URL=http://<IP_DE_TON_PC>:3000/api/v1 pnpm start`.
+
 ## Roadmap MVP (socle livré)
 
 - [x] Arborescence mobile/backend conforme au cadrage
 - [x] Health check backend Axum
 - [x] Endpoints produits/catégories/sync (stubs)
 - [x] Schéma SQLite local (Drizzle)
-- [x] Cache MMKV et moteur de sync (interfaces)
+- [x] Cache produit local compatible Expo Go et moteur de sync (interfaces)
 
 
 ## Progrès supplémentaires

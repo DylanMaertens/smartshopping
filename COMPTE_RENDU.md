@@ -86,3 +86,8 @@
 - Suppression de `react-native-mmkv` du runtime mobile car sa version NitroModules nécessite un build natif/dev-client et déclenche une erreur dans Expo Go.
 - Ajout d’un stockage clé-valeur TypeScript sans module natif pour garder l’app lançable immédiatement dans Expo Go.
 - Le stockage natif persistant pourra être réintroduit plus tard via Expo Prebuild/dev-client ou remplacé par SQLite pour la persistance de production.
+
+## Mise à jour liaison scan → API produit
+- Le scan code-barres appelle maintenant le backend produit via le client mobile, avec cache produit local avant requête réseau.
+- Le backend active par défaut le proxy Open Food Facts pour enrichir le code-barres en vrai nom produit et rayon magasin générique.
+- Sur Android émulateur, le client mobile utilise `http://10.0.2.2:3000/api/v1` par défaut; sur téléphone physique, il faut définir `EXPO_PUBLIC_API_BASE_URL` avec l'IP locale du poste.
