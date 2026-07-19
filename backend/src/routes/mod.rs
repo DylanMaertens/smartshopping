@@ -1,24 +1,32 @@
 use axum::{
     extract::DefaultBodyLimit,
-    http::{header, Method},
+    http::{header, HeaderValue, Method},
     routing::{get, post},
     Router,
 };
-use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
+use tower_http::{
+    compression::CompressionLayer, cors::CorsLayer, set_header::SetResponseHeaderLayer,
+    trace::TraceLayer,
+};
 
 use crate::{handlers, state::AppState};
 
+const DEVICE_ID_HEADER: &str = "x-device-id";
+
 pub fn create_router(state: AppState) -> Router {
+    let allowed_origin = state
+        .config
+        .allowed_origin
+        .parse::<HeaderValue>()
+        .unwrap_or_else(|_| HeaderValue::from_static("http://localhost:8081"));
+
     let cors = CorsLayer::new()
-        .allow_origin(
-            state
-                .config
-                .allowed_origin
-                .parse::<header::HeaderValue>()
-                .expect("invalid ALLOWED_ORIGIN"),
-        )
+        .allow_origin(allowed_origin)
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]);
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::HeaderName::from_static(DEVICE_ID_HEADER),
+        ]);
 
     let mut router = Router::new()
         .route("/health", get(handlers::health::health_check))
@@ -43,6 +51,14 @@ pub fn create_router(state: AppState) -> Router {
         .with_state(state)
         .layer(DefaultBodyLimit::max(64 * 1024))
         .layer(cors)
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("no-referrer"),
+        ))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
 }

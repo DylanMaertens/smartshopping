@@ -131,3 +131,29 @@ async fn classify_product_uses_generic_store_aisles() {
 
     assert_eq!(response.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn health_response_sets_security_headers() {
+    let state = AppState::new(Config::from_env());
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get("x-content-type-options").unwrap(),
+        "nosniff",
+    );
+    assert_eq!(
+        response.headers().get("referrer-policy").unwrap(),
+        "no-referrer"
+    );
+}

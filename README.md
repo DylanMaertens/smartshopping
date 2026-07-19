@@ -43,3 +43,9 @@ Par défaut, l'app utilise `http://10.0.2.2:3000/api/v1` sur émulateur Android 
 - Backend exposé en librairie (`src/lib.rs`) pour faciliter les tests d'intégration.
 - Test smoke API ajouté (`backend/tests/api_smoke.rs`).
 - Hook mobile `useOfflineSync` ajouté pour brancher le moteur de synchronisation.
+
+## Point sécurité actuel
+
+- Backend: CORS restreint à `ALLOWED_ORIGIN`, taille de body limitée à 64 KB, headers `nosniff` et `no-referrer`.
+- Mobile: identification anonyme par `device_id` UUID v4 local, sans compte obligatoire ni secret embarqué.
+- Sync: endpoint désactivé par défaut et validation de `X-Device-Id` côté backend.

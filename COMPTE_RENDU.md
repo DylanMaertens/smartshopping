@@ -91,3 +91,9 @@
 - Le scan code-barres appelle maintenant le backend produit via le client mobile, avec cache produit local avant requête réseau.
 - Le backend active par défaut le proxy Open Food Facts pour enrichir le code-barres en vrai nom produit et rayon magasin générique.
 - Sur Android émulateur, le client mobile utilise `http://10.0.2.2:3000/api/v1` par défaut; sur téléphone physique, il faut définir `EXPO_PUBLIC_API_BASE_URL` avec l'IP locale du poste.
+
+## Point sécurité et durcissement
+- Remplacement du `device_id` mobile codé en dur par un UUID v4 anonyme généré côté client et réutilisé via le stockage local.
+- Durcissement CORS backend : retrait du header `Authorization` inutile et autorisation explicite de `X-Device-Id` uniquement pour la synchronisation.
+- Ajout des headers de sécurité `X-Content-Type-Options: nosniff` et `Referrer-Policy: no-referrer` sur les réponses API.
+- L'origine CORS invalide ne provoque plus de panic au démarrage: le backend retombe sur l'origine locale de développement.
