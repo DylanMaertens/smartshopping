@@ -7,6 +7,8 @@ export type ShoppingItem = {
   quantity: number;
   checked: boolean;
   updatedAt: number;
+  syncedAt?: number;
+  deletedAt?: number;
 };
 
 export type CategorySection = {

@@ -97,3 +97,8 @@
 - Durcissement CORS backend : retrait du header `Authorization` inutile et autorisation explicite de `X-Device-Id` uniquement pour la synchronisation.
 - Ajout des headers de sécurité `X-Content-Type-Options: nosniff` et `Referrer-Policy: no-referrer` sur les réponses API.
 - L'origine CORS invalide ne provoque plus de panic au démarrage: le backend retombe sur l'origine locale de développement.
+
+## Mise à jour synchronisation LWW
+- Mise en place d'un flux sync réel minimal avec envoi des changements locaux (`items`) et timestamp `last_sync`.
+- Le backend conserve un état temporaire par liste et applique une résolution Last Write Wins basée sur `updated_at`.
+- Le mobile suit les changements en attente via `syncedAt`, applique les retours distants et expose un bouton "Synchroniser maintenant" pour tester le flux de bout en bout.

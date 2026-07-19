@@ -5,6 +5,7 @@ import { CategorySection } from '@/components/CategorySection';
 import { classifyProductLocally, STORE_CATEGORIES } from '@/services/categorization/categoryService';
 import { getProduct } from '@/services/api/backend';
 import { ShoppingListStorage } from '@/services/storage/shoppingListStorage';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import type { CategorySection as CategorySectionType, ShoppingItem } from '@/types';
 
 const DEMO_LIST_ID = 'local-demo-list';
@@ -13,6 +14,8 @@ export function HomeScreen() {
   const [inputValue, setInputValue] = useState('');
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const syncEngine = useOfflineSync();
   const [items, setItems] = useState<ShoppingItem[]>(() => {
     const persistedItems = ShoppingListStorage.getCurrentList();
     if (persistedItems.length > 0) return persistedItems;
@@ -20,8 +23,10 @@ export function HomeScreen() {
     return [createShoppingItem('Lait demi-écrémé'), createShoppingItem('Pommes'), createShoppingItem('Lessive')];
   });
 
-  const sections = useMemo(() => groupItemsByCategory(items), [items]);
-  const remainingCount = items.filter((item) => !item.checked).length;
+  const visibleItems = useMemo(() => items.filter((item) => !item.deletedAt), [items]);
+  const sections = useMemo(() => groupItemsByCategory(visibleItems), [visibleItems]);
+  const remainingCount = visibleItems.filter((item) => !item.checked).length;
+  const pendingChangesCount = ShoppingListStorage.getPendingChanges(items).length;
 
   useEffect(() => {
     ShoppingListStorage.saveCurrentList(items);
@@ -81,7 +86,46 @@ export function HomeScreen() {
   }
 
   function removeItem(id: string) {
-    setItems((current) => current.filter((item) => item.id !== id));
+    const now = Date.now();
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, deletedAt: now, updatedAt: now } : item,
+      ),
+    );
+  }
+
+  async function syncCurrentList() {
+    const pendingChanges = ShoppingListStorage.getPendingChanges(items);
+    if (pendingChanges.length === 0) {
+      setSyncStatus('Aucun changement à synchroniser.');
+      return;
+    }
+
+    setSyncStatus(`Synchronisation de ${pendingChanges.length} changement(s)…`);
+
+    try {
+      const result = await syncEngine.syncListIfOnline(
+        DEMO_LIST_ID,
+        pendingChanges,
+        ShoppingListStorage.getLastSyncTimestamp(),
+      );
+
+      if (!result.synced) {
+        setSyncStatus(result.reason === 'offline' ? 'Hors ligne: sync reportée.' : 'Sync indisponible.');
+        return;
+      }
+
+      const syncedItems = ShoppingListStorage.markAsSynced(items, result.response.server_time);
+      const mergedItems = ShoppingListStorage.applyRemoteChanges(syncedItems, result.remoteItems);
+      setItems(mergedItems);
+      setSyncStatus(
+        result.response.conflicts.length > 0
+          ? `${result.response.conflicts.length} conflit(s) résolu(s) en LWW.`
+          : 'Liste synchronisée.',
+      );
+    } catch {
+      setSyncStatus('Erreur sync: changements conservés en local.');
+    }
   }
 
   function resetList() {
@@ -150,6 +194,20 @@ export function HomeScreen() {
           </Text>
         </Pressable>
         {scanStatus ? <Text style={{ color: '#475569' }}>{scanStatus}</Text> : null}
+      </View>
+
+      <View style={{ backgroundColor: '#eff6ff', borderRadius: 16, gap: 10, padding: 16 }}>
+        <Text style={{ color: '#1e3a8a', fontSize: 16, fontWeight: '700' }}>Synchronisation</Text>
+        <Text style={{ color: '#475569' }}>
+          {pendingChangesCount} changement{pendingChangesCount > 1 ? 's' : ''} en attente.
+        </Text>
+        <Pressable
+          onPress={syncCurrentList}
+          style={{ alignItems: 'center', backgroundColor: '#1d4ed8', borderRadius: 12, padding: 12 }}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '700' }}>Synchroniser maintenant</Text>
+        </Pressable>
+        {syncStatus ? <Text style={{ color: '#1e3a8a' }}>{syncStatus}</Text> : null}
       </View>
 
       {scannerVisible ? (

@@ -3,7 +3,8 @@ use std::time::Duration;
 use moka::future::Cache;
 
 use crate::{
-    config::Config, models::product::ProductResponse, services::openfoodfacts::OpenFoodFactsClient,
+    config::Config, handlers::sync::SyncItem, models::product::ProductResponse,
+    services::openfoodfacts::OpenFoodFactsClient,
 };
 
 #[derive(Clone)]
@@ -11,6 +12,7 @@ pub struct AppState {
     pub config: Config,
     pub products_cache: Cache<String, ProductResponse>,
     pub off_client: OpenFoodFactsClient,
+    pub synced_items: Cache<String, Vec<SyncItem>>,
 }
 
 impl AppState {
@@ -24,11 +26,16 @@ impl AppState {
             .max_capacity(config.product_cache_capacity)
             .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
             .build();
+        let synced_items = Cache::builder()
+            .max_capacity(10_000)
+            .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
+            .build();
 
         Self {
             config,
             products_cache,
             off_client,
+            synced_items,
         }
     }
 }

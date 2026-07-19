@@ -1,4 +1,5 @@
-import { getProduct, syncList } from '../api/backend';
+import { fromSyncItemPayload, getProduct, syncList, toSyncItemPayload } from '../api/backend';
+import type { ShoppingItem } from '@/types';
 
 export type ConnectivityProbe = () => Promise<boolean>;
 
@@ -22,7 +23,7 @@ export class SyncEngine {
     return { synced: true as const, reason: 'ok' as const };
   }
 
-  async syncListIfOnline(listId: string, lastSync: number) {
+  async syncListIfOnline(listId: string, items: ShoppingItem[], lastSync: number) {
     const online = await this.isOnline();
     if (!online) {
       return { synced: false as const, reason: 'offline' as const };
@@ -33,7 +34,17 @@ export class SyncEngine {
     }
 
     const deviceId = await this.config.getDeviceId();
-    const response = await syncList(deviceId, { list_id: listId, last_sync: lastSync });
-    return { synced: true as const, reason: 'ok' as const, response };
+    const response = await syncList(deviceId, {
+      list_id: listId,
+      items: items.map(toSyncItemPayload),
+      last_sync: lastSync,
+    });
+
+    return {
+      synced: true as const,
+      reason: 'ok' as const,
+      response,
+      remoteItems: response.updated_items.map(fromSyncItemPayload),
+    };
   }
 }
