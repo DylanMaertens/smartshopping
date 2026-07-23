@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BarcodeScannerPanel } from '@/components/BarcodeScannerPanel';
 import { CategorySection } from '@/components/CategorySection';
 import { classifyProductLocally, STORE_CATEGORIES } from '@/services/categorization/categoryService';
-import { getProduct } from '@/services/api/backend';
+import { getConfiguredApiBaseUrl, getProduct } from '@/services/api/backend';
 import { ShoppingListStorage } from '@/services/storage/shoppingListStorage';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import type { CategorySection as CategorySectionType, ShoppingItem } from '@/types';
@@ -11,6 +11,7 @@ import type { CategorySection as CategorySectionType, ShoppingItem } from '@/typ
 const DEMO_LIST_ID = 'local-demo-list';
 
 export function HomeScreen() {
+  const inputRef = useRef<TextInput>(null);
   const [inputValue, setInputValue] = useState('');
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
@@ -38,25 +39,33 @@ export function HomeScreen() {
 
     setItems((current) => [createShoppingItem(name), ...current]);
     setInputValue('');
+    requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   async function addItemFromBarcode(barcode: string) {
     setScannerVisible(false);
-    setScanStatus(`Code-barres scanné : ${barcode}`);
+    const pendingItem = createShoppingItem(`Produit ${barcode}`, { barcode });
+    setItems((current) => [pendingItem, ...current]);
+    setScanStatus(`Produit ajouté, enrichissement en cours… (${barcode})`);
 
     try {
       const product = await getProduct(barcode);
-      setItems((current) => [
-        createShoppingItem(product.product_name, {
-          barcode: product.barcode,
-          category: product.categories[0],
-        }),
-        ...current,
-      ]);
-      setScanStatus(`Produit ajouté : ${product.product_name}`);
+      setItems((current) =>
+        current.map((item) =>
+          item.id === pendingItem.id
+            ? {
+                ...item,
+                name: product.product_name,
+                barcode: product.barcode,
+                category: product.categories[0] ?? item.category,
+                updatedAt: Date.now(),
+              }
+            : item,
+        ),
+      );
+      setScanStatus(`Produit enrichi : ${product.product_name}`);
     } catch {
-      setItems((current) => [createShoppingItem(`Produit ${barcode}`, { barcode }), ...current]);
-      setScanStatus(`Produit ajouté hors-ligne avec le code ${barcode}`);
+      setScanStatus(`Produit conservé hors-ligne. API non jointe: ${getConfiguredApiBaseUrl()}`);
     }
   }
 
@@ -157,6 +166,8 @@ export function HomeScreen() {
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TextInput
+            ref={inputRef}
+            blurOnSubmit={false}
             onChangeText={setInputValue}
             onSubmitEditing={addItem}
             placeholder="Ex: pain, dentifrice, saumon..."
@@ -236,13 +247,13 @@ export function HomeScreen() {
 
 function createShoppingItem(
   name: string,
-  overrides: Pick<Partial<ShoppingItem>, 'barcode' | 'category'> = {},
+  overrides: Pick<Partial<ShoppingItem>, 'id' | 'barcode' | 'category'> = {},
 ): ShoppingItem {
   const category = classifyProductLocally(name);
   const now = Date.now();
 
   return {
-    id: `${now}-${Math.random().toString(36).slice(2)}`,
+    id: overrides.id ?? `${now}-${Math.random().toString(36).slice(2)}`,
     listId: DEMO_LIST_ID,
     name,
     barcode: overrides.barcode,

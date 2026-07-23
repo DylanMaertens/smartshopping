@@ -1,8 +1,10 @@
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { ProductCache } from '@/services/cache/mmkvCache';
 import type { ShoppingItem } from '@/types';
 
 const API_BASE_URL = getApiBaseUrl();
+const PRODUCT_LOOKUP_TIMEOUT_MS = 3500;
 
 export type BackendProduct = {
   barcode: string;
@@ -49,7 +51,7 @@ export async function getProduct(barcode: string): Promise<BackendProduct> {
   const cached = ProductCache.get<BackendProduct>(barcode);
   if (cached) return { ...cached, cached: true };
 
-  const response = await fetch(`${API_BASE_URL}/products/${barcode}`);
+  const response = await fetchWithTimeout(`${API_BASE_URL}/products/${barcode}`, PRODUCT_LOOKUP_TIMEOUT_MS);
   if (!response.ok) {
     throw new Error(`Backend product lookup error: ${response.status}`);
   }
@@ -105,10 +107,37 @@ export function fromSyncItemPayload(item: SyncItemPayload): ShoppingItem {
   };
 }
 
+export function getConfiguredApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 function getApiBaseUrl(): string {
   const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
   if (configuredUrl) return configuredUrl.replace(/\/$/, '');
 
+  const metroHost = getMetroHost();
+  if (metroHost) return `http://${metroHost}:3000/api/v1`;
+
   if (Platform.OS === 'android') return 'http://10.0.2.2:3000/api/v1';
   return 'http://127.0.0.1:3000/api/v1';
+}
+
+function getMetroHost(): string | null {
+  const constants = Constants as unknown as {
+    expoConfig?: { hostUri?: string };
+    manifest?: { debuggerHost?: string };
+  };
+  const hostUri = constants.expoConfig?.hostUri ?? constants.manifest?.debuggerHost;
+  return hostUri?.split(':')[0] ?? null;
+}
+
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

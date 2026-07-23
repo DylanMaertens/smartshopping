@@ -102,3 +102,13 @@
 - Mise en place d'un flux sync réel minimal avec envoi des changements locaux (`items`) et timestamp `last_sync`.
 - Le backend conserve un état temporaire par liste et applique une résolution Last Write Wins basée sur `updated_at`.
 - Le mobile suit les changements en attente via `syncedAt`, applique les retours distants et expose un bouton "Synchroniser maintenant" pour tester le flux de bout en bout.
+
+## Correctif UX scan, focus et API locale
+- Le scan ajoute désormais immédiatement un article provisoire dans la liste puis l'enrichit en arrière-plan via l'API, ce qui supprime l'attente bloquante après lecture du code-barres.
+- Après ajout manuel, le focus reste sur l'input pour saisir plusieurs articles à la suite.
+- Le client mobile déduit automatiquement l'IP du serveur Metro/Expo pour joindre le backend local depuis un téléphone physique; `EXPO_PUBLIC_API_BASE_URL` reste prioritaire si défini.
+
+## Mise à jour observabilité backend
+- Ajout d'un header `X-Request-Id` sur chaque réponse API pour faciliter le debug entre mobile et backend.
+- Ajout d'un endpoint `/metrics` au format texte Prometheus pour suivre cache produits, appels Open Food Facts et synchronisations.
+- Les handlers produits et sync alimentent désormais des compteurs en mémoire afin de préparer le suivi latence/cache hit ratio plus complet.

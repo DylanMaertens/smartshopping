@@ -1,4 +1,10 @@
-use std::time::Duration;
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use moka::future::Cache;
 
@@ -13,6 +19,27 @@ pub struct AppState {
     pub products_cache: Cache<String, ProductResponse>,
     pub off_client: OpenFoodFactsClient,
     pub synced_items: Cache<String, Vec<SyncItem>>,
+    pub metrics: Arc<AppMetrics>,
+}
+
+#[derive(Default)]
+pub struct AppMetrics {
+    product_cache_hits: AtomicU64,
+    product_cache_misses: AtomicU64,
+    off_lookup_successes: AtomicU64,
+    off_lookup_failures: AtomicU64,
+    sync_attempts: AtomicU64,
+    sync_successes: AtomicU64,
+}
+
+#[derive(Clone, Copy)]
+pub enum MetricKind {
+    ProductCacheHit,
+    ProductCacheMiss,
+    OffLookupSuccess,
+    OffLookupFailure,
+    SyncAttempt,
+    SyncSuccess,
 }
 
 impl AppState {
@@ -36,6 +63,42 @@ impl AppState {
             products_cache,
             off_client,
             synced_items,
+            metrics: Arc::new(AppMetrics::default()),
         }
+    }
+
+    pub fn record_metric(&self, metric: MetricKind) {
+        self.metrics.record(metric);
+    }
+}
+
+impl AppMetrics {
+    pub fn record(&self, metric: MetricKind) {
+        match metric {
+            MetricKind::ProductCacheHit => self.product_cache_hits.fetch_add(1, Ordering::Relaxed),
+            MetricKind::ProductCacheMiss => {
+                self.product_cache_misses.fetch_add(1, Ordering::Relaxed)
+            }
+            MetricKind::OffLookupSuccess => {
+                self.off_lookup_successes.fetch_add(1, Ordering::Relaxed)
+            }
+            MetricKind::OffLookupFailure => {
+                self.off_lookup_failures.fetch_add(1, Ordering::Relaxed)
+            }
+            MetricKind::SyncAttempt => self.sync_attempts.fetch_add(1, Ordering::Relaxed),
+            MetricKind::SyncSuccess => self.sync_successes.fetch_add(1, Ordering::Relaxed),
+        };
+    }
+
+    pub fn render_prometheus(&self) -> String {
+        format!(
+            "# TYPE smartshopping_product_cache_hits_total counter\nsmartshopping_product_cache_hits_total {}\n# TYPE smartshopping_product_cache_misses_total counter\nsmartshopping_product_cache_misses_total {}\n# TYPE smartshopping_off_lookup_successes_total counter\nsmartshopping_off_lookup_successes_total {}\n# TYPE smartshopping_off_lookup_failures_total counter\nsmartshopping_off_lookup_failures_total {}\n# TYPE smartshopping_sync_attempts_total counter\nsmartshopping_sync_attempts_total {}\n# TYPE smartshopping_sync_successes_total counter\nsmartshopping_sync_successes_total {}\n",
+            self.product_cache_hits.load(Ordering::Relaxed),
+            self.product_cache_misses.load(Ordering::Relaxed),
+            self.off_lookup_successes.load(Ordering::Relaxed),
+            self.off_lookup_failures.load(Ordering::Relaxed),
+            self.sync_attempts.load(Ordering::Relaxed),
+            self.sync_successes.load(Ordering::Relaxed),
+        )
     }
 }

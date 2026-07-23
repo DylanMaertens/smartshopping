@@ -1,6 +1,7 @@
 use axum::{
     extract::DefaultBodyLimit,
     http::{header, HeaderValue, Method},
+    middleware::from_fn,
     routing::{get, post},
     Router,
 };
@@ -9,7 +10,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use crate::{handlers, state::AppState};
+use crate::{handlers, middleware, state::AppState};
 
 const DEVICE_ID_HEADER: &str = "x-device-id";
 
@@ -30,6 +31,7 @@ pub fn create_router(state: AppState) -> Router {
 
     let mut router = Router::new()
         .route("/health", get(handlers::health::health_check))
+        .route("/metrics", get(handlers::metrics::metrics))
         .route(
             "/api/v1/products/:barcode",
             get(handlers::products::get_product),
@@ -61,4 +63,5 @@ pub fn create_router(state: AppState) -> Router {
         ))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
+        .layer(from_fn(middleware::request_id))
 }

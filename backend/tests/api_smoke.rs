@@ -215,3 +215,51 @@ async fn sync_merges_items_and_returns_updates() {
     assert_eq!(payload["updated_items"][0]["name"], "Pommes");
     assert_eq!(payload["conflicts"].as_array().unwrap().len(), 0);
 }
+
+#[tokio::test]
+async fn health_response_sets_request_id() {
+    let state = AppState::new(Config::from_env());
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .header("x-request-id", "test-request-id")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get("x-request-id").unwrap(),
+        "test-request-id"
+    );
+}
+
+#[tokio::test]
+async fn metrics_endpoint_returns_counters() {
+    let state = AppState::new(Config::from_env());
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/metrics")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("smartshopping_product_cache_hits_total"));
+    assert!(body.contains("smartshopping_sync_attempts_total"));
+}

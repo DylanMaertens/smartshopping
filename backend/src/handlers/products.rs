@@ -4,7 +4,10 @@ use axum::{
 };
 
 use crate::{
-    error::ApiError, models::product::ProductResponse, services::categories, state::AppState,
+    error::ApiError,
+    models::product::ProductResponse,
+    services::categories,
+    state::{AppState, MetricKind},
 };
 
 pub async fn get_product(
@@ -16,8 +19,10 @@ pub async fn get_product(
     }
 
     if let Some(found) = state.products_cache.get(&barcode).await {
+        state.record_metric(MetricKind::ProductCacheHit);
         return Ok(Json(found));
     }
+    state.record_metric(MetricKind::ProductCacheMiss);
 
     if state.config.enable_off_proxy {
         match state.off_client.get_product(&barcode).await {
@@ -34,14 +39,19 @@ pub async fn get_product(
                     ttl_seconds: state.config.cache_ttl_seconds,
                 };
 
+                state.record_metric(MetricKind::OffLookupSuccess);
                 state
                     .products_cache
                     .insert(barcode.clone(), remote_response.clone())
                     .await;
                 return Ok(Json(remote_response));
             }
-            Ok(None) => return Err(ApiError::not_found("Product not found for barcode")),
+            Ok(None) => {
+                state.record_metric(MetricKind::OffLookupFailure);
+                return Err(ApiError::not_found("Product not found for barcode"));
+            }
             Err(error) => {
+                state.record_metric(MetricKind::OffLookupFailure);
                 tracing::warn!(%barcode, error = %error, "Open Food Facts lookup failed; using local placeholder");
             }
         }

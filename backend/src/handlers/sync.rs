@@ -3,7 +3,10 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::ApiError, state::AppState};
+use crate::{
+    error::ApiError,
+    state::{AppState, MetricKind},
+};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct SyncItem {
@@ -46,6 +49,7 @@ pub async fn sync_list(
     headers: HeaderMap,
     Json(req): Json<SyncRequest>,
 ) -> Result<Json<SyncResponse>, ApiError> {
+    state.record_metric(MetricKind::SyncAttempt);
     validate_device_id(&headers)?;
 
     if req.list_id.trim().is_empty() {
@@ -90,6 +94,8 @@ pub async fn sync_list(
         .synced_items
         .insert(req.list_id.clone(), remote_items)
         .await;
+
+    state.record_metric(MetricKind::SyncSuccess);
 
     Ok(Json(SyncResponse {
         list_id: req.list_id,
