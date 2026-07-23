@@ -10,6 +10,7 @@ pub struct Config {
     pub enable_off_proxy: bool,
     pub off_rate_limit_per_minute: u32,
     pub off_max_retries: u32,
+    pub device_registry_path: String,
 }
 
 impl Config {
@@ -48,6 +49,8 @@ impl Config {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(2),
+            device_registry_path: std::env::var("DEVICE_REGISTRY_PATH")
+                .unwrap_or_else(|_| "./data/device_registry.json".to_string()),
         }
     }
 }

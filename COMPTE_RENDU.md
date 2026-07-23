@@ -112,3 +112,8 @@
 - Ajout d'un header `X-Request-Id` sur chaque réponse API pour faciliter le debug entre mobile et backend.
 - Ajout d'un endpoint `/metrics` au format texte Prometheus pour suivre cache produits, appels Open Food Facts et synchronisations.
 - Les handlers produits et sync alimentent désormais des compteurs en mémoire afin de préparer le suivi latence/cache hit ratio plus complet.
+
+## Mise à jour identification anonyme durable
+- Le backend maintient maintenant un registre persistant des `device_id` anonymes vus pendant la synchronisation.
+- Chaque sync met à jour `first_seen_at`, `last_seen_at` et `sync_count` dans un fichier JSON configurable via `DEVICE_REGISTRY_PATH`.
+- La réponse sync renvoie le `device_id` validé afin de faciliter le debug du mapping anonyme côté backend.

@@ -37,6 +37,7 @@ export type SyncPayload = {
 
 export type SyncResponse = {
   list_id: string;
+  device_id: string;
   server_time: number;
   conflicts: Array<{
     entity_id: string;

@@ -74,6 +74,7 @@ async fn sync_requires_device_id_when_enabled() {
         enable_off_proxy: false,
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
+        device_registry_path: temp_registry_path("sync_requires_device_id"),
     };
 
     let state = AppState::new(config);
@@ -171,6 +172,7 @@ async fn sync_merges_items_and_returns_updates() {
         enable_off_proxy: false,
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
+        device_registry_path: temp_registry_path("sync_merges_items"),
     };
 
     let state = AppState::new(config);
@@ -262,4 +264,53 @@ async fn metrics_endpoint_returns_counters() {
 
     assert!(body.contains("smartshopping_product_cache_hits_total"));
     assert!(body.contains("smartshopping_sync_attempts_total"));
+}
+
+fn temp_registry_path(name: &str) -> String {
+    std::env::temp_dir()
+        .join(format!("smartshopping-{name}-{}.json", std::process::id()))
+        .to_string_lossy()
+        .to_string()
+}
+
+#[tokio::test]
+async fn sync_persists_anonymous_device_profile() {
+    let registry_path = temp_registry_path("device_profile");
+    let config = Config {
+        host: "0.0.0.0".into(),
+        port: 3000,
+        cache_ttl_seconds: 60,
+        product_cache_capacity: 100,
+        allowed_origin: "http://localhost:8081".into(),
+        enable_sync_endpoint: true,
+        off_base_url: "https://world.openfoodfacts.org/api/v2".into(),
+        enable_off_proxy: false,
+        off_rate_limit_per_minute: 100,
+        off_max_retries: 0,
+        device_registry_path: registry_path.clone(),
+    };
+
+    let state = AppState::new(config);
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/sync")
+                .header("content-type", "application/json")
+                .header("x-device-id", "00000000-0000-4000-8000-000000000002")
+                .body(Body::from(
+                    r#"{"list_id":"local-demo-list","last_sync":0,"items":[]}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let persisted = std::fs::read_to_string(registry_path).unwrap();
+
+    assert!(persisted.contains("00000000-0000-4000-8000-000000000002"));
+    assert!(persisted.contains("sync_count"));
 }

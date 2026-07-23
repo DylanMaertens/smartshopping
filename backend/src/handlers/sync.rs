@@ -39,6 +39,7 @@ pub struct SyncConflict {
 #[derive(Serialize)]
 pub struct SyncResponse {
     pub list_id: String,
+    pub device_id: String,
     pub server_time: i64,
     pub conflicts: Vec<SyncConflict>,
     pub updated_items: Vec<SyncItem>,
@@ -50,7 +51,13 @@ pub async fn sync_list(
     Json(req): Json<SyncRequest>,
 ) -> Result<Json<SyncResponse>, ApiError> {
     state.record_metric(MetricKind::SyncAttempt);
-    validate_device_id(&headers)?;
+    let device_id = validate_device_id(&headers)?;
+    state
+        .device_registry
+        .lock()
+        .await
+        .register_sync(&device_id)
+        .map_err(|_| ApiError::internal_server_error("failed to persist device profile"))?;
 
     if req.list_id.trim().is_empty() {
         return Err(ApiError::bad_request("list_id is required"));
@@ -99,13 +106,14 @@ pub async fn sync_list(
 
     Ok(Json(SyncResponse {
         list_id: req.list_id,
+        device_id,
         server_time: now,
         conflicts,
         updated_items,
     }))
 }
 
-fn validate_device_id(headers: &HeaderMap) -> Result<(), ApiError> {
+fn validate_device_id(headers: &HeaderMap) -> Result<String, ApiError> {
     let Some(device_id) = headers.get("x-device-id") else {
         return Err(ApiError::bad_request("Missing X-Device-Id header"));
     };
@@ -117,5 +125,5 @@ fn validate_device_id(headers: &HeaderMap) -> Result<(), ApiError> {
     Uuid::parse_str(device_id)
         .map_err(|_| ApiError::bad_request("X-Device-Id must be a valid UUID"))?;
 
-    Ok(())
+    Ok(device_id.to_string())
 }

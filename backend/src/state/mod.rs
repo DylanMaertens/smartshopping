@@ -7,10 +7,13 @@ use std::{
 };
 
 use moka::future::Cache;
+use tokio::sync::Mutex;
 
 use crate::{
-    config::Config, handlers::sync::SyncItem, models::product::ProductResponse,
-    services::openfoodfacts::OpenFoodFactsClient,
+    config::Config,
+    handlers::sync::SyncItem,
+    models::product::ProductResponse,
+    services::{device_registry::DeviceRegistry, openfoodfacts::OpenFoodFactsClient},
 };
 
 #[derive(Clone)]
@@ -20,6 +23,7 @@ pub struct AppState {
     pub off_client: OpenFoodFactsClient,
     pub synced_items: Cache<String, Vec<SyncItem>>,
     pub metrics: Arc<AppMetrics>,
+    pub device_registry: Arc<Mutex<DeviceRegistry>>,
 }
 
 #[derive(Default)]
@@ -58,12 +62,15 @@ impl AppState {
             .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
             .build();
 
+        let device_registry = DeviceRegistry::load(config.device_registry_path.clone());
+
         Self {
             config,
             products_cache,
             off_client,
             synced_items,
             metrics: Arc::new(AppMetrics::default()),
+            device_registry: Arc::new(Mutex::new(device_registry)),
         }
     }
 
