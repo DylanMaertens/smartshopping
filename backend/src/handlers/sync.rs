@@ -1,0 +1,146 @@
+use axum::{extract::State, http::HeaderMap, Json};
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::{
+    error::ApiError,
+    services::persistent_sync,
+    state::{AppState, MetricKind},
+};
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct SyncItem {
+    pub id: String,
+    pub list_id: String,
+    pub name: String,
+    pub barcode: Option<String>,
+    pub category: Option<String>,
+    pub quantity: i32,
+    pub checked: bool,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+}
+
+#[derive(Deserialize)]
+pub struct SyncRequest {
+    pub list_id: String,
+    pub items: Vec<SyncItem>,
+    pub last_sync: i64,
+}
+
+#[derive(Serialize)]
+pub struct SyncConflict {
+    pub entity_id: String,
+    pub local_updated_at: i64,
+    pub remote_updated_at: i64,
+    pub resolution: &'static str,
+}
+
+#[derive(Serialize)]
+pub struct SyncResponse {
+    pub list_id: String,
+    pub device_id: String,
+    pub server_time: i64,
+    pub conflicts: Vec<SyncConflict>,
+    pub updated_items: Vec<SyncItem>,
+}
+
+pub async fn sync_list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<SyncRequest>,
+) -> Result<Json<SyncResponse>, ApiError> {
+    state.record_metric(MetricKind::SyncAttempt);
+    let device_id = validate_device_id(&headers)?;
+    state
+        .device_registry
+        .lock()
+        .await
+        .register_sync(&device_id)
+        .map_err(|_| ApiError::internal_server_error("failed to persist device profile"))?;
+
+    if req.list_id.trim().is_empty() {
+        return Err(ApiError::bad_request("list_id is required"));
+    }
+
+    let now = Utc::now().timestamp_millis();
+    let mut remote_items = match state.synced_items.get(&req.list_id).await {
+        Some(items) => items,
+        None => match &state.db_pool {
+            Some(pool) => persistent_sync::load_sync_items(pool, &req.list_id)
+                .await
+                .map_err(|error| {
+                    tracing::error!(%error, "failed to load persisted shopping list");
+                    ApiError::internal_server_error("failed to load persisted shopping list")
+                })?,
+            None => Vec::new(),
+        },
+    };
+    let mut conflicts = Vec::new();
+
+    for incoming in req.items {
+        if incoming.list_id != req.list_id {
+            return Err(ApiError::bad_request(
+                "item list_id must match request list_id",
+            ));
+        }
+
+        match remote_items.iter_mut().find(|item| item.id == incoming.id) {
+            Some(remote) if incoming.updated_at >= remote.updated_at => *remote = incoming,
+            Some(remote) => conflicts.push(SyncConflict {
+                entity_id: incoming.id,
+                local_updated_at: incoming.updated_at,
+                remote_updated_at: remote.updated_at,
+                resolution: "remote_wins_lww",
+            }),
+            None => remote_items.push(incoming),
+        }
+    }
+
+    remote_items.sort_by(|left, right| left.updated_at.cmp(&right.updated_at));
+    let updated_items = remote_items
+        .iter()
+        .filter(|item| item.updated_at > req.last_sync)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if let Some(pool) = &state.db_pool {
+        persistent_sync::persist_sync_items(pool, &device_id, &req.list_id, &remote_items)
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, "failed to persist synced shopping list");
+                ApiError::internal_server_error("failed to persist synced shopping list")
+            })?;
+    }
+
+    state
+        .synced_items
+        .insert(req.list_id.clone(), remote_items)
+        .await;
+
+    state.record_metric(MetricKind::SyncSuccess);
+
+    Ok(Json(SyncResponse {
+        list_id: req.list_id,
+        device_id,
+        server_time: now,
+        conflicts,
+        updated_items,
+    }))
+}
+
+fn validate_device_id(headers: &HeaderMap) -> Result<String, ApiError> {
+    let Some(device_id) = headers.get("x-device-id") else {
+        return Err(ApiError::bad_request("Missing X-Device-Id header"));
+    };
+
+    let device_id = device_id
+        .to_str()
+        .map_err(|_| ApiError::bad_request("Invalid X-Device-Id header"))?;
+
+    Uuid::parse_str(device_id)
+        .map_err(|_| ApiError::bad_request("X-Device-Id must be a valid UUID"))?;
+
+    Ok(device_id.to_string())
+}

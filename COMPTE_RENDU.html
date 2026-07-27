@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Tableau de bord d’avancement du projet SmartShopping.">
+  <title>SmartShopping — Compte rendu</title>
+  <style>
+    :root{color-scheme:dark;--bg:#08110d;--surface:#101c16;--raised:#16251d;--text:#f4f7f5;--muted:#9fb1a7;--accent:#65e6a4;--line:#294035;--warning:#f2c66d;--radius:18px}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,rgba(33,191,115,.16),transparent 32rem),var(--bg);color:var(--text);font:16px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}code{color:var(--accent);font-size:.92em}h1,h2,h3,p{margin-top:0}h2{font-size:clamp(1.45rem,3vw,2rem)}.container{width:min(1120px,calc(100% - 32px));margin:0 auto}header{padding:72px 0 42px}.eyebrow{display:inline-flex;gap:8px;align-items:center;margin-bottom:18px;color:var(--accent);font-size:.78rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.eyebrow:before{content:"";width:28px;height:2px;background:currentColor}h1{max-width:850px;margin-bottom:18px;font-size:clamp(2.5rem,8vw,5.6rem);line-height:.98;letter-spacing:-.055em}.intro{max-width:760px;color:var(--muted);font-size:clamp(1rem,2vw,1.2rem)}section{margin-bottom:72px}.summary,.features,.attention{display:grid;gap:16px}.summary{grid-template-columns:repeat(4,1fr);margin:12px 0 64px}.features,.attention{grid-template-columns:repeat(2,1fr)}.card{padding:24px;border:1px solid var(--line);border-radius:var(--radius);background:rgba(16,28,22,.9)}.metric strong{display:block;color:var(--accent);font-size:2rem;line-height:1.15}.metric span,.card ul,.section-title p,.step p{color:var(--muted)}.card h3{margin-bottom:10px}.card ul{margin:0;padding-left:20px}.card li+li{margin-top:7px}.section-title{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:24px}.section-title p{max-width:520px;margin-bottom:4px}.status{display:inline-flex;align-items:center;gap:8px;color:var(--accent);font-size:.82rem;font-weight:750}.status:before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 18px currentColor}.notice{border-left:3px solid var(--warning)}.notice h3{color:var(--warning)}.roadmap{display:grid;counter-reset:roadmap}.step{position:relative;display:grid;grid-template-columns:68px 1fr;gap:18px;padding-bottom:30px;counter-increment:roadmap}.step:before{content:counter(roadmap,decimal-leading-zero);position:relative;z-index:1;display:grid;place-items:center;width:52px;height:52px;border:1px solid var(--line);border-radius:15px;background:var(--raised);color:var(--accent);font-weight:850}.step:not(:last-child):after{content:"";position:absolute;top:52px;bottom:0;left:26px;width:1px;background:var(--line)}.step-body{padding:12px 20px 18px;border-bottom:1px solid var(--line)}.step-body h3{margin-bottom:8px}.step-body p{margin-bottom:0}.checks{display:flex;flex-wrap:wrap;gap:10px}.check{padding:8px 13px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--surface);font-size:.88rem}.check:before{content:"✓";margin-right:7px;color:var(--accent);font-weight:900}footer{padding:10px 0 48px;color:var(--muted);font-size:.88rem}
+    @media(max-width:780px){header{padding-top:48px}.summary{grid-template-columns:repeat(2,1fr)}.features,.attention{grid-template-columns:1fr}.section-title{display:block}}
+    @media(max-width:430px){.container{width:min(100% - 22px,1120px)}.summary{grid-template-columns:1fr}.step{grid-template-columns:48px 1fr;gap:10px}.step:before{width:42px;height:42px;border-radius:12px;font-size:.8rem}.step:not(:last-child):after{top:42px;left:21px}.step-body{padding:8px 4px 20px 10px}}
+    @media print{:root{color-scheme:light;--bg:#fff;--surface:#fff;--raised:#f3f7f4;--text:#102018;--muted:#42564b;--line:#ccd8d1}body{background:#fff}header{padding-top:28px}section{break-inside:avoid;margin-bottom:36px}}
+  </style>
+</head>
+<body>
+  <header class="container">
+    <div class="eyebrow">Rapport d’avancement</div>
+    <h1>SmartShopping prend forme.</h1>
+    <p class="intro">Un aperçu autonome et partageable du socle produit : backend cache-first, application mobile offline-first et synchronisation anonyme optionnelle.</p>
+  </header>
+  <main class="container">
+    <section class="summary" aria-label="Indicateurs clés">
+      <article class="card metric"><strong>6</strong><span>routes API principales</span></article>
+      <article class="card metric"><strong>3</strong><span>niveaux de cache produit</span></article>
+      <article class="card metric"><strong>SQLite</strong><span>source de vérité mobile</span></article>
+      <article class="card metric"><strong>0</strong><span>compte obligatoire</span></article>
+    </section>
+    <section>
+      <div class="section-title"><div><span class="status">Socle fonctionnel</span><h2>Ce qui est opérationnel</h2></div><p>Les deux applications évoluent indépendamment autour de contrats API simples.</p></div>
+      <div class="features">
+        <article class="card"><h3>Backend Rust / Axum</h3><ul><li><code>/health</code>, <code>/metrics</code>, produits, catégories et synchronisation.</li><li>Lookup cache-first : Moka, Redis optionnel, puis Open Food Facts.</li><li>Timeout, retry/backoff et limitation temporelle des appels externes.</li><li>Persistance PostgreSQL optionnelle et résolution Last-Write-Wins.</li><li>CORS restrictif, limite de 64 Ko, en-têtes sécurité et request id.</li></ul></article>
+        <article class="card"><h3>Mobile Expo / React Native</h3><ul><li>Plusieurs listes avec création, renommage, sélection et archivage.</li><li>Scan code-barres avec ajout immédiat puis enrichissement asynchrone.</li><li>SQLite embarqué pour les listes, tombstones, produits et opérations de sync.</li><li>Cache produit avec TTL et identification anonyme UUID v4.</li><li>Reprise automatique de la sync au retour du réseau, sans appels concurrents.</li></ul></article>
+        <article class="card"><h3>Produits &amp; catégorisation</h3><ul><li>Recherche par code-barres et cache des résultats.</li><li>Taxonomie locale de rayons génériques de supermarché.</li><li>Classification locale utilisable sans réseau.</li><li>Dégradation contrôlée si l’API externe est indisponible.</li></ul></article>
+        <article class="card"><h3>Synchronisation &amp; identité</h3><ul><li><code>X-Device-Id</code> validé sans donnée personnelle.</li><li>Registre persistant des appareils anonymes.</li><li>Conflits fondés sur <code>updated_at</code> et suppressions logiques.</li><li>Endpoint désactivé par défaut, activable par configuration.</li></ul></article>
+      </div>
+    </section>
+    <section>
+      <div class="section-title"><div><span class="eyebrow">Vigilance</span><h2>Points d’attention</h2></div></div>
+      <div class="attention">
+        <article class="card notice"><h3>Tests sur appareil</h3><p>SQLite conserve désormais listes, cache produit et journal de sync. Le comportement doit maintenant être éprouvé sur plusieurs versions Android.</p></article>
+        <article class="card notice"><h3>PostgreSQL</h3><p>Les migrations automatiques, la relecture durable et le test LWW sont prêts. Le test d’intégration doit être exécuté sur une base jetable avant déploiement.</p></article>
+        <article class="card notice"><h3>Réseau local</h3><p>Sur téléphone, <code>EXPO_PUBLIC_API_BASE_URL</code> reste la configuration la plus fiable pour joindre le backend.</p></article>
+        <article class="card notice"><h3>Services optionnels</h3><p>Redis et PostgreSQL ne sont pas requis en développement, mais deviennent importants pour un déploiement durable.</p></article>
+      </div>
+    </section>
+    <section>
+      <div class="section-title"><div><span class="eyebrow">Validation</span><h2>Contrôles récents</h2></div></div>
+      <div class="checks"><span class="check">Tests backend Rust</span><span class="check">13 tests mobiles</span><span class="check">SQLite en intégration</span><span class="check">Bundle Android Expo</span></div>
+    </section>
+    <section id="prochaines-etapes">
+      <div class="section-title"><div><span class="eyebrow">Feuille de route</span><h2>Prochaines étapes recommandées</h2></div><p>Ordonnées pour obtenir rapidement un MVP fiable sur appareil réel.</p></div>
+      <div class="roadmap">
+        <article class="step"><div class="step-body"><h3>Tester les parcours offline sur appareil</h3><p>Valider les redémarrages, longues périodes hors ligne, expirations du cache et reprises de synchronisation sur Android.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Ajouter le partage optionnel</h3><p>Créer des codes d’invitation révocables sans transformer le partage en compte obligatoire.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Planifier une sync périodique sobre</h3><p>Évaluer une tâche en arrière-plan uniquement si elle apporte un bénéfice réel sans dégrader batterie ni confidentialité.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Tester le stockage Expo sur appareil</h3><p>Compléter les tests SQL portables par des parcours instrumentés utilisant le module natif <code>expo-sqlite</code>.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Préparer Expo Prebuild / dev-client</h3><p>Valider caméra et permissions hors Expo Go, puis évaluer les modules natifs utiles.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Étendre l’observabilité</h3><p>Mesurer les latences, le ratio de cache hit et propager <code>X-Request-Id</code> depuis le mobile.</p></div></article>
+      </div>
+    </section>
+  </main>
+  <footer class="container"><p>SmartShopping · Artefact autonome, consultable dans un navigateur et imprimable en PDF.</p></footer>
+</body>
+</html>
