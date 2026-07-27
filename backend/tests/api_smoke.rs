@@ -75,6 +75,8 @@ async fn sync_requires_device_id_when_enabled() {
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
         device_registry_path: temp_registry_path("sync_requires_device_id"),
+        redis_url: None,
+        database_url: None,
     };
 
     let state = AppState::new(config);
@@ -173,6 +175,8 @@ async fn sync_merges_items_and_returns_updates() {
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
         device_registry_path: temp_registry_path("sync_merges_items"),
+        redis_url: None,
+        database_url: None,
     };
 
     let state = AppState::new(config);
@@ -288,6 +292,8 @@ async fn sync_persists_anonymous_device_profile() {
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
         device_registry_path: registry_path.clone(),
+        redis_url: None,
+        database_url: None,
     };
 
     let state = AppState::new(config);

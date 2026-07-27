@@ -11,6 +11,13 @@ export type ShoppingItem = {
   deletedAt?: number;
 };
 
+export type ShoppingList = {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type CategorySection = {
   categoryName: string;
   orderIndex: number;

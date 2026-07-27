@@ -7,19 +7,26 @@ use std::{
 };
 
 use moka::future::Cache;
+use sqlx::PgPool;
 use tokio::sync::Mutex;
 
 use crate::{
     config::Config,
+    db::create_optional_pool,
     handlers::sync::SyncItem,
     models::product::ProductResponse,
-    services::{device_registry::DeviceRegistry, openfoodfacts::OpenFoodFactsClient},
+    services::{
+        device_registry::DeviceRegistry, openfoodfacts::OpenFoodFactsClient,
+        redis_cache::RedisCache,
+    },
 };
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
     pub products_cache: Cache<String, ProductResponse>,
+    pub redis_cache: Option<RedisCache>,
+    pub db_pool: Option<PgPool>,
     pub off_client: OpenFoodFactsClient,
     pub synced_items: Cache<String, Vec<SyncItem>>,
     pub metrics: Arc<AppMetrics>,
@@ -57,6 +64,19 @@ impl AppState {
             .max_capacity(config.product_cache_capacity)
             .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
             .build();
+        let redis_cache = config
+            .redis_url
+            .as_deref()
+            .and_then(|url| match RedisCache::new(url) {
+                Ok(cache) => Some(cache),
+                Err(error) => {
+                    tracing::warn!(%error, "redis cache disabled: invalid REDIS_URL");
+                    None
+                }
+            });
+
+        let db_pool = create_optional_pool(config.database_url.as_deref());
+
         let synced_items = Cache::builder()
             .max_capacity(10_000)
             .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
@@ -67,6 +87,8 @@ impl AppState {
         Self {
             config,
             products_cache,
+            redis_cache,
+            db_pool,
             off_client,
             synced_items,
             metrics: Arc::new(AppMetrics::default()),

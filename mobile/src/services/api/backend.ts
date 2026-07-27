@@ -1,10 +1,11 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { ProductCache } from '@/services/cache/mmkvCache';
+import { ProductCache } from '@/services/cache/sqliteProductCache';
 import type { ShoppingItem } from '@/types';
 
 const API_BASE_URL = getApiBaseUrl();
 const PRODUCT_LOOKUP_TIMEOUT_MS = 3500;
+const SYNC_TIMEOUT_MS = 8000;
 
 export type BackendProduct = {
   barcode: string;
@@ -63,7 +64,7 @@ export async function getProduct(barcode: string): Promise<BackendProduct> {
 }
 
 export async function syncList(deviceId: string, payload: SyncPayload): Promise<SyncResponse> {
-  const response = await fetch(`${API_BASE_URL}/sync`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sync`, SYNC_TIMEOUT_MS, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -132,12 +133,16 @@ function getMetroHost(): string | null {
   return hostUri?.split(':')[0] ?? null;
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  timeoutMs: number,
+  options: RequestInit = {},
+): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(url, { signal: controller.signal });
+    return await fetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
   }

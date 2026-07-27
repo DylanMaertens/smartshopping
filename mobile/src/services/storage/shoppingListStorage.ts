@@ -1,58 +1,209 @@
-import { LocalKeyValueStorage } from './localKeyValueStorage';
-import type { ShoppingItem } from '@/types';
+import { getDatabase } from '@/db/client';
+import { mergeShoppingItems } from '@/services/sync/mergeItems';
+import type { ShoppingItem, ShoppingList } from '@/types';
 
-const CURRENT_LIST_KEY = 'current-shopping-list';
-const LAST_SYNC_KEY = 'current-shopping-list-last-sync';
+const DEFAULT_LIST_ID = 'local-default-list';
+const ACTIVE_LIST_KEY = 'active-list-id';
+
+type ListRow = { id: string; name: string; created_at: number; updated_at: number };
+type ItemRow = {
+  id: string;
+  list_id: string;
+  name: string;
+  barcode: string | null;
+  category: string | null;
+  quantity: number;
+  checked: number;
+  updated_at: number;
+  synced_at: number | null;
+  deleted_at: number | null;
+};
+type SyncOperationRow = { payload: string };
 
 export class ShoppingListStorage {
-  static getCurrentList(): ShoppingItem[] {
-    const raw = LocalKeyValueStorage.getString(CURRENT_LIST_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw) as ShoppingItem[];
-    return Array.isArray(parsed) ? parsed : [];
+  static getLists(): ShoppingList[] {
+    this.ensureDefaultList();
+    return getDatabase()
+      .getAllSync<ListRow>(
+        `SELECT id, name, created_at, updated_at
+         FROM shopping_lists WHERE deleted_at IS NULL
+         ORDER BY updated_at DESC`,
+      )
+      .map(mapListRow);
   }
 
-  static saveCurrentList(items: ShoppingItem[]): void {
-    LocalKeyValueStorage.setString(CURRENT_LIST_KEY, JSON.stringify(items));
+  static getActiveListId(): string {
+    this.ensureDefaultList();
+    const stored = getMetadata(ACTIVE_LIST_KEY);
+    const existing = stored
+      ? getDatabase().getFirstSync<{ id: string }>(
+          'SELECT id FROM shopping_lists WHERE id = ? AND deleted_at IS NULL',
+          stored,
+        )
+      : null;
+    if (existing) return existing.id;
+
+    const first = getDatabase().getFirstSync<{ id: string }>(
+      'SELECT id FROM shopping_lists WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1',
+    );
+    const activeId = first?.id ?? DEFAULT_LIST_ID;
+    setMetadata(ACTIVE_LIST_KEY, activeId);
+    return activeId;
   }
 
-  static getPendingChanges(items = this.getCurrentList()): ShoppingItem[] {
-    return items.filter((item) => !item.syncedAt || item.updatedAt > item.syncedAt);
+  static setActiveList(listId: string): void {
+    setMetadata(ACTIVE_LIST_KEY, listId);
   }
 
-  static getLastSyncTimestamp(): number {
-    const raw = LocalKeyValueStorage.getString(LAST_SYNC_KEY);
-    if (!raw) return 0;
+  static createList(name: string): ShoppingList {
+    const now = Date.now();
+    const list = { id: `list-${now}-${Math.random().toString(36).slice(2)}`, name, createdAt: now, updatedAt: now };
+    getDatabase().runSync(
+      'INSERT INTO shopping_lists (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
+      list.id,
+      list.name,
+      list.createdAt,
+      list.updatedAt,
+    );
+    this.setActiveList(list.id);
+    return list;
+  }
 
-    const parsed = Number(raw);
+  static renameList(listId: string, name: string): void {
+    getDatabase().runSync(
+      'UPDATE shopping_lists SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+      name,
+      Date.now(),
+      listId,
+    );
+  }
+
+  static archiveList(listId: string): string {
+    const db = getDatabase();
+    const lists = this.getLists();
+    if (lists.length <= 1) return listId;
+
+    db.runSync('UPDATE shopping_lists SET deleted_at = ?, updated_at = ? WHERE id = ?', Date.now(), Date.now(), listId);
+    const nextId = lists.find((list) => list.id !== listId)?.id ?? DEFAULT_LIST_ID;
+    this.setActiveList(nextId);
+    return nextId;
+  }
+
+  static getCurrentList(listId = this.getActiveListId()): ShoppingItem[] {
+    return getDatabase()
+      .getAllSync<ItemRow>(
+        `SELECT id, list_id, name, barcode, category, quantity, checked,
+                updated_at, synced_at, deleted_at
+         FROM items WHERE list_id = ? ORDER BY created_at DESC`,
+        listId,
+      )
+      .map(mapItemRow);
+  }
+
+  static saveCurrentList(listId: string, items: ShoppingItem[]): void {
+    const db = getDatabase();
+    db.withTransactionSync(() => {
+      db.runSync('UPDATE shopping_lists SET updated_at = ? WHERE id = ?', Date.now(), listId);
+
+      for (const item of items) {
+        db.runSync(
+          `INSERT INTO items (id, list_id, name, barcode, category, quantity, checked, created_at, updated_at, synced_at, deleted_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET name=excluded.name, barcode=excluded.barcode,
+             category=excluded.category, quantity=excluded.quantity, checked=excluded.checked,
+             updated_at=excluded.updated_at, synced_at=excluded.synced_at, deleted_at=excluded.deleted_at`,
+          item.id, listId, item.name, item.barcode ?? null, item.category ?? null, item.quantity,
+          item.checked ? 1 : 0, item.updatedAt, item.updatedAt, item.syncedAt ?? null, item.deletedAt ?? null,
+        );
+
+        if (!item.syncedAt || item.updatedAt > item.syncedAt) {
+          db.runSync(
+            `INSERT INTO sync_ops (id, entity_type, entity_id, operation, payload, created_at, synced_at)
+             VALUES (?, 'item', ?, ?, ?, ?, NULL)
+             ON CONFLICT(entity_type, entity_id) DO UPDATE SET operation=excluded.operation,
+               payload=excluded.payload, created_at=excluded.created_at, synced_at=NULL`,
+            `item:${item.id}`, item.id, item.deletedAt ? 'delete' : 'upsert', JSON.stringify(item), item.updatedAt,
+          );
+        }
+      }
+    });
+  }
+
+  static getPendingChanges(listId: string, items = this.getCurrentList(listId)): ShoppingItem[] {
+    const rows = getDatabase().getAllSync<SyncOperationRow>(
+      `SELECT sync_ops.payload FROM sync_ops
+       INNER JOIN items ON items.id = sync_ops.entity_id
+       WHERE sync_ops.entity_type = 'item' AND sync_ops.synced_at IS NULL AND items.list_id = ?
+       ORDER BY sync_ops.created_at ASC`,
+      listId,
+    );
+    return rows.length > 0
+      ? rows.map((row) => JSON.parse(row.payload) as ShoppingItem)
+      : items.filter((item) => !item.syncedAt || item.updatedAt > item.syncedAt);
+  }
+
+  static getLastSyncTimestamp(listId: string): number {
+    const parsed = Number(getMetadata(lastSyncKey(listId)) ?? 0);
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  static markAsSynced(items: ShoppingItem[], syncedAt: number): ShoppingItem[] {
+  static markAsSynced(listId: string, items: ShoppingItem[], syncedAt: number): ShoppingItem[] {
     const syncedItems = items.map((item) => ({ ...item, syncedAt }));
-    this.saveCurrentList(syncedItems);
-    LocalKeyValueStorage.setString(LAST_SYNC_KEY, String(syncedAt));
+    const db = getDatabase();
+    this.saveCurrentList(listId, syncedItems);
+    setMetadata(lastSyncKey(listId), String(syncedAt));
+    db.runSync(
+      `UPDATE sync_ops SET synced_at = ? WHERE entity_type = 'item'
+       AND entity_id IN (SELECT id FROM items WHERE list_id = ?) AND synced_at IS NULL`,
+      syncedAt,
+      listId,
+    );
     return syncedItems;
   }
 
-  static applyRemoteChanges(currentItems: ShoppingItem[], remoteItems: ShoppingItem[]): ShoppingItem[] {
-    const merged = new Map(currentItems.map((item) => [item.id, item]));
-
-    for (const remoteItem of remoteItems) {
-      const localItem = merged.get(remoteItem.id);
-      if (!localItem || remoteItem.updatedAt >= localItem.updatedAt) {
-        merged.set(remoteItem.id, remoteItem);
-      }
-    }
-
-    const nextItems = Array.from(merged.values()).filter((item) => !item.deletedAt);
-    this.saveCurrentList(nextItems);
-    return nextItems;
+  static applyRemoteChanges(listId: string, currentItems: ShoppingItem[], remoteItems: ShoppingItem[]): ShoppingItem[] {
+    const allItems = mergeShoppingItems(currentItems, remoteItems);
+    this.saveCurrentList(listId, allItems);
+    return allItems;
   }
 
-  static clearCurrentList(): void {
-    LocalKeyValueStorage.delete(CURRENT_LIST_KEY);
-    LocalKeyValueStorage.delete(LAST_SYNC_KEY);
+  static clearCurrentList(listId: string): ShoppingItem[] {
+    const now = Date.now();
+    const tombstones = this.getCurrentList(listId).map((item) => ({ ...item, deletedAt: now, updatedAt: now }));
+    this.saveCurrentList(listId, tombstones);
+    return tombstones;
   }
+
+  private static ensureDefaultList(): void {
+    const count = getDatabase().getFirstSync<{ count: number }>('SELECT COUNT(*) AS count FROM shopping_lists');
+    if ((count?.count ?? 0) > 0) return;
+    const now = Date.now();
+    getDatabase().runSync(
+      'INSERT INTO shopping_lists (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
+      DEFAULT_LIST_ID, 'Ma liste', now, now,
+    );
+  }
+}
+
+function getMetadata(key: string): string | null {
+  return getDatabase().getFirstSync<{ value: string }>('SELECT value FROM app_metadata WHERE key = ?', key)?.value ?? null;
+}
+
+function setMetadata(key: string, value: string): void {
+  getDatabase().runSync(
+    `INSERT INTO app_metadata (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value,
+  );
+}
+
+function lastSyncKey(listId: string): string { return `last-sync:${listId}`; }
+function mapListRow(row: ListRow): ShoppingList {
+  return { id: row.id, name: row.name, createdAt: row.created_at, updatedAt: row.updated_at };
+}
+function mapItemRow(row: ItemRow): ShoppingItem {
+  return {
+    id: row.id, listId: row.list_id, name: row.name, barcode: row.barcode ?? undefined,
+    category: row.category ?? undefined, quantity: row.quantity, checked: row.checked === 1,
+    updatedAt: row.updated_at, syncedAt: row.synced_at ?? undefined, deletedAt: row.deleted_at ?? undefined,
+  };
 }

@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     error::ApiError,
+    services::persistent_sync,
     state::{AppState, MetricKind},
 };
 
@@ -64,11 +65,18 @@ pub async fn sync_list(
     }
 
     let now = Utc::now().timestamp_millis();
-    let mut remote_items = state
-        .synced_items
-        .get(&req.list_id)
-        .await
-        .unwrap_or_default();
+    let mut remote_items = match state.synced_items.get(&req.list_id).await {
+        Some(items) => items,
+        None => match &state.db_pool {
+            Some(pool) => persistent_sync::load_sync_items(pool, &req.list_id)
+                .await
+                .map_err(|error| {
+                    tracing::error!(%error, "failed to load persisted shopping list");
+                    ApiError::internal_server_error("failed to load persisted shopping list")
+                })?,
+            None => Vec::new(),
+        },
+    };
     let mut conflicts = Vec::new();
 
     for incoming in req.items {
@@ -96,6 +104,15 @@ pub async fn sync_list(
         .filter(|item| item.updated_at > req.last_sync)
         .cloned()
         .collect::<Vec<_>>();
+
+    if let Some(pool) = &state.db_pool {
+        persistent_sync::persist_sync_items(pool, &device_id, &req.list_id, &remote_items)
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, "failed to persist synced shopping list");
+                ApiError::internal_server_error("failed to persist synced shopping list")
+            })?;
+    }
 
     state
         .synced_items

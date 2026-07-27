@@ -48,9 +48,15 @@ CREATE TABLE IF NOT EXISTS sync_ops (
   synced_at INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS app_metadata (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_items_list_id ON items(list_id);
 CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
 CREATE INDEX IF NOT EXISTS idx_items_synced_at ON items(synced_at);
 CREATE INDEX IF NOT EXISTS idx_products_cache_expires ON products_cache(expires_at);
 CREATE INDEX IF NOT EXISTS idx_sync_ops_synced_at ON sync_ops(synced_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_ops_entity ON sync_ops(entity_type, entity_id);
 `;

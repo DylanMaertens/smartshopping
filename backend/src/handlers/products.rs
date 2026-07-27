@@ -22,6 +22,18 @@ pub async fn get_product(
         state.record_metric(MetricKind::ProductCacheHit);
         return Ok(Json(found));
     }
+    if let Some(redis_cache) = &state.redis_cache {
+        if let Some(mut found) = redis_cache.get_product(&barcode).await {
+            found.cached = true;
+            found.source = "redis-cache".to_string();
+            state.record_metric(MetricKind::ProductCacheHit);
+            state
+                .products_cache
+                .insert(barcode.clone(), found.clone())
+                .await;
+            return Ok(Json(found));
+        }
+    }
     state.record_metric(MetricKind::ProductCacheMiss);
 
     if state.config.enable_off_proxy {
@@ -44,6 +56,11 @@ pub async fn get_product(
                     .products_cache
                     .insert(barcode.clone(), remote_response.clone())
                     .await;
+                if let Some(redis_cache) = &state.redis_cache {
+                    redis_cache
+                        .set_product(&barcode, &remote_response, state.config.cache_ttl_seconds)
+                        .await;
+                }
                 return Ok(Json(remote_response));
             }
             Ok(None) => {
@@ -72,6 +89,11 @@ pub async fn get_product(
         .products_cache
         .insert(barcode.clone(), seeded.clone())
         .await;
+    if let Some(redis_cache) = &state.redis_cache {
+        redis_cache
+            .set_product(&barcode, &seeded, state.config.cache_ttl_seconds)
+            .await;
+    }
     Ok(Json(seeded))
 }
 

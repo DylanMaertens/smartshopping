@@ -11,6 +11,8 @@ pub struct Config {
     pub off_rate_limit_per_minute: u32,
     pub off_max_retries: u32,
     pub device_registry_path: String,
+    pub redis_url: Option<String>,
+    pub database_url: Option<String>,
 }
 
 impl Config {
@@ -51,6 +53,12 @@ impl Config {
                 .unwrap_or(2),
             device_registry_path: std::env::var("DEVICE_REGISTRY_PATH")
                 .unwrap_or_else(|_| "./data/device_registry.json".to_string()),
+            redis_url: std::env::var("REDIS_URL")
+                .ok()
+                .filter(|url| !url.trim().is_empty()),
+            database_url: std::env::var("DATABASE_URL")
+                .ok()
+                .filter(|url| !url.trim().is_empty()),
         }
     }
 }

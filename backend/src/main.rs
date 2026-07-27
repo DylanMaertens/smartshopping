@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 
-use shopping_list_backend::{config::Config, routes::create_router, state::AppState};
+use shopping_list_backend::{
+    config::Config, db::prepare_database, routes::create_router, state::AppState,
+};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -14,6 +16,14 @@ async fn main() {
 
     let config = Config::from_env();
     let state = AppState::new(config.clone());
+
+    if let Some(pool) = &state.db_pool {
+        prepare_database(pool)
+            .await
+            .expect("failed to connect to PostgreSQL or apply migrations");
+        tracing::info!("PostgreSQL persistence ready");
+    }
+
     let app = create_router(state);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port)

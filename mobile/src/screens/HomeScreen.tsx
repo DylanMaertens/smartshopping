@@ -1,24 +1,33 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BarcodeScannerPanel } from '@/components/BarcodeScannerPanel';
 import { CategorySection } from '@/components/CategorySection';
+import { ListManager } from '@/components/ListManager';
+import { SyncStatusCard, type SyncPhase } from '@/components/SyncStatusCard';
 import { classifyProductLocally, STORE_CATEGORIES } from '@/services/categorization/categoryService';
 import { getConfiguredApiBaseUrl, getProduct } from '@/services/api/backend';
 import { ShoppingListStorage } from '@/services/storage/shoppingListStorage';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
-import type { CategorySection as CategorySectionType, ShoppingItem } from '@/types';
-
-const DEMO_LIST_ID = 'local-demo-list';
+import type { CategorySection as CategorySectionType, ShoppingItem, ShoppingList } from '@/types';
 
 export function HomeScreen() {
   const inputRef = useRef<TextInput>(null);
+  const previousOnlineRef = useRef<boolean | null>(null);
+  const syncInFlightRef = useRef(false);
   const [inputValue, setInputValue] = useState('');
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const syncEngine = useOfflineSync();
+  const [syncPhase, setSyncPhase] = useState<SyncPhase>('idle');
+  const [lists, setLists] = useState<ShoppingList[]>(() => ShoppingListStorage.getLists());
+  const [activeListId, setActiveListId] = useState(() => ShoppingListStorage.getActiveListId());
+  const activeListIdRef = useRef(activeListId);
+  const [lastSyncAt, setLastSyncAt] = useState(() =>
+    ShoppingListStorage.getLastSyncTimestamp(ShoppingListStorage.getActiveListId()),
+  );
+  const { networkState, syncEngine } = useOfflineSync();
   const [items, setItems] = useState<ShoppingItem[]>(() => {
-    const persistedItems = ShoppingListStorage.getCurrentList();
+    const persistedItems = ShoppingListStorage.getCurrentList(ShoppingListStorage.getActiveListId());
     if (persistedItems.length > 0) return persistedItems;
 
     return [createShoppingItem('Lait demi-écrémé'), createShoppingItem('Pommes'), createShoppingItem('Lessive')];
@@ -27,11 +36,19 @@ export function HomeScreen() {
   const visibleItems = useMemo(() => items.filter((item) => !item.deletedAt), [items]);
   const sections = useMemo(() => groupItemsByCategory(visibleItems), [visibleItems]);
   const remainingCount = visibleItems.filter((item) => !item.checked).length;
-  const pendingChangesCount = ShoppingListStorage.getPendingChanges(items).length;
+  const pendingChangesCount = ShoppingListStorage.getPendingChanges(activeListId, items).length;
 
   useEffect(() => {
-    ShoppingListStorage.saveCurrentList(items);
-  }, [items]);
+    activeListIdRef.current = activeListId;
+    ShoppingListStorage.saveCurrentList(activeListId, items);
+  }, [activeListId, items]);
+
+  useEffect(() => {
+    if (pendingChangesCount > 0 && syncPhase === 'synced') {
+      setSyncPhase('idle');
+      setSyncStatus('Modifications locales en attente.');
+    }
+  }, [pendingChangesCount, syncPhase]);
 
   function addItem() {
     const name = inputValue.trim();
@@ -103,43 +120,96 @@ export function HomeScreen() {
     );
   }
 
-  async function syncCurrentList() {
-    const pendingChanges = ShoppingListStorage.getPendingChanges(items);
-    if (pendingChanges.length === 0) {
-      setSyncStatus('Aucun changement à synchroniser.');
-      return;
-    }
+  const syncCurrentList = useCallback(async (trigger: 'manual' | 'reconnect' = 'manual') => {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
 
-    setSyncStatus(`Synchronisation de ${pendingChanges.length} changement(s)…`);
+    const syncingListId = activeListId;
+    const pendingChanges = ShoppingListStorage.getPendingChanges(activeListId, items);
+    setSyncPhase('syncing');
+    setSyncStatus(
+      trigger === 'reconnect'
+        ? 'Connexion rétablie, reprise de la synchronisation…'
+        : pendingChanges.length > 0
+        ? `Synchronisation de ${pendingChanges.length} changement(s)…`
+        : 'Recherche de changements distants…',
+    );
 
     try {
       const result = await syncEngine.syncListIfOnline(
-        DEMO_LIST_ID,
+        activeListId,
         pendingChanges,
-        ShoppingListStorage.getLastSyncTimestamp(),
+        ShoppingListStorage.getLastSyncTimestamp(activeListId),
       );
 
       if (!result.synced) {
+        setSyncPhase(result.reason === 'offline' ? 'offline' : 'error');
         setSyncStatus(result.reason === 'offline' ? 'Hors ligne: sync reportée.' : 'Sync indisponible.');
         return;
       }
 
-      const syncedItems = ShoppingListStorage.markAsSynced(items, result.response.server_time);
-      const mergedItems = ShoppingListStorage.applyRemoteChanges(syncedItems, result.remoteItems);
+      const syncedItems = ShoppingListStorage.markAsSynced(activeListId, items, result.response.server_time);
+      const mergedItems = ShoppingListStorage.applyRemoteChanges(activeListId, syncedItems, result.remoteItems);
+      if (activeListIdRef.current !== syncingListId) return;
+
       setItems(mergedItems);
+      setLastSyncAt(result.response.server_time);
+      setSyncPhase('synced');
       setSyncStatus(
         result.response.conflicts.length > 0
           ? `${result.response.conflicts.length} conflit(s) résolu(s) en LWW.`
           : 'Liste synchronisée.',
       );
     } catch {
+      if (activeListIdRef.current !== syncingListId) return;
+      setSyncPhase('error');
       setSyncStatus('Erreur sync: changements conservés en local.');
+    } finally {
+      syncInFlightRef.current = false;
     }
-  }
+  }, [activeListId, items, syncEngine]);
+
+  useEffect(() => {
+    if (networkState.isConnected === undefined) return;
+
+    const online = networkState.isConnected === true && networkState.isInternetReachable !== false;
+    const wasOnline = previousOnlineRef.current;
+    previousOnlineRef.current = online;
+
+    if (wasOnline === false && online) {
+      void syncCurrentList('reconnect');
+    }
+  }, [networkState.isConnected, networkState.isInternetReachable, syncCurrentList]);
 
   function resetList() {
-    ShoppingListStorage.clearCurrentList();
-    setItems([]);
+    setItems(ShoppingListStorage.clearCurrentList(activeListId));
+  }
+
+  function selectList(listId: string) {
+    ShoppingListStorage.setActiveList(listId);
+    activeListIdRef.current = listId;
+    setActiveListId(listId);
+    setItems(ShoppingListStorage.getCurrentList(listId));
+    setLastSyncAt(ShoppingListStorage.getLastSyncTimestamp(listId));
+    setSyncPhase('idle');
+    setSyncStatus(null);
+  }
+
+  function createList() {
+    const created = ShoppingListStorage.createList(`Liste ${lists.length + 1}`);
+    setLists(ShoppingListStorage.getLists());
+    selectList(created.id);
+  }
+
+  function renameList(name: string) {
+    ShoppingListStorage.renameList(activeListId, name);
+    setLists(ShoppingListStorage.getLists());
+  }
+
+  function archiveList() {
+    const nextId = ShoppingListStorage.archiveList(activeListId);
+    setLists(ShoppingListStorage.getLists());
+    selectList(nextId);
   }
 
   return (
@@ -150,6 +220,15 @@ export function HomeScreen() {
           Ajoute un produit, l’app le classe automatiquement dans un rayon magasin générique.
         </Text>
       </View>
+
+      <ListManager
+        activeListId={activeListId}
+        lists={lists}
+        onArchive={archiveList}
+        onCreate={createList}
+        onRename={renameList}
+        onSelect={selectList}
+      />
 
       <View
         style={{
@@ -207,19 +286,14 @@ export function HomeScreen() {
         {scanStatus ? <Text style={{ color: '#475569' }}>{scanStatus}</Text> : null}
       </View>
 
-      <View style={{ backgroundColor: '#eff6ff', borderRadius: 16, gap: 10, padding: 16 }}>
-        <Text style={{ color: '#1e3a8a', fontSize: 16, fontWeight: '700' }}>Synchronisation</Text>
-        <Text style={{ color: '#475569' }}>
-          {pendingChangesCount} changement{pendingChangesCount > 1 ? 's' : ''} en attente.
-        </Text>
-        <Pressable
-          onPress={syncCurrentList}
-          style={{ alignItems: 'center', backgroundColor: '#1d4ed8', borderRadius: 12, padding: 12 }}
-        >
-          <Text style={{ color: '#ffffff', fontWeight: '700' }}>Synchroniser maintenant</Text>
-        </Pressable>
-        {syncStatus ? <Text style={{ color: '#1e3a8a' }}>{syncStatus}</Text> : null}
-      </View>
+      <SyncStatusCard
+        lastSyncAt={lastSyncAt}
+        message={syncStatus}
+        networkState={networkState}
+        onSync={() => void syncCurrentList('manual')}
+        pendingCount={pendingChangesCount}
+        phase={syncPhase}
+      />
 
       {scannerVisible ? (
         <BarcodeScannerPanel onCancel={() => setScannerVisible(false)} onScanned={addItemFromBarcode} />
@@ -254,7 +328,7 @@ function createShoppingItem(
 
   return {
     id: overrides.id ?? `${now}-${Math.random().toString(36).slice(2)}`,
-    listId: DEMO_LIST_ID,
+    listId: ShoppingListStorage.getActiveListId(),
     name,
     barcode: overrides.barcode,
     category: overrides.category ?? category.categoryName,
