@@ -1,0 +1,11 @@
+appId: com.smartshopping.app
+---
+- launchApp:
+    clearState: true
+- tapOn: "Scanner un code-barres"
+- tapOn:
+    id: request-camera-permission
+- tapOn: "While using the app"
+- assertVisible:
+    id: barcode-camera-view
+- tapOn: "Fermer"

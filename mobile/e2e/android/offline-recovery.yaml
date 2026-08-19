@@ -1,0 +1,14 @@
+appId: com.smartshopping.app
+---
+- launchApp
+- toggleAirplaneMode
+- tapOn:
+    id: add-item-input
+- inputText: Pates
+- tapOn:
+    id: add-item-button
+- assertVisible: Pates
+- toggleAirplaneMode
+- tapOn: "Synchroniser maintenant"
+- assertVisible:
+    text: ".*(synchronisée|conservés en local).*"

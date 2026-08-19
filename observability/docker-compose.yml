@@ -1,0 +1,60 @@
+services:
+  backend:
+    build: ../backend
+    environment:
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL: redis://redis:6379
+      ENABLE_SYNC_ENDPOINT: "true"
+      METRICS_TOKEN_FILE: /run/secrets/metrics_token
+      REQUIRE_DEVICE_SIGNATURES: "true"
+      DEVICE_REGISTRY_PATH: /data/device_registry.json
+    ports: ["3000:3000"]
+    volumes: ["backend-data:/data"]
+    secrets: [database_url, metrics_token]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: smartshopping
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: smartshopping
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartshopping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    secrets: [postgres_password]
+  redis:
+    image: redis:7-alpine
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-alerts.yml:/etc/prometheus/alerts.yml:ro
+    depends_on: [backend]
+    secrets: [metrics_token]
+  grafana:
+    image: grafana/grafana:12.1.0
+    ports: ["3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana-provisioning:/etc/grafana/provisioning:ro
+      - ./grafana-dashboard.json:/var/lib/grafana/dashboards/smartshopping.json:ro
+    depends_on: [prometheus]
+    secrets: [grafana_admin_password]
+volumes:
+  backend-data:
+  postgres-data:
+secrets:
+  database_url: { file: ./secrets/database_url }
+  metrics_token: { file: ./secrets/metrics_token }
+  postgres_password: { file: ./secrets/postgres_password }
+  grafana_admin_password: { file: ./secrets/grafana_admin_password }
