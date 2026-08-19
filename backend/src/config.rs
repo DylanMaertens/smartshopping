@@ -13,6 +13,9 @@ pub struct Config {
     pub device_registry_path: String,
     pub redis_url: Option<String>,
     pub database_url: Option<String>,
+    pub metrics_token: Option<String>,
+    pub api_rate_limit_per_minute: u32,
+    pub require_device_signatures: bool,
 }
 
 impl Config {
@@ -56,9 +59,26 @@ impl Config {
             redis_url: std::env::var("REDIS_URL")
                 .ok()
                 .filter(|url| !url.trim().is_empty()),
-            database_url: std::env::var("DATABASE_URL")
+            database_url: env_or_file("DATABASE_URL").filter(|url| !url.trim().is_empty()),
+            metrics_token: env_or_file("METRICS_TOKEN").filter(|token| !token.is_empty()),
+            api_rate_limit_per_minute: std::env::var("API_RATE_LIMIT_PER_MINUTE")
                 .ok()
-                .filter(|url| !url.trim().is_empty()),
+                .and_then(|value| value.parse().ok())
+                .filter(|value| *value > 0)
+                .unwrap_or(120),
+            require_device_signatures: std::env::var("REQUIRE_DEVICE_SIGNATURES")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(true),
         }
     }
+}
+
+fn env_or_file(name: &str) -> Option<String> {
+    std::env::var(name).ok().or_else(|| {
+        let path = std::env::var(format!("{name}_FILE")).ok()?;
+        std::fs::read_to_string(path)
+            .ok()
+            .map(|value| value.trim().to_string())
+    })
 }

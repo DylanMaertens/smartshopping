@@ -9,6 +9,8 @@ pub struct DeviceProfile {
     pub first_seen_at: i64,
     pub last_seen_at: i64,
     pub sync_count: u64,
+    #[serde(default)]
+    pub auth_secret: Option<String>,
 }
 
 #[derive(Debug)]
@@ -48,6 +50,7 @@ impl DeviceRegistry {
                 first_seen_at: now,
                 last_seen_at: now,
                 sync_count: 1,
+                auth_secret: None,
             })
             .clone();
 
@@ -59,6 +62,28 @@ impl DeviceRegistry {
         self.devices.get(device_id).cloned()
     }
 
+    pub fn enroll(&mut self, device_id: &str) -> io::Result<Option<String>> {
+        let now = Utc::now().timestamp_millis();
+        let profile = self
+            .devices
+            .entry(device_id.to_string())
+            .or_insert_with(|| DeviceProfile {
+                device_id: device_id.to_string(),
+                first_seen_at: now,
+                last_seen_at: now,
+                sync_count: 0,
+                auth_secret: None,
+            });
+        if profile.auth_secret.is_some() {
+            return Ok(None);
+        }
+        let secret = crate::services::device_auth::generate_secret();
+        profile.auth_secret = Some(secret.clone());
+        profile.last_seen_at = now;
+        self.persist()?;
+        Ok(Some(secret))
+    }
+
     fn persist(&self) -> io::Result<()> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)?;
@@ -67,6 +92,24 @@ impl DeviceRegistry {
         let mut profiles = self.devices.values().cloned().collect::<Vec<_>>();
         profiles.sort_by(|left, right| left.device_id.cmp(&right.device_id));
         let serialized = serde_json::to_string_pretty(&profiles)?;
-        fs::write(&self.path, serialized)
+        write_private(&self.path, serialized.as_bytes())
     }
+}
+
+fn write_private(path: &std::path::Path, contents: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    let mut options = fs::OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+    }
+    file.write_all(contents)
 }

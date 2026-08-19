@@ -188,9 +188,7 @@ fn normalize(input: &str) -> String {
     input
         .to_lowercase()
         .replace(['-', '_'], " ")
-        .replace('é', "e")
-        .replace('è', "e")
-        .replace('ê', "e")
+        .replace(['é', 'è', 'ê'], "e")
         .replace('à', "a")
         .replace('ç', "c")
         .replace('œ', "oe")

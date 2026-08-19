@@ -87,7 +87,8 @@ pub async fn persist_sync_items(
                 checked = EXCLUDED.checked,
                 updated_at = EXCLUDED.updated_at,
                 deleted_at = EXCLUDED.deleted_at
-            WHERE shared_items.updated_at <= EXCLUDED.updated_at
+            WHERE shared_items.list_id = EXCLUDED.list_id
+              AND shared_items.updated_at <= EXCLUDED.updated_at
             "#,
         )
         .bind(&item.id)

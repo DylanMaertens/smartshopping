@@ -1,11 +1,17 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { ProductCache } from '@/services/cache/sqliteProductCache';
+import { createRequestId } from '@/services/api/requestId';
+import { getAnonymousDeviceId } from '@/services/identity/deviceIdentity';
+import { getDeviceAuthSecret, signDeviceRequest, storeDeviceAuthSecret } from '@/services/identity/deviceAuth';
 import type { ShoppingItem } from '@/types';
 
 const API_BASE_URL = getApiBaseUrl();
 const PRODUCT_LOOKUP_TIMEOUT_MS = 3500;
 const SYNC_TIMEOUT_MS = 8000;
+let enrollmentPromise: Promise<string> | null = null;
+
+export type InvitationResponse = { code: string; list_id: string; expires_at: number };
 
 export type BackendProduct = {
   barcode: string;
@@ -49,13 +55,24 @@ export type SyncResponse = {
   updated_items: SyncItemPayload[];
 };
 
+export class BackendApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly requestId: string,
+  ) {
+    super(message);
+    this.name = 'BackendApiError';
+  }
+}
+
 export async function getProduct(barcode: string): Promise<BackendProduct> {
   const cached = ProductCache.get<BackendProduct>(barcode);
   if (cached) return { ...cached, cached: true };
 
   const response = await fetchWithTimeout(`${API_BASE_URL}/products/${barcode}`, PRODUCT_LOOKUP_TIMEOUT_MS);
   if (!response.ok) {
-    throw new Error(`Backend product lookup error: ${response.status}`);
+    throw apiError('Backend product lookup error', response);
   }
 
   const product = (await response.json()) as BackendProduct;
@@ -74,10 +91,37 @@ export async function syncList(deviceId: string, payload: SyncPayload): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(`Backend sync error: ${response.status}`);
+    throw apiError('Backend sync error', response);
   }
 
   return response.json() as Promise<SyncResponse>;
+}
+
+export async function createListInvitation(deviceId: string, listId: string): Promise<InvitationResponse> {
+  return sharingRequest(`/lists/${encodeURIComponent(listId)}/invitations`, deviceId);
+}
+
+export async function joinListInvitation(deviceId: string, code: string): Promise<{ list_id: string }> {
+  return sharingRequest(`/invitations/${encodeURIComponent(code.trim())}/join`, deviceId);
+}
+
+export async function revokeListInvitation(deviceId: string, code: string): Promise<{ revoked: boolean }> {
+  return sharingRequest(`/invitations/${encodeURIComponent(code)}/revoke`, deviceId);
+}
+
+export type SharedListMember = { device_id: string; role: string; joined_at: number };
+
+export async function getListMembers(deviceId: string, listId: string): Promise<SharedListMember[]> {
+  const response = await sharingRequest<{ members: SharedListMember[] }>(
+    `/lists/${encodeURIComponent(listId)}/members`, deviceId, 'GET',
+  );
+  return response.members;
+}
+
+export async function removeListMember(deviceId: string, listId: string, memberId: string): Promise<void> {
+  await sharingRequest(
+    `/lists/${encodeURIComponent(listId)}/members/${encodeURIComponent(memberId)}/revoke`, deviceId,
+  );
 }
 
 export function toSyncItemPayload(item: ShoppingItem): SyncItemPayload {
@@ -140,10 +184,61 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const headers = new Headers(options.headers);
+  const requestId = createRequestId();
+  headers.set('X-Request-Id', requestId);
+  const deviceId = headers.get('X-Device-Id') ?? await getAnonymousDeviceId();
+  if (!headers.has('X-Device-Id')) {
+    headers.set('X-Device-Id', deviceId);
+  }
+  const secret = await ensureDeviceEnrollment(deviceId);
+  const timestamp = Date.now();
+  const body = typeof options.body === 'string' ? options.body : '';
+  const parsedUrl = new URL(url);
+  headers.set('X-Device-Timestamp', String(timestamp));
+  headers.set('X-Device-Signature', signDeviceRequest(
+    secret, timestamp, requestId, options.method ?? 'GET', `${parsedUrl.pathname}${parsedUrl.search}`, body,
+  ));
 
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    return await fetch(url, { ...options, headers, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function ensureDeviceEnrollment(deviceId: string): Promise<string> {
+  const existing = getDeviceAuthSecret(deviceId);
+  if (existing) return existing;
+  enrollmentPromise ??= enrollDevice(deviceId).finally(() => { enrollmentPromise = null; });
+  return enrollmentPromise;
+}
+
+async function enrollDevice(deviceId: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/devices/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+    body: JSON.stringify({ device_id: deviceId }),
+  });
+  if (!response.ok) throw apiError('Device enrollment error', response);
+  const payload = await response.json() as { device_id: string; secret: string };
+  if (payload.device_id !== deviceId) throw new Error('Device enrollment mismatch');
+  storeDeviceAuthSecret(deviceId, payload.secret);
+  return payload.secret;
+}
+
+function apiError(message: string, response: Response): BackendApiError {
+  return new BackendApiError(
+    `${message}: ${response.status}`,
+    response.status,
+    response.headers.get('x-request-id') ?? 'non-disponible',
+  );
+}
+
+async function sharingRequest<T>(path: string, deviceId: string, method: 'GET' | 'POST' = 'POST'): Promise<T> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, SYNC_TIMEOUT_MS, {
+    method,
+    headers: { 'X-Device-Id': deviceId },
+  });
+  if (!response.ok) throw apiError('Backend sharing error', response);
+  return response.json() as Promise<T>;
 }

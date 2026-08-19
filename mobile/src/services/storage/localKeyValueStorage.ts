@@ -1,3 +1,5 @@
+import SQLiteKeyValueStorage from 'expo-sqlite/kv-store';
+
 const memoryStore = new Map<string, string>();
 
 type BrowserLikeStorage = {
@@ -17,8 +19,7 @@ export class LocalKeyValueStorage {
   static getString(key: string): string | null {
     const browserStorage = getBrowserStorage();
     if (browserStorage) return browserStorage.getItem(key);
-
-    return memoryStore.get(key) ?? null;
+    return SQLiteKeyValueStorage.getItemSync(key) ?? memoryStore.get(key) ?? null;
   }
 
   static setString(key: string, value: string): void {
@@ -28,6 +29,7 @@ export class LocalKeyValueStorage {
       return;
     }
 
+    SQLiteKeyValueStorage.setItemSync(key, value);
     memoryStore.set(key, value);
   }
 
@@ -38,6 +40,7 @@ export class LocalKeyValueStorage {
       return;
     }
 
+    SQLiteKeyValueStorage.removeItemSync(key);
     memoryStore.delete(key);
   }
 }

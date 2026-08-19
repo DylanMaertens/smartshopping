@@ -24,6 +24,7 @@ export function BarcodeScannerPanel({ onCancel, onScanned }: Props) {
         </Text>
         <Pressable
           onPress={requestPermission}
+          testID="request-camera-permission"
           style={{ alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 12, padding: 12 }}
         >
           <Text style={{ color: '#ffffff', fontWeight: '700' }}>Autoriser la caméra</Text>
@@ -49,6 +50,7 @@ export function BarcodeScannerPanel({ onCancel, onScanned }: Props) {
         facing="back"
         onBarcodeScanned={locked ? undefined : handleBarcodeScanned}
         style={{ height: 320, width: '100%' }}
+        testID="barcode-camera-view"
       />
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Pressable

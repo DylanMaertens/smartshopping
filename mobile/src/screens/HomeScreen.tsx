@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BarcodeScannerPanel } from '@/components/BarcodeScannerPanel';
 import { CategorySection } from '@/components/CategorySection';
+import { DeviceDiagnosticsCard } from '@/components/DeviceDiagnosticsCard';
 import { ListManager } from '@/components/ListManager';
+import { ShareListCard } from '@/components/ShareListCard';
 import { SyncStatusCard, type SyncPhase } from '@/components/SyncStatusCard';
 import { classifyProductLocally, STORE_CATEGORIES } from '@/services/categorization/categoryService';
-import { getConfiguredApiBaseUrl, getProduct } from '@/services/api/backend';
+import { BackendApiError, getConfiguredApiBaseUrl, getProduct } from '@/services/api/backend';
 import { ShoppingListStorage } from '@/services/storage/shoppingListStorage';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import type { CategorySection as CategorySectionType, ShoppingItem, ShoppingList } from '@/types';
@@ -81,8 +83,9 @@ export function HomeScreen() {
         ),
       );
       setScanStatus(`Produit enrichi : ${product.product_name}`);
-    } catch {
-      setScanStatus(`Produit conservé hors-ligne. API non jointe: ${getConfiguredApiBaseUrl()}`);
+    } catch (error) {
+      const reference = error instanceof BackendApiError ? ` Référence : ${error.requestId}.` : '';
+      setScanStatus(`Produit conservé hors-ligne. API non jointe: ${getConfiguredApiBaseUrl()}.${reference}`);
     }
   }
 
@@ -120,7 +123,7 @@ export function HomeScreen() {
     );
   }
 
-  const syncCurrentList = useCallback(async (trigger: 'manual' | 'reconnect' = 'manual') => {
+  const syncCurrentList = useCallback(async (trigger: 'manual' | 'reconnect' | 'periodic' = 'manual') => {
     if (syncInFlightRef.current) return;
     syncInFlightRef.current = true;
 
@@ -130,6 +133,8 @@ export function HomeScreen() {
     setSyncStatus(
       trigger === 'reconnect'
         ? 'Connexion rétablie, reprise de la synchronisation…'
+        : trigger === 'periodic'
+        ? 'Synchronisation périodique au premier plan…'
         : pendingChanges.length > 0
         ? `Synchronisation de ${pendingChanges.length} changement(s)…`
         : 'Recherche de changements distants…',
@@ -160,10 +165,11 @@ export function HomeScreen() {
           ? `${result.response.conflicts.length} conflit(s) résolu(s) en LWW.`
           : 'Liste synchronisée.',
       );
-    } catch {
+    } catch (error) {
       if (activeListIdRef.current !== syncingListId) return;
       setSyncPhase('error');
-      setSyncStatus('Erreur sync: changements conservés en local.');
+      const reference = error instanceof BackendApiError ? ` Référence : ${error.requestId}.` : '';
+      setSyncStatus(`Erreur sync: changements conservés en local.${reference}`);
     } finally {
       syncInFlightRef.current = false;
     }
@@ -179,6 +185,19 @@ export function HomeScreen() {
     if (wasOnline === false && online) {
       void syncCurrentList('reconnect');
     }
+  }, [networkState.isConnected, networkState.isInternetReachable, syncCurrentList]);
+
+  useEffect(() => {
+    const online = networkState.isConnected === true && networkState.isInternetReachable !== false;
+    if (!online) return undefined;
+
+    const interval = setInterval(() => {
+      if (AppState.currentState === 'active') {
+        void syncCurrentList('periodic');
+      }
+    }, 5 * 60 * 1_000);
+
+    return () => clearInterval(interval);
   }, [networkState.isConnected, networkState.isInternetReachable, syncCurrentList]);
 
   function resetList() {
@@ -210,6 +229,12 @@ export function HomeScreen() {
     const nextId = ShoppingListStorage.archiveList(activeListId);
     setLists(ShoppingListStorage.getLists());
     selectList(nextId);
+  }
+
+  function joinSharedList(listId: string) {
+    ShoppingListStorage.importSharedList(listId);
+    setLists(ShoppingListStorage.getLists());
+    selectList(listId);
   }
 
   return (
@@ -251,6 +276,7 @@ export function HomeScreen() {
             onSubmitEditing={addItem}
             placeholder="Ex: pain, dentifrice, saumon..."
             returnKeyType="done"
+            testID="add-item-input"
             style={{
               backgroundColor: '#ffffff',
               borderColor: '#cbd5e1',
@@ -264,6 +290,7 @@ export function HomeScreen() {
           />
           <Pressable
             onPress={addItem}
+            testID="add-item-button"
             style={{
               alignItems: 'center',
               backgroundColor: '#0f172a',
@@ -294,6 +321,10 @@ export function HomeScreen() {
         pendingCount={pendingChangesCount}
         phase={syncPhase}
       />
+
+      <DeviceDiagnosticsCard />
+
+      <ShareListCard listId={activeListId} onJoined={joinSharedList} />
 
       {scannerVisible ? (
         <BarcodeScannerPanel onCancel={() => setScannerVisible(false)} onScanned={addItemFromBarcode} />

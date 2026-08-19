@@ -2,7 +2,6 @@ import { getDatabase } from '@/db/client';
 import { mergeShoppingItems } from '@/services/sync/mergeItems';
 import type { ShoppingItem, ShoppingList } from '@/types';
 
-const DEFAULT_LIST_ID = 'local-default-list';
 const ACTIVE_LIST_KEY = 'active-list-id';
 
 type ListRow = { id: string; name: string; created_at: number; updated_at: number };
@@ -46,7 +45,7 @@ export class ShoppingListStorage {
     const first = getDatabase().getFirstSync<{ id: string }>(
       'SELECT id FROM shopping_lists WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1',
     );
-    const activeId = first?.id ?? DEFAULT_LIST_ID;
+    const activeId = first?.id ?? this.ensureDefaultList();
     setMetadata(ACTIVE_LIST_KEY, activeId);
     return activeId;
   }
@@ -69,6 +68,17 @@ export class ShoppingListStorage {
     return list;
   }
 
+  static importSharedList(listId: string): ShoppingList {
+    const now = Date.now();
+    getDatabase().runSync(
+      `INSERT INTO shopping_lists (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET deleted_at = NULL, updated_at = excluded.updated_at`,
+      listId, 'Liste partagée', now, now,
+    );
+    this.setActiveList(listId);
+    return { id: listId, name: 'Liste partagée', createdAt: now, updatedAt: now };
+  }
+
   static renameList(listId: string, name: string): void {
     getDatabase().runSync(
       'UPDATE shopping_lists SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
@@ -84,7 +94,7 @@ export class ShoppingListStorage {
     if (lists.length <= 1) return listId;
 
     db.runSync('UPDATE shopping_lists SET deleted_at = ?, updated_at = ? WHERE id = ?', Date.now(), Date.now(), listId);
-    const nextId = lists.find((list) => list.id !== listId)?.id ?? DEFAULT_LIST_ID;
+    const nextId = lists.find((list) => list.id !== listId)?.id ?? this.ensureDefaultList();
     this.setActiveList(nextId);
     return nextId;
   }
@@ -174,14 +184,21 @@ export class ShoppingListStorage {
     return tombstones;
   }
 
-  private static ensureDefaultList(): void {
+  private static ensureDefaultList(): string {
     const count = getDatabase().getFirstSync<{ count: number }>('SELECT COUNT(*) AS count FROM shopping_lists');
-    if ((count?.count ?? 0) > 0) return;
+    if ((count?.count ?? 0) > 0) {
+      return getDatabase().getFirstSync<{ id: string }>(
+        'SELECT id FROM shopping_lists WHERE deleted_at IS NULL ORDER BY created_at LIMIT 1',
+      )?.id ?? 'local-recovery-list';
+    }
     const now = Date.now();
+    const random = getDatabase().getFirstSync<{ value: string }>('SELECT lower(hex(randomblob(16))) AS value');
+    const defaultListId = `local-${random?.value ?? `${now}-${Math.random().toString(36).slice(2)}`}`;
     getDatabase().runSync(
       'INSERT INTO shopping_lists (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
-      DEFAULT_LIST_ID, 'Ma liste', now, now,
+      defaultListId, 'Ma liste', now, now,
     );
+    return defaultListId;
   }
 }
 

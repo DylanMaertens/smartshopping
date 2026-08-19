@@ -1,0 +1,27 @@
+groups:
+  - name: smartshopping-api
+    rules:
+      - alert: SmartShoppingApiHighLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(smartshopping_http_request_duration_seconds_bucket[10m]))) > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Latence p95 SmartShopping supérieure à 500 ms"
+      - alert: SmartShoppingOffFailures
+        expr: increase(smartshopping_off_lookup_failures_total[15m]) > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Erreurs répétées sur Open Food Facts"
+      - alert: SmartShoppingSyncSuccessRateLow
+        expr: increase(smartshopping_sync_attempts_total[30m]) > 10 and increase(smartshopping_sync_successes_total[30m]) / increase(smartshopping_sync_attempts_total[30m]) < 0.8
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "Moins de 80 % des synchronisations réussissent"
+      - alert: SmartShoppingApiRateLimited
+        expr: increase(smartshopping_api_rate_limit_rejections_total[10m]) > 20
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Le quota API est fréquemment dépassé"
