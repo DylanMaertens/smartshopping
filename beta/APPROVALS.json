@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "approvals": {
+    "privacy_legal": { "status": "pending", "approver": "", "approved_at": "" },
+    "support_owner": { "status": "pending", "approver": "", "approved_at": "" },
+    "data_retention_owner": { "status": "pending", "approver": "", "approved_at": "" }
+  }
+}

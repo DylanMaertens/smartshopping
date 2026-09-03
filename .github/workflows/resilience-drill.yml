@@ -1,0 +1,64 @@
+name: Resilience drill
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  restore-and-failover:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: smartshopping
+          POSTGRES_PASSWORD: drill-only-password
+          POSTGRES_DB: smartshopping_drill
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U smartshopping -d smartshopping_drill"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGPASSWORD: drill-only-password
+      SOURCE_DATABASE_URL: postgres://smartshopping:drill-only-password@localhost:5432/smartshopping_drill
+      RESTORE_DATABASE_URL: postgres://smartshopping:drill-only-password@localhost:5432/smartshopping_restore
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Seed and migrate source
+        run: |
+          cd backend
+          TEST_DATABASE_URL="$SOURCE_DATABASE_URL" cargo test --test postgres_sync -- --ignored --test-threads=1
+      - name: Backup with integrity manifest
+        run: DATABASE_URL="$SOURCE_DATABASE_URL" ops/backup-postgres.sh "$RUNNER_TEMP/backups" | tee "$RUNNER_TEMP/backup-path"
+      - name: Restore and enforce RTO
+        run: |
+          RTO_SECONDS=$(python3 -c 'import json; print(json.load(open("ops/recovery-objectives.json"))["rto_seconds"])')
+          RPO_SECONDS=$(python3 -c 'import json; print(json.load(open("ops/recovery-objectives.json"))["rpo_seconds"])')
+          backup=$(cat "$RUNNER_TEMP/backup-path")
+          backup_age=$(( $(date +%s) - $(stat -c %Y "$backup") ))
+          test "$backup_age" -le "$RPO_SECONDS"
+          createdb -h localhost -U smartshopping smartshopping_restore
+          started=$(date +%s)
+          CONFIRM_RESTORE=RESTORE DATABASE_URL="$RESTORE_DATABASE_URL" ops/restore-postgres.sh "$backup"
+          elapsed=$(( $(date +%s) - started ))
+          test "$elapsed" -le "$RTO_SECONDS"
+          printf '{"measured_rto_seconds":%s,"rto_target_seconds":%s,"measured_rpo_seconds":%s,"rpo_target_seconds":%s}\n' "$elapsed" "$RTO_SECONDS" "$backup_age" "$RPO_SECONDS" | tee resilience-result.json
+          psql "$RESTORE_DATABASE_URL" -Atc 'SELECT count(*) FROM _sqlx_migrations' | grep -E '^[1-9][0-9]*$'
+      - name: Verify fail-closed behavior without dependencies
+        run: cargo test --manifest-path backend/Cargo.toml --test distributed_failures
+      - name: Exercise envelope-key rotation script
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          ops/rotate-device-encryption-key.sh "$RUNNER_TEMP/keys"
+          ops/rotate-device-encryption-key.sh "$RUNNER_TEMP/keys"
+          test -s "$RUNNER_TEMP/keys/device_secret_previous_key"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resilience-drill-result
+          path: resilience-result.json
+          retention-days: 30
