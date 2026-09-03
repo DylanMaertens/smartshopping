@@ -39,31 +39,31 @@
     <section>
       <div class="section-title"><div><span class="eyebrow">Vigilance</span><h2>Points d’attention</h2></div></div>
       <div class="attention">
-        <article class="card notice"><h3>Tests sur appareil</h3><p>Quatre scénarios Maestro couvrent persistance, mode avion, redémarrage, reprise, caméra et liens d’invitation. Leur exécution physique reste conditionnée à une matrice Android disponible.</p></article>
-        <article class="card notice"><h3>Persistance distribuée</h3><p>PostgreSQL partage désormais les secrets d’appareils ; Redis partage nonces anti-rejeu et quotas. La CI couvre les primitives atomiques Redis.</p></article>
-        <article class="card notice"><h3>Transport sécurisé</h3><p>L’enrôlement délivre un secret unique : HTTPS devient obligatoire hors réseau local et <code>REQUIRE_DEVICE_SIGNATURES</code> doit être activé en production.</p></article>
+        <article class="card notice"><h3>Tests sur appareil</h3><p>La vague EAS development/preview Android/iOS est automatisée et bloquée tant que les validations humaines restent en attente. Les quatre scénarios Maestro restent à confirmer sur appareils physiques.</p></article>
+        <article class="card notice"><h3>Persistance distribuée</h3><p>PostgreSQL partage les secrets d’appareils ; Redis partage nonces anti-rejeu et quotas. Un exercice hebdomadaire mesure désormais restauration, RTO et comportement sans dépendances.</p></article>
+        <article class="card notice"><h3>Transport sécurisé</h3><p>L’enrôlement délivre un secret unique : HTTPS reste obligatoire hors réseau local et les signatures sont désormais obligatoires par défaut.</p></article>
         <article class="card notice"><h3>Stack locale complète</h3><p>Docker Compose assemble backend, PostgreSQL, Redis, Prometheus et Grafana avec dashboard et alertes préconfigurés.</p></article>
       </div>
     </section>
     <section>
       <div class="section-title"><div><span class="eyebrow">Validation</span><h2>Contrôles récents</h2></div></div>
-      <div class="checks"><span class="check">16 tests backend</span><span class="check">16 tests mobiles</span><span class="check">SQLite en intégration</span><span class="check">Bundle Android Expo</span><span class="check">4 parcours Maestro</span><span class="check">Alertes Prometheus</span></div>
+      <div class="checks"><span class="check">21 tests backend</span><span class="check">16 tests mobiles</span><span class="check">Vault réel en CI</span><span class="check">RTO 60 s / RPO 24 h</span><span class="check">Récupération 2 appareils</span><span class="check">Gate bêta</span></div>
     </section>
     <section>
       <div class="section-title"><div><span class="eyebrow">Sécurité</span><h2>État de l’audit</h2></div><p>Durcissement appliqué sans introduire de compte obligatoire.</p></div>
       <div class="features">
         <article class="card"><h3>Entrées et synchronisation</h3><ul><li>Validation stricte des listes, articles, quantités, codes-barres et horodatages.</li><li>Une requête invalide ne peut plus revendiquer la propriété d’une liste.</li><li>La limite globale de requête reste fixée à 64 Kio.</li></ul></article>
-        <article class="card"><h3>Identité et partage</h3><ul><li>UUID mobile généré par <code>expo-crypto</code>, sans repli pseudo-aléatoire.</li><li>Codes d’invitation 128 bits, expirables et révocables.</li><li>Rotation explicite de l’identité locale, avec avertissement sur la perte des accès.</li><li><code>/metrics</code> protégé par bearer token dès que <code>METRICS_TOKEN</code> est configuré.</li><li>Quota API par appareil avec réponse <code>429</code>, délai de reprise et métrique dédiée.</li><li>Enrôlement unique et signature HMAC-SHA256 du corps, chemin, méthode, timestamp et request ID, avec secret conservé dans SecureStore et PostgreSQL.</li><li>Protection anti-rejeu atomique Redis, fenêtre temporelle limitée à cinq minutes et quota distribué avec repli local.</li><li>Un article PostgreSQL ne peut plus être déplacé entre listes via une collision d’identifiant.</li></ul></article>
+        <article class="card"><h3>Identité et partage</h3><ul><li>UUID mobile généré par <code>expo-crypto</code>, sans repli pseudo-aléatoire.</li><li>Codes d’invitation 128 bits, expirables et révocables.</li><li>Récupération multi-membre isolée dans une CI PostgreSQL dédiée : révocation de l’ancien appareil puis réinvitation du remplaçant.</li><li><code>/metrics</code> protégé par bearer token dès que <code>METRICS_TOKEN</code> est configuré.</li><li>Quota API par appareil avec réponse <code>429</code>, délai de reprise et métrique dédiée.</li><li>Vault Transit testé contre un serveur réel éphémère, rotation comprise, avec token limité à trois opérations.</li><li>Protection anti-rejeu atomique Redis, fenêtre temporelle limitée à cinq minutes et quota distribué avec repli local.</li><li>Un article PostgreSQL ne peut plus être déplacé entre listes via une collision d’identifiant.</li></ul></article>
       </div>
     </section>
     <section id="prochaines-etapes">
       <div class="section-title"><div><span class="eyebrow">Feuille de route</span><h2>Prochaines étapes recommandées</h2></div><p>Ordonnées pour obtenir rapidement un MVP fiable sur appareil réel.</p></div>
       <div class="roadmap">
-        <article class="step"><div class="step-body"><h3>Chiffrer les secrets côté serveur</h3><p>Protéger les secrets HMAC PostgreSQL par une clé KMS et organiser leur rotation sans interruption.</p></div></article>
-        <article class="step"><div class="step-body"><h3>Ajouter récupération et rotation de clés</h3><p>Définir révocation, ré-enrôlement contrôlé et perte de SecureStore sans permettre la prise de contrôle d’une liste.</p></div></article>
-        <article class="step"><div class="step-body"><h3>Publier les premiers dev-clients</h3><p>Configurer <code>EAS_PROJECT_ID</code> et <code>EXPO_TOKEN</code>, puis valider signatures obligatoires sur appareils physiques.</p></div></article>
-        <article class="step"><div class="step-body"><h3>Tester les pannes distribuées</h3><p>Simuler indisponibilité Redis et PostgreSQL, bascule, rejeux concurrents et reprise sans perte de données.</p></div></article>
-        <article class="step"><div class="step-body"><h3>Préparer sauvegardes et runbooks</h3><p>Documenter restauration PostgreSQL, rotation des secrets, alertes et procédures d’incident avant bêta publique.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Activer l’audit Vault de recette</h3><p>Expédier les événements Transit vers le SIEM et déclencher une alerte sur les refus ou volumes anormaux.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Valider les appareils physiques</h3><p>Exécuter récupération, caméra, hors-ligne et reprise sur un couple Android/iOS réel.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Lever le gate de bêta</h3><p>Renseigner approbateurs et dates après revues juridique, support et rétention, puis déclencher la matrice EAS.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Mesurer trois exercices de reprise</h3><p>Confirmer RTO 60 secondes et RPO 24 heures sur trois semaines avant de figer les objectifs de service.</p></div></article>
+        <article class="step"><div class="step-body"><h3>Ajouter la suppression self-service</h3><p>Permettre au propriétaire de supprimer définitivement une liste synchronisée et vérifier sa purge des sauvegardes.</p></div></article>
       </div>
     </section>
   </main>

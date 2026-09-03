@@ -78,12 +78,37 @@ async fn invitations_are_durable_authorized_and_revocable() {
     persist_sync_items(&pool, &owner, &list_id, &[])
         .await
         .expect("failed to claim list");
-    let auth_secret = device_auth::enroll(&pool, &owner).await.unwrap().unwrap();
+    let cipher = shopping_list_backend::services::secret_cipher::SecretCipher::from_base64_keys(
+        "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        None,
+    )
+    .unwrap();
+    let auth_secret = device_auth::enroll(&pool, &cipher, &owner)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
-        device_auth::get_secret(&pool, &owner).await.unwrap(),
-        Some(auth_secret)
+        device_auth::get_secret(&pool, &cipher, &owner)
+            .await
+            .unwrap(),
+        Some(auth_secret.clone())
     );
-    assert_eq!(device_auth::enroll(&pool, &owner).await.unwrap(), None);
+    assert_eq!(
+        device_auth::enroll(&pool, &cipher, &owner).await.unwrap(),
+        None
+    );
+    let stored: String =
+        sqlx::query_scalar("SELECT auth_secret FROM anonymous_devices WHERE device_id = $1")
+            .bind(&owner)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(stored.starts_with("enc:v1:"));
+    let rotated = device_auth::rotate(&pool, &cipher, &owner)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(rotated, auth_secret);
     let sharing = SharingService::default();
 
     let invitation = sharing
@@ -117,6 +142,23 @@ async fn invitations_are_durable_authorized_and_revocable() {
     );
     assert!(!sharing
         .authorize_or_claim(Some(&pool), &list_id, &guest)
+        .await
+        .unwrap());
+    let replacement = Uuid::new_v4().to_string();
+    let recovery_invitation = sharing
+        .create_invitation(Some(&pool), &list_id, &owner)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        sharing
+            .join(Some(&pool), &recovery_invitation.code, &replacement)
+            .await
+            .unwrap(),
+        Some(list_id.clone())
+    );
+    assert!(sharing
+        .authorize_or_claim(Some(&pool), &list_id, &replacement)
         .await
         .unwrap());
     assert!(!sharing

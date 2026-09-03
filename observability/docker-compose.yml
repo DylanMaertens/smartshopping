@@ -7,10 +7,12 @@ services:
       ENABLE_SYNC_ENDPOINT: "true"
       METRICS_TOKEN_FILE: /run/secrets/metrics_token
       REQUIRE_DEVICE_SIGNATURES: "true"
+      DEVICE_SECRET_KEY_FILE: /run/secrets/device_secret_key
+      DEVICE_SECRET_PREVIOUS_KEY_FILE: /run/secrets/device_secret_previous_key
       DEVICE_REGISTRY_PATH: /data/device_registry.json
     ports: ["3000:3000"]
     volumes: ["backend-data:/data"]
-    secrets: [database_url, metrics_token]
+    secrets: [database_url, metrics_token, device_secret_key, device_secret_previous_key]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
@@ -58,3 +60,5 @@ secrets:
   metrics_token: { file: ./secrets/metrics_token }
   postgres_password: { file: ./secrets/postgres_password }
   grafana_admin_password: { file: ./secrets/grafana_admin_password }
+  device_secret_key: { file: ./secrets/device_secret_key }
+  device_secret_previous_key: { file: ./secrets/device_secret_previous_key }

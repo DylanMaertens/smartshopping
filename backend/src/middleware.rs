@@ -192,6 +192,8 @@ fn normalized_endpoint(path: &str) -> &'static str {
             "/api/v1/categories" => "/api/v1/categories",
             "/api/v1/categories/classify" => "/api/v1/categories/classify",
             "/api/v1/sync" => "/api/v1/sync",
+            "/api/v1/devices/register" => "/api/v1/devices/register",
+            "/api/v1/devices/rotate-secret" => "/api/v1/devices/rotate-secret",
             _ => "/other",
         }
     }

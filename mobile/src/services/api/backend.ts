@@ -226,6 +226,18 @@ async function enrollDevice(deviceId: string): Promise<string> {
   return payload.secret;
 }
 
+export async function rotateDeviceSecret(deviceId: string): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/devices/rotate-secret`,
+    SYNC_TIMEOUT_MS,
+    { method: 'POST', headers: { 'X-Device-Id': deviceId } },
+  );
+  if (!response.ok) throw apiError('Device secret rotation error', response);
+  const payload = await response.json() as { device_id: string; secret: string };
+  if (payload.device_id !== deviceId) throw new Error('Device rotation mismatch');
+  storeDeviceAuthSecret(deviceId, payload.secret);
+}
+
 function apiError(message: string, response: Response): BackendApiError {
   return new BackendApiError(
     `${message}: ${response.status}`,

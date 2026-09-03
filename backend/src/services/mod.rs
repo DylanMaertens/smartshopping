@@ -4,4 +4,5 @@ pub mod device_registry;
 pub mod openfoodfacts;
 pub mod persistent_sync;
 pub mod redis_cache;
+pub mod secret_cipher;
 pub mod sharing;

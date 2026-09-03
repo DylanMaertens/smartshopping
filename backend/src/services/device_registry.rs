@@ -84,6 +84,20 @@ impl DeviceRegistry {
         Ok(Some(secret))
     }
 
+    pub fn rotate_secret(&mut self, device_id: &str) -> io::Result<Option<String>> {
+        let Some(profile) = self.devices.get_mut(device_id) else {
+            return Ok(None);
+        };
+        if profile.auth_secret.is_none() {
+            return Ok(None);
+        }
+        let secret = crate::services::device_auth::generate_secret();
+        profile.auth_secret = Some(secret.clone());
+        profile.last_seen_at = Utc::now().timestamp_millis();
+        self.persist()?;
+        Ok(Some(secret))
+    }
+
     fn persist(&self) -> io::Result<()> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)?;

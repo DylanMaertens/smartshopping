@@ -47,6 +47,10 @@ pub fn create_router(state: AppState) -> Router {
             post(handlers::device_auth::enroll),
         )
         .route(
+            "/api/v1/devices/rotate-secret",
+            post(handlers::device_auth::rotate),
+        )
+        .route(
             "/api/v1/products/:barcode",
             get(handlers::products::get_product),
         )

@@ -1,0 +1,43 @@
+name: Vault Transit integration
+
+on:
+  pull_request:
+    paths: ["backend/**", "ops/vault-transit-policy.hcl", ".github/workflows/vault-transit.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transit:
+    runs-on: ubuntu-latest
+    services:
+      vault:
+        image: hashicorp/vault:1.20
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: ci-root-token
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        ports: ["8200:8200"]
+        options: >-
+          --cap-add IPC_LOCK
+          --health-cmd "wget -qO- http://127.0.0.1:8200/v1/sys/health?standbyok=true"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_TOKEN: ci-root-token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: backend }
+      - name: Configure Transit and least-privilege application token
+        run: |
+          curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" -X POST -d '{"type":"transit"}' "$VAULT_ADDR/v1/sys/mounts/transit"
+          curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" -X POST "$VAULT_ADDR/v1/transit/keys/smartshopping-device-secrets"
+          policy=$(python3 -c 'import json; print(json.dumps({"policy": open("ops/vault-transit-policy.hcl").read()}))')
+          curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" -X PUT -d "$policy" "$VAULT_ADDR/v1/sys/policies/acl/smartshopping"
+          curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" -X POST -d '{"policies":["smartshopping"],"ttl":"5m"}' "$VAULT_ADDR/v1/auth/token/create" > token.json
+      - name: Run real Transit rotation test
+        run: |
+          TEST_VAULT_TOKEN=$(python3 -c 'import json; print(json.load(open("token.json"))["auth"]["client_token"])')
+          TEST_VAULT_ADDR="$VAULT_ADDR" TEST_VAULT_TOKEN="$TEST_VAULT_TOKEN" cargo test --manifest-path backend/Cargo.toml --test vault_transit -- --ignored

@@ -18,7 +18,7 @@ use crate::{
     models::product::ProductResponse,
     services::{
         device_registry::DeviceRegistry, openfoodfacts::OpenFoodFactsClient,
-        redis_cache::RedisCache, sharing::SharingService,
+        redis_cache::RedisCache, secret_cipher::SecretCipher, sharing::SharingService,
     },
 };
 
@@ -36,6 +36,7 @@ pub struct AppState {
     pub api_rate_limiter: Arc<ApiRateLimiter>,
     pub signed_request_ids: Cache<String, ()>,
     pub device_auth_secrets: Cache<String, String>,
+    pub secret_cipher: SecretCipher,
 }
 
 #[derive(Default)]
@@ -110,6 +111,7 @@ impl AppState {
             .time_to_live(Duration::from_secs(15 * 60))
             .build();
 
+        let secret_cipher = SecretCipher::from_env().expect("invalid device secret encryption key");
         Self {
             config,
             products_cache,
@@ -123,6 +125,7 @@ impl AppState {
             api_rate_limiter,
             signed_request_ids,
             device_auth_secrets,
+            secret_cipher,
         }
     }
 
@@ -132,7 +135,7 @@ impl AppState {
 
     pub async fn enroll_device(&self, device_id: &str) -> Result<Option<String>, String> {
         let secret = if let Some(pool) = &self.db_pool {
-            crate::services::device_auth::enroll(pool, device_id)
+            crate::services::device_auth::enroll(pool, &self.secret_cipher, device_id)
                 .await
                 .map_err(|error| error.to_string())?
         } else {
@@ -155,7 +158,7 @@ impl AppState {
             return Ok(Some(secret));
         }
         let secret = if let Some(pool) = &self.db_pool {
-            crate::services::device_auth::get_secret(pool, device_id)
+            crate::services::device_auth::get_secret(pool, &self.secret_cipher, device_id)
                 .await
                 .map_err(|error| error.to_string())?
         } else {
@@ -164,6 +167,24 @@ impl AppState {
                 .await
                 .get(device_id)
                 .and_then(|profile| profile.auth_secret)
+        };
+        if let Some(value) = &secret {
+            self.device_auth_secrets
+                .insert(device_id.to_string(), value.clone())
+                .await;
+        }
+        Ok(secret)
+    }
+
+    pub async fn rotate_device_secret(&self, device_id: &str) -> Result<Option<String>, String> {
+        let secret = if let Some(pool) = &self.db_pool {
+            crate::services::device_auth::rotate(pool, &self.secret_cipher, device_id).await?
+        } else {
+            self.device_registry
+                .lock()
+                .await
+                .rotate_secret(device_id)
+                .map_err(|error| error.to_string())?
         };
         if let Some(value) = &secret {
             self.device_auth_secrets
