@@ -1,0 +1,57 @@
+name: Mobile development build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        default: android
+        type: choice
+        options: [android, ios]
+      profile:
+        description: EAS profile
+        required: true
+        default: development
+        type: choice
+        options: [development, preview]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec expo-doctor
+      - name: Validate EAS project binding
+        run: |
+          test -n "$EXPO_TOKEN"
+          test -n "$EAS_PROJECT_ID"
+          pnpm dlx eas-cli@16.17.4 project:info --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_PROJECT_ID: ${{ secrets.EAS_PROJECT_ID }}
+      - name: Build signed development client
+        run: pnpm dlx eas-cli@16.17.4 build --profile "${{ inputs.profile }}" --platform "${{ inputs.platform }}" --non-interactive --no-wait --json | tee eas-build.json
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_PROJECT_ID: ${{ secrets.EAS_PROJECT_ID }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eas-${{ inputs.profile }}-${{ inputs.platform }}
+          path: mobile/eas-build.json
+          retention-days: 14

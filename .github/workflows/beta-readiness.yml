@@ -1,0 +1,26 @@
+name: Beta readiness
+
+on:
+  pull_request:
+    paths: ["beta/**", "ops/check-beta-readiness.py", "ops/recovery-objectives.json", ".github/workflows/beta-readiness.yml"]
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: Require all human approvals
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate artifact schema
+        run: python3 ops/check-beta-readiness.py
+      - name: Require human sign-off for a release dispatch
+        if: github.event_name == 'workflow_dispatch' && inputs.strict
+        run: python3 ops/check-beta-readiness.py --strict

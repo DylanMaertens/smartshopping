@@ -1,0 +1,48 @@
+name: Mobile Android E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["mobile/**", ".github/workflows/mobile-android-e2e.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  maestro:
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29, 35]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: pnpm install --frozen-lockfile
+        working-directory: mobile
+      - run: pnpm exec expo prebuild --platform android --no-install
+        working-directory: mobile
+      - run: ./gradlew assembleDebug
+        working-directory: mobile/android
+      - run: curl -Ls "https://get.maestro.mobile.dev" | bash
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            $HOME/.maestro/bin/maestro test mobile/e2e/android
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: maestro-debug-api-${{ matrix.api-level }}
+          path: ~/.maestro/tests

@@ -1,0 +1,5 @@
+{
+  "rto_seconds": 60,
+  "rpo_seconds": 86400,
+  "exercise_frequency_days": 7
+}

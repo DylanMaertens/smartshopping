@@ -1,0 +1,33 @@
+name: Two-device recovery
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["backend/src/services/sharing.rs", "backend/tests/postgres_sync.rs", ".github/workflows/two-device-recovery.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: smartshopping
+          POSTGRES_PASSWORD: recovery-only-password
+          POSTGRES_DB: smartshopping_recovery
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U smartshopping -d smartshopping_recovery"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: backend }
+      - name: Revoke old member and invite replacement
+        run: cargo test --manifest-path backend/Cargo.toml --test postgres_sync invitations_are_durable_authorized_and_revocable -- --ignored --exact --test-threads=1
+        env:
+          TEST_DATABASE_URL: postgres://smartshopping:recovery-only-password@localhost:5432/smartshopping_recovery

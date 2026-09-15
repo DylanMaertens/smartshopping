@@ -1,0 +1,7 @@
+appId: com.smartshopping.app
+---
+- launchApp
+- openLink: "smartshopping://invite/0123456789abcdef0123456789abcdef"
+- assertVisible:
+    id: invitation-code-input
+- assertVisible: "0123456789abcdef0123456789abcdef"

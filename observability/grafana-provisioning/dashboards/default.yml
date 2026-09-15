@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: SmartShopping
+    folder: SmartShopping
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

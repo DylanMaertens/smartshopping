@@ -1,0 +1,10 @@
+backend/target/
+.DS_Store
+node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+.env
+backend/data/
+observability/secrets/*
+!observability/secrets/*.example
