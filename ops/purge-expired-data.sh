@@ -12,5 +12,6 @@ DELETE FROM anonymous_devices d
 WHERE d.last_seen_at < :cutoff_ms
   AND NOT EXISTS (SELECT 1 FROM shared_lists l WHERE l.owner_device_id = d.device_id)
   AND NOT EXISTS (SELECT 1 FROM list_members m WHERE m.device_id = d.device_id);
+DELETE FROM deleted_lists WHERE deleted_at < :cutoff_ms;
 COMMIT;
 SQL

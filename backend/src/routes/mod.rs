@@ -75,6 +75,10 @@ pub fn create_router(state: AppState) -> Router {
                 get(handlers::sharing::list_members),
             )
             .route(
+                "/api/v1/lists/:list_id/delete",
+                post(handlers::sharing::delete_list),
+            )
+            .route(
                 "/api/v1/lists/:list_id/members/:member_id/revoke",
                 post(handlers::sharing::remove_member),
             )

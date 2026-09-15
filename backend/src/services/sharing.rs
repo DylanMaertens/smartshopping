@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use chrono::Utc;
 use sqlx::{PgPool, Row};
@@ -15,6 +18,7 @@ struct MemorySharingState {
     owners: HashMap<String, String>,
     members: HashMap<(String, String), &'static str>,
     invitations: HashMap<String, MemoryInvitation>,
+    deleted_lists: HashSet<String>,
 }
 
 struct MemoryInvitation {
@@ -157,6 +161,14 @@ impl SharingService {
         device_id: &str,
     ) -> Result<bool, sqlx::Error> {
         if let Some(pool) = pool {
+            if sqlx::query("SELECT 1 FROM deleted_lists WHERE id = $1")
+                .bind(list_id)
+                .fetch_optional(pool)
+                .await?
+                .is_some()
+            {
+                return Ok(false);
+            }
             let access = sqlx::query(
                 r#"
                 SELECT EXISTS(SELECT 1 FROM shared_lists WHERE id = $1) AS exists,
@@ -177,6 +189,9 @@ impl SharingService {
         }
 
         let mut state = self.state.lock().await;
+        if state.deleted_lists.contains(list_id) {
+            return Ok(false);
+        }
         match state.owners.get(list_id) {
             None => {
                 state
@@ -188,6 +203,60 @@ impl SharingService {
             Some(_) => Ok(state
                 .members
                 .contains_key(&(list_id.to_string(), device_id.to_string()))),
+        }
+    }
+
+    pub async fn delete_list(
+        &self,
+        pool: Option<&PgPool>,
+        list_id: &str,
+        owner_id: &str,
+    ) -> Result<Option<bool>, sqlx::Error> {
+        if let Some(pool) = pool {
+            let mut tx = pool.begin().await?;
+            let inserted = sqlx::query(
+                r#"INSERT INTO deleted_lists (id, owner_device_id, deleted_at)
+                   SELECT id, owner_device_id, $3 FROM shared_lists
+                   WHERE id = $1 AND owner_device_id = $2
+                   ON CONFLICT (id) DO NOTHING"#,
+            )
+            .bind(list_id)
+            .bind(owner_id)
+            .bind(Utc::now().timestamp_millis())
+            .execute(&mut *tx)
+            .await?;
+            if inserted.rows_affected() == 0 {
+                let exists = sqlx::query("SELECT 1 FROM shared_lists WHERE id = $1")
+                    .bind(list_id)
+                    .fetch_optional(&mut *tx)
+                    .await?
+                    .is_some();
+                tx.rollback().await?;
+                return Ok(exists.then_some(false));
+            }
+            sqlx::query("DELETE FROM shared_lists WHERE id = $1")
+                .bind(list_id)
+                .execute(&mut *tx)
+                .await?;
+            tx.commit().await?;
+            return Ok(Some(true));
+        }
+
+        let mut state = self.state.lock().await;
+        match state.owners.get(list_id) {
+            None => Ok(None),
+            Some(owner) if owner != owner_id => Ok(Some(false)),
+            Some(_) => {
+                state.owners.remove(list_id);
+                state
+                    .members
+                    .retain(|(member_list, _), _| member_list != list_id);
+                state
+                    .invitations
+                    .retain(|_, invitation| invitation.list_id != list_id);
+                state.deleted_lists.insert(list_id.to_string());
+                Ok(Some(true))
+            }
         }
     }
 
@@ -323,5 +392,35 @@ impl SharingService {
             invitation.revoked = true;
         }
         Ok(allowed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SharingService;
+
+    #[tokio::test]
+    async fn deleted_list_cannot_be_claimed_again() {
+        let sharing = SharingService::default();
+        assert!(sharing
+            .authorize_or_claim(None, "list", "owner")
+            .await
+            .unwrap());
+        assert_eq!(
+            sharing.delete_list(None, "list", "stranger").await.unwrap(),
+            Some(false)
+        );
+        assert_eq!(
+            sharing.delete_list(None, "list", "owner").await.unwrap(),
+            Some(true)
+        );
+        assert!(!sharing
+            .authorize_or_claim(None, "list", "owner")
+            .await
+            .unwrap());
+        assert_eq!(
+            sharing.delete_list(None, "list", "owner").await.unwrap(),
+            None
+        );
     }
 }

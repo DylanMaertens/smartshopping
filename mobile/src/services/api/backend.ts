@@ -124,6 +124,10 @@ export async function removeListMember(deviceId: string, listId: string, memberI
   );
 }
 
+export async function deleteSharedList(deviceId: string, listId: string): Promise<void> {
+  await sharingRequest(`/lists/${encodeURIComponent(listId)}/delete`, deviceId);
+}
+
 export function toSyncItemPayload(item: ShoppingItem): SyncItemPayload {
   return {
     id: item.id,

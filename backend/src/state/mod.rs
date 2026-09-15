@@ -48,6 +48,7 @@ pub struct AppMetrics {
     sync_attempts: AtomicU64,
     sync_successes: AtomicU64,
     api_rate_limit_rejections: AtomicU64,
+    list_deletions: AtomicU64,
     http_requests: StdMutex<HashMap<&'static str, HttpEndpointMetrics>>,
 }
 
@@ -69,6 +70,7 @@ pub enum MetricKind {
     SyncAttempt,
     SyncSuccess,
     ApiRateLimitRejection,
+    ListDeletion,
 }
 
 impl AppState {
@@ -287,6 +289,7 @@ impl AppMetrics {
             MetricKind::ApiRateLimitRejection => self
                 .api_rate_limit_rejections
                 .fetch_add(1, Ordering::Relaxed),
+            MetricKind::ListDeletion => self.list_deletions.fetch_add(1, Ordering::Relaxed),
         };
     }
 
@@ -314,12 +317,13 @@ impl AppMetrics {
             cache_hits as f64 / cache_total as f64
         };
         let mut output = format!(
-            "# TYPE smartshopping_product_cache_hits_total counter\nsmartshopping_product_cache_hits_total {cache_hits}\n# TYPE smartshopping_product_cache_misses_total counter\nsmartshopping_product_cache_misses_total {cache_misses}\n# TYPE smartshopping_product_cache_hit_ratio gauge\nsmartshopping_product_cache_hit_ratio {cache_hit_ratio:.6}\n# TYPE smartshopping_off_lookup_successes_total counter\nsmartshopping_off_lookup_successes_total {}\n# TYPE smartshopping_off_lookup_failures_total counter\nsmartshopping_off_lookup_failures_total {}\n# TYPE smartshopping_sync_attempts_total counter\nsmartshopping_sync_attempts_total {}\n# TYPE smartshopping_sync_successes_total counter\nsmartshopping_sync_successes_total {}\n# TYPE smartshopping_api_rate_limit_rejections_total counter\nsmartshopping_api_rate_limit_rejections_total {}\n# TYPE smartshopping_http_request_duration_seconds histogram\n",
+            "# TYPE smartshopping_product_cache_hits_total counter\nsmartshopping_product_cache_hits_total {cache_hits}\n# TYPE smartshopping_product_cache_misses_total counter\nsmartshopping_product_cache_misses_total {cache_misses}\n# TYPE smartshopping_product_cache_hit_ratio gauge\nsmartshopping_product_cache_hit_ratio {cache_hit_ratio:.6}\n# TYPE smartshopping_off_lookup_successes_total counter\nsmartshopping_off_lookup_successes_total {}\n# TYPE smartshopping_off_lookup_failures_total counter\nsmartshopping_off_lookup_failures_total {}\n# TYPE smartshopping_sync_attempts_total counter\nsmartshopping_sync_attempts_total {}\n# TYPE smartshopping_sync_successes_total counter\nsmartshopping_sync_successes_total {}\n# TYPE smartshopping_api_rate_limit_rejections_total counter\nsmartshopping_api_rate_limit_rejections_total {}\n# TYPE smartshopping_list_deletions_total counter\nsmartshopping_list_deletions_total {}\n# TYPE smartshopping_http_request_duration_seconds histogram\n",
             self.off_lookup_successes.load(Ordering::Relaxed),
             self.off_lookup_failures.load(Ordering::Relaxed),
             self.sync_attempts.load(Ordering::Relaxed),
             self.sync_successes.load(Ordering::Relaxed),
             self.api_rate_limit_rejections.load(Ordering::Relaxed),
+            self.list_deletions.load(Ordering::Relaxed),
         );
 
         let metrics = self.http_requests.lock().expect("metrics mutex poisoned");

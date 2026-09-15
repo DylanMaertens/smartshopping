@@ -179,6 +179,8 @@ fn normalized_endpoint(path: &str) -> &'static str {
         "/api/v1/lists/:list_id/invitations"
     } else if path.starts_with("/api/v1/lists/") && path.ends_with("/members") {
         "/api/v1/lists/:list_id/members"
+    } else if path.starts_with("/api/v1/lists/") && path.ends_with("/delete") {
+        "/api/v1/lists/:list_id/delete"
     } else if path.starts_with("/api/v1/lists/") && path.ends_with("/revoke") {
         "/api/v1/lists/:list_id/members/:member_id/revoke"
     } else if path.starts_with("/api/v1/invitations/") && path.ends_with("/join") {

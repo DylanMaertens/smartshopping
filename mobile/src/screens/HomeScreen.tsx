@@ -237,6 +237,12 @@ export function HomeScreen() {
     selectList(listId);
   }
 
+  function deleteActiveList() {
+    const nextId = ShoppingListStorage.deleteListPermanently(activeListId);
+    setLists(ShoppingListStorage.getLists());
+    selectList(nextId);
+  }
+
   return (
     <ScrollView contentContainerStyle={{ padding: 24, gap: 20 }}>
       <View style={{ gap: 8 }}>
@@ -324,7 +330,7 @@ export function HomeScreen() {
 
       <DeviceDiagnosticsCard />
 
-      <ShareListCard listId={activeListId} onJoined={joinSharedList} />
+      <ShareListCard listId={activeListId} onDeleted={deleteActiveList} onJoined={joinSharedList} />
 
       {scannerVisible ? (
         <BarcodeScannerPanel onCancel={() => setScannerVisible(false)} onScanned={addItemFromBarcode} />

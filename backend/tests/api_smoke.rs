@@ -672,6 +672,61 @@ fn sync_request(device_id: &str, list_id: &str) -> Request<Body> {
         .unwrap()
 }
 
+#[tokio::test]
+async fn owner_can_permanently_delete_a_list_and_tombstone_blocks_recreation() {
+    let mut config = test_config();
+    config.enable_sync_endpoint = true;
+    config.enable_off_proxy = false;
+    config.database_url = None;
+    config.redis_url = None;
+    config.device_registry_path = temp_registry_path("delete-list");
+    let app = create_router(AppState::new(config));
+    let owner = "00000000-0000-4000-8000-000000000020";
+    let stranger = "00000000-0000-4000-8000-000000000021";
+
+    assert_eq!(
+        app.clone()
+            .oneshot(sync_request(owner, "deleted-list"))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+    let forbidden = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/lists/deleted-list/delete")
+                .header("x-device-id", stranger)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
+    let deleted = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/lists/deleted-list/delete")
+                .header("x-device-id", owner)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), StatusCode::OK);
+    assert_eq!(
+        app.oneshot(sync_request(owner, "deleted-list"))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+}
+
 fn test_config() -> Config {
     let mut config = Config::from_env();
     config.require_device_signatures = false;

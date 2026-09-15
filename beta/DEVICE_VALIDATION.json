@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "platforms": {
+    "android": { "status": "pending", "tester": "", "tested_at": "", "build_id": "", "scenarios": [] },
+    "ios": { "status": "pending", "tester": "", "tested_at": "", "build_id": "", "scenarios": [] }
+  }
+}

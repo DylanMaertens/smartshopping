@@ -25,3 +25,9 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "Le quota API est fréquemment dépassé"
+      - alert: SmartShoppingUnexpectedListDeletionSpike
+        expr: increase(smartshopping_list_deletions_total[15m]) > 20
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Volume inhabituel de suppressions définitives de listes"

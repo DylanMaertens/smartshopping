@@ -181,8 +181,33 @@ async fn invitations_are_durable_authorized_and_revocable() {
         .revoke(Some(&pool), &second.code, &owner)
         .await
         .unwrap());
+    assert_eq!(
+        sharing
+            .delete_list(Some(&pool), &list_id, &guest)
+            .await
+            .unwrap(),
+        Some(false)
+    );
+    assert_eq!(
+        sharing
+            .delete_list(Some(&pool), &list_id, &owner)
+            .await
+            .unwrap(),
+        Some(true)
+    );
+    assert!(!sharing
+        .authorize_or_claim(Some(&pool), &list_id, &owner)
+        .await
+        .unwrap());
+    let deleted: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM deleted_lists WHERE id = $1)")
+            .bind(&list_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(deleted);
 
-    sqlx::query("DELETE FROM shared_lists WHERE id = $1")
+    sqlx::query("DELETE FROM deleted_lists WHERE id = $1")
         .bind(&list_id)
         .execute(&pool)
         .await

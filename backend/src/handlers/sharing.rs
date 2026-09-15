@@ -40,6 +40,35 @@ pub struct MembersResponse {
     pub members: Vec<MemberResponse>,
 }
 
+#[derive(Serialize)]
+pub struct DeleteListResponse {
+    pub deleted: bool,
+}
+
+pub async fn delete_list(
+    State(state): State<AppState>,
+    Path(list_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<DeleteListResponse>, ApiError> {
+    let owner_id = validate_device_id(&headers)?;
+    validate_list_id(&list_id)?;
+    let deleted = state
+        .sharing
+        .delete_list(state.db_pool.as_ref(), &list_id, &owner_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, "failed to permanently delete list");
+            ApiError::internal_server_error("failed to permanently delete list")
+        })?
+        .ok_or_else(|| ApiError::not_found("list not found"))?;
+    if !deleted {
+        return Err(ApiError::forbidden("only the list owner can delete it"));
+    }
+    state.synced_items.invalidate(&list_id).await;
+    state.record_metric(crate::state::MetricKind::ListDeletion);
+    Ok(Json(DeleteListResponse { deleted: true }))
+}
+
 pub async fn list_members(
     State(state): State<AppState>,
     Path(list_id): Path<String>,

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Pressable, Share, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, Share, Text, TextInput, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import {
   BackendApiError,
   createListInvitation,
+  deleteSharedList,
   getListMembers,
   joinListInvitation,
   removeListMember,
@@ -12,9 +13,9 @@ import {
 } from '@/services/api/backend';
 import { getAnonymousDeviceId } from '@/services/identity/deviceIdentity';
 
-type Props = { listId: string; onJoined: (listId: string) => void };
+type Props = { listId: string; onDeleted: () => void; onJoined: (listId: string) => void };
 
-export function ShareListCard({ listId, onJoined }: Props) {
+export function ShareListCard({ listId, onDeleted, onJoined }: Props) {
   const [code, setCode] = useState('');
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [message, setMessage] = useState('Le partage reste facultatif et anonyme.');
@@ -90,6 +91,17 @@ export function ShareListCard({ listId, onJoined }: Props) {
           })}><Text style={{ color: '#b91c1c', fontWeight: '700' }}>Retirer</Text></Pressable>
         </View>
       ))}
+      <Pressable onPress={() => Alert.alert(
+        'Supprimer définitivement la liste ?',
+        'Les articles, membres et invitations seront supprimés du serveur. Cette action est irréversible.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Supprimer', style: 'destructive', onPress: () => void run(async () => {
+            await deleteSharedList(await getAnonymousDeviceId(), listId);
+            onDeleted();
+          }) },
+        ],
+      )}><Text style={{ color: '#b91c1c', fontWeight: '800' }}>Supprimer définitivement</Text></Pressable>
     </View>
   );
 }

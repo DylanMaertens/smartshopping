@@ -99,6 +99,18 @@ export class ShoppingListStorage {
     return nextId;
   }
 
+  static deleteListPermanently(listId: string): string {
+    const db = getDatabase();
+    db.withTransactionSync(() => {
+      db.runSync("DELETE FROM sync_ops WHERE entity_type = 'item' AND entity_id IN (SELECT id FROM items WHERE list_id = ?)", listId);
+      db.runSync('DELETE FROM shopping_lists WHERE id = ?', listId);
+      db.runSync('DELETE FROM app_metadata WHERE key = ?', lastSyncKey(listId));
+    });
+    const nextId = this.ensureDefaultList();
+    this.setActiveList(nextId);
+    return nextId;
+  }
+
   static getCurrentList(listId = this.getActiveListId()): ShoppingItem[] {
     return getDatabase()
       .getAllSync<ItemRow>(
@@ -185,7 +197,9 @@ export class ShoppingListStorage {
   }
 
   private static ensureDefaultList(): string {
-    const count = getDatabase().getFirstSync<{ count: number }>('SELECT COUNT(*) AS count FROM shopping_lists');
+    const count = getDatabase().getFirstSync<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM shopping_lists WHERE deleted_at IS NULL',
+    );
     if ((count?.count ?? 0) > 0) {
       return getDatabase().getFirstSync<{ id: string }>(
         'SELECT id FROM shopping_lists WHERE deleted_at IS NULL ORDER BY created_at LIMIT 1',
