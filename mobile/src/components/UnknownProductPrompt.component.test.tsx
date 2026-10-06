@@ -1,6 +1,9 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { UnknownProductPrompt } from './UnknownProductPrompt';
+import { reportCommunityProposal } from '@/services/api/backend';
+
+jest.mock('@/services/api/backend', () => ({ reportCommunityProposal: jest.fn() }));
 
 it('requires a valid name and permits postponing without saving', () => {
   const onSave = jest.fn(), onLater = jest.fn();
@@ -38,4 +41,26 @@ it('offers at most the supplied community choices and keeps participation opt-in
   expect(onSave).toHaveBeenCalledWith('Lessive douce', 'Entretien maison', {
     publish: true, proposalIds: ['name-1', 'category-1'],
   });
+});
+
+it('reports without selecting a proposal, publishing or altering the private draft', async () => {
+  jest.mocked(reportCommunityProposal).mockResolvedValue(undefined);
+  const onSave = jest.fn();
+  const suggestions = [{ proposal_id: 'name-1', field: 'name' as const, value: 'Nom public', confirmations: 2, agreement_ratio: 1 }];
+  const screen = render(<UnknownProductPrompt barcode="3254569920478" communityAvailable suggestions={suggestions} onSave={onSave} onLater={jest.fn()} />);
+  fireEvent.changeText(screen.getByLabelText('Nom du produit scanné'), 'Mon nom privé');
+  fireEvent.press(screen.getByLabelText('Signaler la proposition de nom : Nom public'));
+  fireEvent.press(screen.getByLabelText('Nom incorrect'));
+  fireEvent.press(screen.getByText('Envoyer le signalement'));
+  await waitFor(() => screen.getByText('Signalement enregistré pour examen. Aucune suppression ni sanction automatique.'));
+  expect(reportCommunityProposal).toHaveBeenCalledWith('name-1', 'wrong_name');
+  fireEvent.press(screen.getByText('Terminer'));
+  fireEvent.press(screen.getByText('Enregistrer le nom'));
+  expect(onSave).toHaveBeenCalledWith('Mon nom privé', 'À classer', { publish: false, proposalIds: [] });
+});
+
+it('hides reporting when the server does not allow contributions', () => {
+  const suggestions = [{ proposal_id: 'name-1', field: 'name' as const, value: 'Nom public', confirmations: 2, agreement_ratio: 1 }];
+  const screen = render(<UnknownProductPrompt barcode="3254569920478" suggestions={suggestions} onSave={jest.fn()} onLater={jest.fn()} />);
+  expect(screen.queryByText('Signaler cette proposition')).toBeNull();
 });

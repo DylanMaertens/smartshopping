@@ -99,11 +99,13 @@ jest.mock('@/components/ListManager', () => {
 jest.mock('@/components/CategorySection', () => {
   const React = require('react');
   const { Pressable, Text, View } = require('react-native');
-  return { CategorySection: ({ section, onIncreaseQuantity, onDecreaseQuantity, onToggleItem, onRemoveItem, onRenameItem }: {
+  return { CategorySection: ({ section, getItemBarcodes, onIncreaseQuantity, onDecreaseQuantity, onToggleItem, onRemoveItem, onRenameItem }: {
+    getItemBarcodes?: (id: string) => string[];
     section: { categoryName: string; items: ShoppingItem[] }; onIncreaseQuantity: (id: string) => void;
     onRenameItem: (id: string, name: string, category?: string) => void;
     onDecreaseQuantity: (id: string) => void; onToggleItem: (id: string) => void; onRemoveItem: (id: string) => void;
   }) => <View testID={`section-${section.categoryName}`}>{section.items.map((item) => <View key={item.id}>
+    <Text testID={`barcodes-${item.id}`}>{getItemBarcodes?.(item.id).join(',')}</Text>
     <Pressable testID={`decrease-${item.id}`} onPress={() => onDecreaseQuantity(item.id)}><Text>Diminuer</Text></Pressable>
     <Pressable testID={`toggle-${item.id}`} onPress={() => onToggleItem(item.id)}><Text>Cocher</Text></Pressable>
     <Pressable testID={`remove-${item.id}`} onPress={() => onRemoveItem(item.id)}><Text>Supprimer</Text></Pressable>
@@ -148,6 +150,21 @@ beforeEach(() => {
 });
 
 describe('HomeScreen during synchronization', () => {
+  it('passes all distinct valid barcodes from grouped rows to the community lookup', async () => {
+    mockItems.set('home', [
+      { ...milk(), id: 'a', barcode: '3017620422003' },
+      { ...milk(), id: 'b', barcode: '3254569920478' },
+      { ...milk(), id: 'c', barcode: '3017620422003' },
+      { ...milk(), id: 'd', barcode: 'invalid' },
+      { ...milk(), id: 'e', barcode: '12345678', deletedAt: 1 },
+    ]);
+    const screen = render(<HomeScreen />);
+    try {
+      await act(async () => {});
+      expect(screen.getByTestId('barcodes-a').props.children).toBe('3017620422003,3254569920478');
+      expect(getProduct).not.toHaveBeenCalled();
+    } finally { screen.unmount(); }
+  });
   it('persists edits immediately and acknowledges only the original snapshot', async () => {
     const request = deferred<typeof success>();
     mockSync.mockReturnValue(request.promise);

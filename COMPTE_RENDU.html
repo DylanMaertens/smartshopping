@@ -28,11 +28,13 @@
       <article class="card metric"><strong>0</strong><span>compte obligatoire</span></article>
     </section>
     <section id="catalogue-communautaire-tranche-1">
-      <div class="section-title"><div><span class="eyebrow">6 octobre 2026 · Code local, sans nouvel APK</span><h2>Première tranche du catalogue communautaire</h2></div><p>Backend Rust et parcours mobile implémentés et testés. Fonctionnalité désactivée par défaut, sans exposition publique.</p></div>
+      <div class="section-title"><div><span class="eyebrow">6 octobre 2026 · Catalogue et signalements</span><h2>Première tranche du catalogue communautaire</h2></div><p>Backend Rust et parcours mobile implémentés et testés. Fonctionnalité désactivée par défaut, sans exposition publique.</p></div>
       <div class="features">
         <article class="card"><h3>Recherche et choix facultatif</h3><ul>
           <li>Préférences personnelles prioritaires, cache à sept jours conservé, puis Food, Products, Beauty et Pet Food avant le catalogue communautaire. Une proposition en cours ne devient pas un produit final ; nom et rayon sont validés séparément.</li>
           <li>Trois propositions au maximum, choix ou saisie du nom et du rayon, classement local conservé et possibilité de passer. Participation communautaire décochée par défaut ; elle n’est proposée que si le serveur l’autorise.</li>
+          <li>Signalement mobile des propositions en cours : cinq motifs explicites, envoi signé et accusé de réception obligatoire, erreurs et réessai manuel, doubles appuis bloqués. Aucun changement des choix privés ni activation implicite du partage ; aucune sanction automatique.</li>
+          <li>Fiches validées accessibles depuis Modifier l’article : lecture actuelle du nom et du rayon, signalements séparés, choix explicite du code-barres pour les lignes regroupées. Aucun remplacement du cache ou du brouillon privé. Absence de consensus, serveur désactivé et panne distingués.</li>
           <li>Le nom privé est enregistré immédiatement et reste conservé après un refus public ou une panne. Les renommages restent prioritaires aux prochains scans, sans expiration. Protection des réponses tardives et pause du scanner pendant la saisie conservées.</li>
         </ul></article>
         <article class="card"><h3>Persistance et protections</h3><ul>
@@ -42,15 +44,15 @@
           <li>Aucune sanction sur le nombre brut de signalements. Les contributions faites pendant une restriction ne sont pas publiées ni conservées pour publication ultérieure. Les réponses n’annoncent jamais une validation publique garantie.</li>
         </ul></article>
         <article class="card"><h3>Résultats vérifiés</h3><ul>
-          <li>TypeScript conforme ; 248 tests Vitest, 179 tests de composants Jest et 21 tests de configuration réussis.</li>
+          <li>TypeScript conforme ; 256 tests Vitest, 197 tests de composants Jest et 21 tests de configuration réussis. Le formulaire de signalement couvre aussi les erreurs réseau, quotas, propositions indisponibles et fermeture pendant l’envoi. Consultation des fiches validées et codes-barres regroupés couverts.</li>
           <li>37 tests Rust standard réussis. Dix tests optionnels ignorés dans cette passe, dont six ensuite exécutés avec succès sur PostgreSQL 17.11 jetable : parcours communautaire et cinq tests de synchronisation. Les quatre autres contrôles externes (OCR réel, catalogues publics, Redis réel, Vault réel) n’ont pas été exécutés ici.</li>
           <li>Scénarios vérifiés : repli après quatre catalogues simulés, absence/panne distinctes, consensus par champ, votes simultanés et répétés, changement de soutien, signatures obligatoires, quota durable, signalements dédupliqués, restriction sans examen refusée, noms privés conservés et réponses tardives ignorées.</li>
           <li>La limite de sockets du sandbox a nécessité l’exécution autorisée des tests locaux. Le cache de compilation a été déplacé de /tmp vers backend/target après saturation de l’espace temporaire. Les bases jetables ont été arrêtées ; le serveur HTTPS et Expo n’ont pas été relancés.</li>
         </ul></article>
         <article class="card notice"><h3>À terminer avant ouverture publique</h3><ul>
-          <li>Interface privée et historique complet de modération, bouton mobile de signalement, contrôles contre les installations coordonnées, liste de termes et procédure d’examen des faux positifs.</li>
+          <li>Interface privée et historique complet de modération, contrôles contre les installations coordonnées, liste de termes et procédure d’examen des faux positifs.</li>
           <li>Les caches communautaires serveur sont revérifiés. Le cache mobile garde sept jours : l’invalidation anticipée après correction ou retrait reste à concevoir. Aucune durée de sanction automatique n’est fixée.</li>
-          <li>Recette physique du nouveau parcours encore à faire. Aucun APK compilé ni publié ; l’APK de référence reste 0.1.6, code Android 7. La migration a été testée uniquement sur des bases temporaires.</li>
+          <li>APK local 0.1.7 compilé, code Android 8, environ 54 Mio : signature v2, certificat identique à la 0.1.6, SHA-256, bundle et bibliothèques ARM 32/64 bits vérifiés. Installer par-dessus sans désinstaller. Aucune publication ni relance du serveur ; recette physique encore à faire. La migration a été testée uniquement sur des bases temporaires.</li>
           <li><a href="docs/CATALOGUE_COMMUNAUTAIRE.md">Contrat, limites et recette reproductible</a> · <a href="docs/FEUILLE_DE_ROUTE.md">Feuille de route intégrée au projet</a>. Promotions, site public et distribution restent des chantiers ultérieurs.</li>
         </ul></article>
       </div>

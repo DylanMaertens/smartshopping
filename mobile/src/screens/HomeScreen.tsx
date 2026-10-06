@@ -592,6 +592,8 @@ export function HomeScreen() {
     : pendingChangesCount ? `${pendingChangesCount} changement${pendingChangesCount > 1 ? 's' : ''} en attente`
     : syncPhase === 'synced' || lastSyncAt > 0 ? 'À jour' : 'Connexion en cours…';
   const rowCallbacks = { onDecreaseQuantity: decreaseQuantity, onIncreaseQuantity: increaseQuantity,
+    getItemBarcodes: (id: string) => [...new Set(getEquivalentItems(itemsRef.current, id)
+      .map((item) => item.barcode).filter((barcode): barcode is string => !!barcode && /^[0-9]{8,14}$/.test(barcode)))],
     onRenameItem: renameItem, onRemoveItem: removeItem, onToggleItem: toggleItem };
   const closePanel = () => { Keyboard.dismiss(); setPanel(null); };
   const openAdd = () => { setAddedMessage(null); setInputError(null); setPanel('add'); };

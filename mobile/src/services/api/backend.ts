@@ -39,6 +39,16 @@ export type CommunitySuggestions = {
   contributions_enabled?: boolean;
 };
 
+export type CommunityField = Pick<CommunitySuggestion, 'proposal_id' | 'field' | 'value'>;
+export type ValidatedCommunityFields = { barcode: string; fields: CommunityField[]; contributions_enabled: boolean };
+
+export async function getValidatedCommunityFields(barcode: string): Promise<ValidatedCommunityFields> {
+  return requestJson<ValidatedCommunityFields>(
+    `${API_BASE_URL}/community/products/${encodeURIComponent(barcode)}/validated`,
+    8000, {}, 'Validated community fields error',
+  );
+}
+
 export type SyncItemPayload = {
   id: string;
   list_id: string;
@@ -117,6 +127,17 @@ export async function confirmCommunityProposal(proposalId: string, agrees = true
   await requestJson(`${API_BASE_URL}/community/proposals/${encodeURIComponent(proposalId)}/confirmations`, 8000, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agrees }),
   }, 'Community confirmation error');
+}
+
+export type CommunityReportReason = 'wrong_product' | 'wrong_name' | 'wrong_category' | 'abuse' | 'spam';
+
+export async function reportCommunityProposal(proposalId: string, reason: CommunityReportReason): Promise<void> {
+  const result = await requestJson<{ recorded: boolean }>(
+    `${API_BASE_URL}/community/proposals/${encodeURIComponent(proposalId)}/reports`,
+    8000, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) },
+    'Community report error',
+  );
+  if (result?.recorded !== true) throw new Error('Community report was not acknowledged');
 }
 
 export async function syncList(deviceId: string, payload: SyncPayload): Promise<SyncResponse> {

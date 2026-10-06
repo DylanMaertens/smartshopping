@@ -1,6 +1,6 @@
 # Catalogue communautaire — première tranche locale
 
-État du 6 octobre 2026. Fonctionnalité désactivée par défaut, non publiée, sans nouvel APK. La migration `006_community_catalog.sql` n’a été appliquée que sur les bases jetables des tests. La feuille de route reste dans [FEUILLE_DE_ROUTE.md](FEUILLE_DE_ROUTE.md).
+État du 6 octobre 2026. Fonctionnalité désactivée par défaut, non ouverte au public. La migration `006_community_catalog.sql` n’a été appliquée que sur les bases jetables des tests. La feuille de route reste dans [FEUILLE_DE_ROUTE.md](FEUILLE_DE_ROUTE.md).
 
 ## Parcours livré
 
@@ -10,12 +10,15 @@ Après une absence ou une indisponibilité signalée par le serveur, le mobile c
 
 L’enregistrement local précède l’envoi facultatif. Une erreur réseau, un quota ou un refus du filtre public ne supprime pas le nom privé. Les réponses tardives ne remplacent pas un renommage ni le contenu d’une autre liste. Il n’existe pas encore de file de renvoi hors ligne des contributions publiques : un échec est signalé, sans réessai automatique.
 
+Depuis **Modifier l’article → Consulter la fiche communautaire**, un article avec code-barres permet de consulter et signaler les valeurs actuellement validées, nom et rayon séparément. Si la ligne regroupe plusieurs codes-barres, le choix est explicite avant toute lecture. Aucun accès réseau n’est déclenché par le simple affichage de la liste. Ce parcours fonctionne aussi après un renommage privé ou une lecture depuis le cache : il interroge le serveur sans lire ni remplacer le cache produit. La fiche consultée est l’état communautaire actuel, pas nécessairement la source du nom affiché dans la liste. Les brouillons et préférences privés restent inchangés. Une absence de valeur validée se distingue d’un catalogue désactivé ou d’une panne ; sans connexion, la liste reste utilisable mais cette consultation ne l’est pas.
+
 ## Contrat serveur
 
 | Route sous `/api/v1` | Comportement |
 | --- | --- |
 | `GET /products/:barcode` | Repli communautaire après les sources externes ; 404 pour absence, 503 pour indisponibilité sans fiche utilisable |
 | `GET /community/products/:barcode/suggestions` | Trois propositions au maximum et capacité `contributions_enabled` |
+| `GET /community/products/:barcode/validated` | Au maximum un nom et un rayon actuellement validés, identifiants de propositions et capacité `contributions_enabled` ; réponse HTTP `no-store`, aucun auteur ni dossier de modération |
 | `POST /community/products/:barcode/proposals` | Nom, rayon, ou les deux ; proposition et soutien de son auteur dans une transaction |
 | `POST /community/proposals/:id/confirmations` | Accord ou désaccord sur ce champ |
 | `POST /community/proposals/:id/reports` | Signalement dédupliqué ; aucune sanction automatique |
@@ -30,7 +33,9 @@ Chaque appareil peut soutenir une seule valeur par code-barres et par champ. Un 
 
 Le filtre concerne exclusivement les noms publics : expressions configurables par `COMMUNITY_PROHIBITED_TERMS`, exceptions par `COMMUNITY_PROHIBITED_EXCEPTIONS` (séparées par virgules). Il normalise casse, accents, caractères compatibles Unicode, ponctuation et espaces. Il compare des expressions entières. Une exception ne neutralise pas une autre occurrence interdite dans le même nom. La liste est vide par défaut et doit être définie et revue avant une ouverture réelle ; ce filtre n’est pas une modération sémantique ni un détecteur universel de contournements.
 
-Les motifs sont `wrong_product`, `wrong_name`, `wrong_category`, `abuse`, `spam`. Un signalement répété de la même installation avec le même motif ne crée pas plusieurs dossiers. L’API d’enregistrement est livrée ; le bouton mobile de signalement et l’interface d’examen administratif sont encore à réaliser.
+Les motifs sont `wrong_product`, `wrong_name`, `wrong_category`, `abuse`, `spam`. Un signalement répété de la même installation avec le même motif ne crée pas plusieurs dossiers. L’API et le bouton mobile sur les propositions en cours sont livrés ; l’interface d’examen administratif reste à réaliser.
+
+Le bouton apparaît uniquement si le serveur autorise les contributions. Le formulaire exige un motif explicite et envoie uniquement l’identifiant de proposition et le motif, avec l’identité anonyme/signature habituelle de l’installation. Il ne sélectionne pas la proposition, ne coche pas la participation et ne modifie pas le nom ni le rayon privés. L’accusé `recorded: true` est nécessaire pour afficher le succès ; l’envoi est borné à huit secondes, les doubles appuis sont bloqués et les erreurs permettent un réessai manuel (quota et proposition indisponible distingués). Fermer pendant l’envoi ne l’annule pas, mais sa réponse tardive est ignorée par l’écran fermé. Aucune sanction ni suppression n’est automatique.
 
 Le schéma conserve auteur/date de l’examen, motif et auteur de restriction, échéance facultative et levée. PostgreSQL refuse une restriction sans signalement **examiné et reconnu fondé contre ce contributeur**. Aucune durée de sanction n’est choisie automatiquement. Les propositions d’un contributeur actuellement restreint sont exclues des lectures et ses votes du décompte. Les nouvelles propositions et confirmations faites pendant la restriction ne sont pas stockées ; elles ne ressortent donc pas à sa levée. La restriction ne modifie ni les listes ni les noms privés.
 
@@ -40,7 +45,7 @@ Le schéma conserve auteur/date de l’examen, motif et auteur de restriction, �
 - Politique de rétention, gestion des faux positifs, contestations et restrictions à préciser.
 - Contrôles d’enrôlement et anti-abus à renforcer pour plusieurs installations coordonnées ; dimensionnement et quotas à éprouver.
 - Les caches serveur communautaires sont revérifiés contre l’état courant avant réutilisation. Le cache **mobile conserve sept jours**, y compris pour une fiche autrefois validée : une correction/restriction peut donc attendre son expiration sur cet appareil. Un mécanisme d’invalidation anticipée reste à concevoir. Les préférences personnelles n’ont pas de TTL.
-- Recette sur téléphone, accès communautaire après reconnaissance d’une fiche déjà validée, interface de signalement et modération opérationnelle à terminer avant exposition publique.
+- Recette sur téléphone et modération opérationnelle à terminer avant exposition publique.
 
 ## Vérification reproductible
 
@@ -54,4 +59,8 @@ Ce script exécute les tests Rust standard, crée une base jetable sous `/tmp`, 
 
 Le parcours communautaire couvre la migration, les signatures, le repli après les quatre catalogues simulés, l’absence et l’indisponibilité, le consensus distinct du rayon, les répétitions et changements de votes, les écritures simultanées, les restrictions, la déduplication des signalements et le quota après recréation de l’état serveur.
 
-Résultats locaux du 6 octobre : **37 tests Rust standard et 6 tests PostgreSQL réussis**, TypeScript conforme, **248 tests Vitest, 179 tests Jest et 21 contrôles de configuration réussis**. Les tests OCR réel, catalogues externes réels, Redis réel et Vault réel n’ont pas été exécutés lors de cette tranche. La recette native sur téléphone reste à effectuer.
+Les tests du signalement couvrent aussi les cinq motifs via HTTP signé, le refus sans signature, les motifs invalides, les propositions absentes et les réessais dédupliqués. Côté mobile : accusé de réception obligatoire, délai réseau, erreurs 404/429, annulation, doubles appuis, réponse tardive et conservation des choix privés.
+
+La lecture des valeurs validées réutilise les mêmes critères que la recherche produit (consensus courant et restrictions). Les tests couvrent un nom sans rayon validé, un rayon sans nom validé, le retrait du consensus, l’exclusion d’un contributeur restreint, la capacité en lecture seule, le contrat HTTP sans données d’auteur et les codes-barres invalides. Les tests mobiles couvrent aussi le choix parmi des codes-barres regroupés, les brouillons privés et les réponses tardives après changement de produit.
+
+Résultats locaux du 6 octobre : **37 tests Rust standard et 6 tests PostgreSQL réussis**, TypeScript conforme, **256 tests Vitest, 197 tests Jest et 21 contrôles de configuration réussis**. Les tests OCR réel, catalogues externes réels, Redis réel et Vault réel n’ont pas été exécutés lors de cette tranche. La recette native sur téléphone reste à effectuer.

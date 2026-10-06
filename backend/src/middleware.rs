@@ -184,6 +184,8 @@ pub async fn device_signature(
 fn normalized_endpoint(path: &str) -> &'static str {
     if path.starts_with("/api/v1/products/") {
         "/api/v1/products/:barcode"
+    } else if path.starts_with("/api/v1/community/products/") && path.ends_with("/validated") {
+        "/api/v1/community/products/:barcode/validated"
     } else if path.starts_with("/api/v1/community/products/") && path.ends_with("/suggestions") {
         "/api/v1/community/products/:barcode/suggestions"
     } else if path.starts_with("/api/v1/community/products/") && path.ends_with("/proposals") {

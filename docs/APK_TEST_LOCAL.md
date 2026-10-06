@@ -4,7 +4,7 @@ L’APK se construit sur le PC, sans compte Expo, sans EAS et sans publication e
 
 ## Installer et essayer
 
-Le fichier produit par le lanceur est `artifacts/android/smartshopping-0.1.6-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle prend en charge les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent.
+Le fichier produit par le lanceur est `artifacts/android/smartshopping-0.1.7-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle prend en charge les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent.
 
 1. Copier l’APK sur le téléphone et l’ouvrir pour l’installer. Android peut demander d’autoriser cette source d’installation.
 2. Ouvrir SmartShopping : les listes sont utilisables hors ligne immédiatement.
@@ -18,7 +18,13 @@ Utiliser l’adresse du **même backend SmartShopping** : changer d’adresse de
 
 **Les données d’Expo Go ne sont pas transférées automatiquement.** Conserver Expo Go et sa sauvegarde. Restaurer une sauvegarde dans l’APK crée des copies indépendantes ; pour conserver une liste partagée, la rejoindre avec une invitation valide. Les deux applications ont des identités d’appareil différentes.
 
-## Mise à jour 0.1.6
+## Mise à jour 0.1.7
+
+Première tranche du catalogue communautaire : propositions de nom/rayon après échec de recherche, participation facultative et signalement avec cinq motifs. Depuis **Modifier l’article → Consulter la fiche communautaire**, accès aux valeurs actuellement validées et signalement séparé du nom ou du rayon. Si une ligne regroupe plusieurs codes-barres, le produit à consulter doit être choisi. Les choix privés et brouillons restent inchangés.
+
+Installer **par-dessus la version précédente, sans désinstaller** : certificat identique à la 0.1.6, code Android **8**. L’adresse du serveur de test reste configurable. Le backend doit contenir les nouvelles routes et la migration communautaire pour permettre ces fonctions ; le catalogue reste **désactivé par défaut**, en attente de modération opérationnelle. Sur un serveur désactivé ou ancien, la consultation l’indique et la liste reste utilisable. Aucun serveur n’a été démarré pour cette compilation.
+
+## Historique 0.1.6
 
 Rayon Alcools séparé des boissons, proposition de renommage des produits non reconnus avec reprise du scanner après Enregistrer ou Plus tard, et notifications de 2,5 secondes. Le nom reste mémorisé pour les prochains scans. Boissons sans alcool et vinaigre de vin couverts par les tests de classement.
 
@@ -70,9 +76,9 @@ Cet APK utilise `com.smartshopping.app`. Augmenter `android.versionCode` lors de
 
 ## Contrôles
 
-Compilation réalisée le 5 octobre 2026 : APK d’environ 54 Mio, version `0.1.6` / code `7`, Android 7 minimum. Signature v2 et SHA-256 vérifiés, bundle embarqué présent, bibliothèques `arm64-v8a` et `armeabi-v7a` présentes. La configuration embarquée active uniquement le serveur de test du canal `preview`, sans ancienne adresse de tunnel. Aucune clé privée de signature n’est incluse.
+Compilation réalisée le 6 octobre 2026 : APK d’environ 54 Mio, version `0.1.7` / code `8`, Android 7 minimum. Signature v2 et SHA-256 vérifiés, certificat identique à la 0.1.6, bundle embarqué présent, bibliothèques `arm64-v8a` et `armeabi-v7a` présentes. La configuration embarquée active uniquement le serveur de test du canal `preview`, sans ancienne adresse de tunnel. Aucun fichier de clé privée de signature n’est inclus ; permission microphone absente.
 
-Validation automatisée : TypeScript, 247 tests Vitest, 175 tests de composants Jest et 21 tests de configuration réussis. La compilation Android release a réussi. La recette physique ci-dessous reste à effectuer ; le serveur de test a été redémarré avec le classement corrigé. Son adresse courante est disponible avec `python3 ops/local-https.py status`.
+Validation automatisée : TypeScript, 256 tests Vitest, 197 tests de composants Jest, 21 tests de configuration, 37 tests Rust standard et 6 tests PostgreSQL réussis. La compilation Android release a réussi. La recette physique ci-dessous reste à effectuer ; le serveur de test n’a pas été redémarré. Les quatre tests externes optionnels (OCR réel, catalogues réels, Redis réel, Vault réel) n’ont pas été exécutés.
 
 - Signature vérifiable avec `apksigner verify --verbose` et intégrité avec le fichier `.sha256`.
 - Présence du bundle JavaScript embarqué et des bibliothèques ARM dans l’APK.
@@ -94,3 +100,13 @@ Validation automatisée : TypeScript, 247 tests Vitest, 175 tests de composants 
 - Ajouter Vin rouge et Bière sans alcool ; vérifier Alcools et Boissons respectivement.
 - Vérifier l’accès manuel à Alcools et son déplacement dans le tri des rayons.
 - Vérifier que chaque confirmation disparaît après 2,5 secondes.
+
+### Recette 0.1.7 sur téléphone
+
+- Installer au-dessus de la 0.1.6 sans désinstaller ; vérifier listes, préférences, réglage serveur et fonctionnement hors ligne.
+- Modifier un article avec code-barres, commencer un renommage puis consulter sa fiche communautaire : revenir doit conserver le brouillon sans l’enregistrer.
+- Serveur communautaire désactivé : vérifier le message d’indisponibilité, sans blocage de la liste.
+- Dans un environnement de test isolé avec catalogue activé : consulter les valeurs validées, signaler le nom puis le rayon ; vérifier motif obligatoire, confirmation de réception, erreur réseau et réessai.
+- Regrouper deux produits de même nom mais de codes-barres distincts : vérifier le choix du code à consulter, puis changer de code pendant une lecture lente.
+- Après échec de recherche, sélectionner ou saisir un nom/rayon privé ; signaler une proposition ne doit ni activer la participation ni modifier ces choix.
+- Ces contrôles ne constituent pas une autorisation d’ouvrir les contributions publiques : la modération opérationnelle et l’invalidation anticipée du cache mobile restent à terminer.

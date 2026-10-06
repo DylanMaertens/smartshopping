@@ -6,6 +6,7 @@ import { ShoppingItem } from '@/components/ShoppingItem';
 import type { CategorySection as CategorySectionType } from '@/types';
 
 type Props = {
+  getItemBarcodes?: (id: string) => string[];
   onDecreaseQuantity: (id: string) => void;
   onIncreaseQuantity: (id: string) => void;
   onRenameItem: (id: string, name: string, category?: string) => void;
@@ -15,6 +16,7 @@ type Props = {
 };
 
 export function CategorySection({
+  getItemBarcodes,
   onDecreaseQuantity,
   onIncreaseQuantity,
   onRenameItem,
@@ -31,6 +33,7 @@ export function CategorySection({
         <ShoppingItem
           key={item.id}
           item={item}
+          communityBarcodes={getItemBarcodes?.(item.id)}
           onDecreaseQuantity={onDecreaseQuantity}
           onIncreaseQuantity={onIncreaseQuantity}
           onRemove={onRemoveItem}

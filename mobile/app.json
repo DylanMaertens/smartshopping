@@ -3,7 +3,7 @@
     "name": "SmartShopping",
     "slug": "shopping-list-app",
     "scheme": "smartshopping",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "orientation": "portrait",
     "platforms": [
       "android",
@@ -21,7 +21,7 @@
       "expo-secure-store"
     ],
     "android": {
-      "versionCode": 7,
+      "versionCode": 8,
       "package": "com.smartshopping.app",
       "permissions": [
         "CAMERA"

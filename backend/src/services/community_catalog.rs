@@ -27,6 +27,20 @@ pub struct ValidatedCommunityProduct {
     pub category: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ValidatedCommunityField {
+    pub proposal_id: Uuid,
+    pub field: String,
+    pub value: String,
+}
+
+#[derive(Serialize)]
+pub struct ValidatedCommunityFields {
+    pub barcode: String,
+    pub fields: Vec<ValidatedCommunityField>,
+    pub contributions_enabled: bool,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ProposalInput {
     pub name: Option<String>,
@@ -96,9 +110,23 @@ pub async fn validated_product(
     barcode: &str,
     config: &Config,
 ) -> Result<Option<ValidatedCommunityProduct>, sqlx::Error> {
+    let fields = validated_fields(pool, barcode, config).await?;
+    let name = fields.iter().find(|entry| entry.field == "name");
+    let category = fields.iter().find(|entry| entry.field == "category");
+    Ok(name.map(|entry| ValidatedCommunityProduct {
+        name: entry.value.clone(),
+        category: category.map(|entry| entry.value.clone()),
+    }))
+}
+
+pub async fn validated_fields(
+    pool: &PgPool,
+    barcode: &str,
+    config: &Config,
+) -> Result<Vec<ValidatedCommunityField>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT DISTINCT ON (field_name) field_name, value
+        SELECT DISTINCT ON (field_name) id, field_name, value
         FROM community_product_proposals proposal
         WHERE barcode = $1 AND status = 'validated'
           AND (SELECT COUNT(*) FROM community_active_votes v WHERE v.proposal_id=proposal.id AND v.agrees) >= $2
@@ -119,16 +147,15 @@ pub async fn validated_product(
     .bind(config.community_consensus_ratio)
     .fetch_all(pool)
     .await?;
-    let mut name = None;
-    let mut category = None;
-    for row in rows {
-        match row.try_get::<String, _>("field_name")?.as_str() {
-            "name" => name = Some(row.try_get("value")?),
-            "category" => category = Some(row.try_get("value")?),
-            _ => {}
-        }
-    }
-    Ok(name.map(|name| ValidatedCommunityProduct { name, category }))
+    rows.into_iter()
+        .map(|row| {
+            Ok(ValidatedCommunityField {
+                proposal_id: row.try_get("id")?,
+                field: row.try_get("field_name")?,
+                value: row.try_get("value")?,
+            })
+        })
+        .collect()
 }
 
 pub async fn suggestions(

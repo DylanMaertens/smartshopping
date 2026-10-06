@@ -98,6 +98,10 @@ pub fn create_router(state: AppState) -> Router {
 
     if state.config.enable_community_catalog && state.db_pool.is_some() {
         router = router.route(
+            "/api/v1/community/products/:barcode/validated",
+            get(handlers::community::get_validated_fields),
+        );
+        router = router.route(
             "/api/v1/community/products/:barcode/suggestions",
             get(handlers::community::get_suggestions),
         );

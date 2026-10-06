@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductCache } from '@/services/cache/sqliteProductCache';
-import { getCommunitySuggestions, getProduct, syncList, recognizeListPhoto } from './backend';
+import { getCommunitySuggestions, getProduct, syncList, recognizeListPhoto, reportCommunityProposal, getValidatedCommunityFields } from './backend';
 import { getDeviceAuthSecret, storeDeviceAuthSecret, signDeviceRequest } from '@/services/identity/deviceAuth';
 
 vi.mock('expo-constants', () => ({ default: {} }));
@@ -106,5 +106,45 @@ it('limits community suggestions to three without putting them in the product ca
   }));
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ barcode: '3017620422003', suggestions })));
   await expect(getCommunitySuggestions('3017620422003')).resolves.toMatchObject({ suggestions: suggestions.slice(0, 3) });
+  expect(ProductCache.set).not.toHaveBeenCalled();
+});
+
+describe('community reports', () => {
+  beforeEach(() => { vi.mocked(getDeviceAuthSecret).mockReturnValue('secret'); });
+  it('signs only the target and reason, without changing cached products', async () => {
+    const fetch = vi.fn().mockResolvedValue(response({ recorded: true, publication_status: 'received' }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(reportCommunityProposal('proposal-1', 'wrong_name')).resolves.toBeUndefined();
+    expect(signDeviceRequest).toHaveBeenCalledWith('secret', expect.any(Number), expect.any(String), 'POST',
+      '/api/v1/community/proposals/proposal-1/reports', JSON.stringify({ reason: 'wrong_name' }));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(ProductCache.set).not.toHaveBeenCalled();
+  });
+  it.each([{}, { recorded: false }, null])('rejects an absent acknowledgment: %s', async (body) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)));
+    await expect(reportCommunityProposal('proposal-1', 'spam')).rejects.toThrow('not acknowledged');
+  });
+  it.each([404, 429])('preserves HTTP status %s for actionable feedback', async (status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status })));
+    await expect(reportCommunityProposal('proposal-1', 'abuse')).rejects.toMatchObject({ status });
+  });
+  it('bounds a stalled report by eight seconds', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    const pending = expect(reportCommunityProposal('proposal-1', 'wrong_product')).rejects.toThrow('timed out');
+    await vi.advanceTimersByTimeAsync(8000);
+    await pending;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+it('reads current validated fields from the server without reusing or replacing product cache', async () => {
+  vi.mocked(getDeviceAuthSecret).mockReturnValue('secret');
+  const current = { barcode: '3017620422003', fields: [{ proposal_id: 'name-1', field: 'name', value: 'Nom public actuel' }], contributions_enabled: true };
+  const fetch = vi.fn().mockResolvedValue(response(current));
+  vi.stubGlobal('fetch', fetch);
+  await expect(getValidatedCommunityFields(current.barcode)).resolves.toEqual(current);
+  expect(signDeviceRequest).toHaveBeenCalledWith('secret', expect.any(Number), expect.any(String), 'GET',
+    '/api/v1/community/products/3017620422003/validated', '');
+  expect(ProductCache.get).not.toHaveBeenCalled();
   expect(ProductCache.set).not.toHaveBeenCalled();
 });
