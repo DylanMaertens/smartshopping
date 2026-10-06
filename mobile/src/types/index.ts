@@ -12,6 +12,7 @@ export type ShoppingItem = {
 };
 
 export type ShoppingList = {
+  syncDisabled?: boolean;
   id: string;
   name: string;
   createdAt: number;

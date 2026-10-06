@@ -40,6 +40,10 @@ pub fn create_router(state: AppState) -> Router {
         .expose_headers([header::HeaderName::from_static(REQUEST_ID_HEADER)]);
 
     let mut router = Router::new()
+        .route(
+            "/api/v1/ocr",
+            post(handlers::ocr::recognize).layer(DefaultBodyLimit::max(handlers::ocr::BODY_LIMIT)),
+        )
         .route("/health", get(handlers::health::health_check))
         .route("/metrics", get(handlers::metrics::metrics))
         .route(
@@ -90,6 +94,29 @@ pub fn create_router(state: AppState) -> Router {
                 "/api/v1/invitations/:code/revoke",
                 post(handlers::sharing::revoke_invitation),
             );
+    }
+
+    if state.config.enable_community_catalog && state.db_pool.is_some() {
+        router = router.route(
+            "/api/v1/community/products/:barcode/suggestions",
+            get(handlers::community::get_suggestions),
+        );
+        // Never expose community writes when the global signature protection is disabled.
+        if state.config.require_device_signatures {
+            router = router
+                .route(
+                    "/api/v1/community/products/:barcode/proposals",
+                    post(handlers::community::propose),
+                )
+                .route(
+                    "/api/v1/community/proposals/:proposal_id/confirmations",
+                    post(handlers::community::confirm),
+                )
+                .route(
+                    "/api/v1/community/proposals/:proposal_id/reports",
+                    post(handlers::community::report),
+                );
+        }
     }
 
     router

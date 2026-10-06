@@ -5,6 +5,20 @@ mobile/.expo/
 mobile/android/
 mobile/ios/
 .env
+mobile/.env.*
+!mobile/.env.example
 backend/data/
 observability/secrets/*
 !observability/secrets/*.example
+__pycache__/
+
+.local-dev/
+
+mobile/.preview/
+
+# Temporary local HTTPS endpoint (not embedded in release builds).
+mobile/.local-api.json
+mobile/.local-api.json.tmp
+
+# Locally signed application builds.
+artifacts/android/

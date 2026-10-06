@@ -14,7 +14,7 @@ Monorepo de l’application mobile **Liste de courses intelligente**.
 ## Prérequis
 
 - Rust et Cargo ;
-- Node.js et pnpm ;
+- Node.js 22 ou ultérieur et pnpm 11 ;
 - Expo Go ou un émulateur Android pour le développement mobile ;
 - PostgreSQL et Redis uniquement pour tester les services optionnels correspondants.
 
@@ -23,6 +23,9 @@ Monorepo de l’application mobile **Liste de courses intelligente**.
 ```bash
 cd backend
 cp .env.example .env
+set -a
+source .env
+set +a
 cargo run
 ```
 
@@ -66,6 +69,26 @@ Sur un téléphone physique, expose l’adresse IP locale de la machine qui exé
 cd mobile
 EXPO_PUBLIC_API_BASE_URL=http://<IP_LOCALE>:3000/api/v1 pnpm start
 ```
+
+## Tester sur un téléphone Android en Wi-Fi
+
+Avec les dépendances mobile installées et Rust, Node.js, Python 3 et les outils PostgreSQL disponibles dans le `PATH` :
+
+```bash
+bash ops/dev-android.sh
+```
+
+Le lanceur prépare une base PostgreSQL locale, active la synchronisation et le partage, puis démarre Expo Go en mode LAN. Le téléphone et le PC doivent être sur le même Wi-Fi. L’API écoute sur le port 3000 et Expo sur le port 8081. Les règles du pare-feu doivent autoriser ces connexions depuis le réseau local.
+
+L’application utilise Expo SDK 54. Installer [Expo Go compatible SDK 54 pour Android](https://expo.dev/go?sdkVersion=54&platform=android&device=true), puis scanner le QR affiché dans le terminal avec Expo Go. Aucun compte Expo ni build EAS n’est nécessaire pour ce parcours.
+
+Les données et la clé de développement restent dans `.local-dev/`, exclu de Git. `Ctrl+C` arrête les services démarrés par le lanceur ; une nouvelle exécution conserve les listes serveur. Ce lancement HTTP est destiné aux essais sur un réseau local de confiance.
+
+Variables facultatives :
+
+- `SMARTSHOPPING_LAN_IP` : choisir l’IPv4 du PC si plusieurs interfaces sont présentes ;
+- `SMARTSHOPPING_NODE_BINARY` : chemin d’un Node.js fonctionnel ;
+- `CARGO_HOME`, `RUSTUP_HOME`, `CARGO_TARGET_DIR` et `PATH` : utiliser un outillage Rust/PostgreSQL installé séparément.
 
 ## Vérifications
 

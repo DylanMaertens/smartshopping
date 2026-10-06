@@ -7,6 +7,9 @@ pub struct Config {
     pub allowed_origin: String,
     pub enable_sync_endpoint: bool,
     pub off_base_url: String,
+    pub products_base_url: String,
+    pub beauty_base_url: String,
+    pub petfood_base_url: String,
     pub enable_off_proxy: bool,
     pub off_rate_limit_per_minute: u32,
     pub off_max_retries: u32,
@@ -16,6 +19,11 @@ pub struct Config {
     pub metrics_token: Option<String>,
     pub api_rate_limit_per_minute: u32,
     pub require_device_signatures: bool,
+    pub enable_community_catalog: bool,
+    pub community_consensus_min_devices: u32,
+    pub community_consensus_ratio: f64,
+    pub community_prohibited_terms: Vec<String>,
+    pub community_prohibited_exceptions: Vec<String>,
 }
 
 impl Config {
@@ -42,6 +50,12 @@ impl Config {
                 .unwrap_or(false),
             off_base_url: std::env::var("OFF_BASE_URL")
                 .unwrap_or_else(|_| "https://world.openfoodfacts.org/api/v2".to_string()),
+            products_base_url: std::env::var("OPF_BASE_URL")
+                .unwrap_or_else(|_| "https://world.openproductsfacts.org/api/v2".into()),
+            beauty_base_url: std::env::var("OBF_BASE_URL")
+                .unwrap_or_else(|_| "https://world.openbeautyfacts.org/api/v2".into()),
+            petfood_base_url: std::env::var("OPFF_BASE_URL")
+                .unwrap_or_else(|_| "https://world.openpetfoodfacts.org/api/v2".into()),
             enable_off_proxy: std::env::var("ENABLE_OFF_PROXY")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -70,8 +84,38 @@ impl Config {
                 .ok()
                 .and_then(|value| value.parse().ok())
                 .unwrap_or(true),
+            enable_community_catalog: std::env::var("ENABLE_COMMUNITY_CATALOG")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(false),
+            community_consensus_min_devices: std::env::var("COMMUNITY_CONSENSUS_MIN_DEVICES")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .filter(|value| *value > 0)
+                .unwrap_or(5),
+            community_consensus_ratio: std::env::var("COMMUNITY_CONSENSUS_RATIO")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .filter(|value| (0.5..=1.0).contains(value))
+                .unwrap_or(0.8),
+            community_prohibited_terms: csv_env("COMMUNITY_PROHIBITED_TERMS"),
+            community_prohibited_exceptions: csv_env("COMMUNITY_PROHIBITED_EXCEPTIONS"),
         }
     }
+}
+
+fn csv_env(name: &str) -> Vec<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn env_or_file(name: &str) -> Option<String> {

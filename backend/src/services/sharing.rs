@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::handlers::sync::SyncListName;
 use chrono::Utc;
 use sqlx::{PgPool, Row};
 use tokio::sync::Mutex;
@@ -19,6 +20,7 @@ struct MemorySharingState {
     members: HashMap<(String, String), &'static str>,
     invitations: HashMap<String, MemoryInvitation>,
     deleted_lists: HashSet<String>,
+    names: HashMap<String, SyncListName>,
 }
 
 struct MemoryInvitation {
@@ -41,6 +43,25 @@ pub struct ListMember {
 }
 
 impl SharingService {
+    /// Called inside memory_list_operations, after authorization.
+    pub(crate) async fn sync_memory_name(
+        &self,
+        list_id: &str,
+        device_id: &str,
+        incoming: Option<&SyncListName>,
+    ) -> Option<SyncListName> {
+        let mut state = self.state.lock().await;
+        let is_owner = state
+            .owners
+            .get(list_id)
+            .is_some_and(|owner| owner == device_id);
+        if let Some(name) = incoming {
+            if name.replaces(state.names.get(list_id), is_owner) {
+                state.names.insert(list_id.to_owned(), name.clone());
+            }
+        }
+        state.names.get(list_id).cloned()
+    }
     pub async fn list_members(
         &self,
         pool: Option<&PgPool>,
@@ -102,6 +123,7 @@ impl SharingService {
     ) -> Result<Option<bool>, sqlx::Error> {
         if let Some(pool) = pool {
             let mut tx = pool.begin().await?;
+            crate::services::persistent_sync::lock_list(&mut tx, list_id).await?;
             let owner_exists =
                 sqlx::query("SELECT 1 FROM shared_lists WHERE id = $1 AND owner_device_id = $2")
                     .bind(list_id)
@@ -214,6 +236,7 @@ impl SharingService {
     ) -> Result<Option<bool>, sqlx::Error> {
         if let Some(pool) = pool {
             let mut tx = pool.begin().await?;
+            crate::services::persistent_sync::lock_list(&mut tx, list_id).await?;
             let inserted = sqlx::query(
                 r#"INSERT INTO deleted_lists (id, owner_device_id, deleted_at)
                    SELECT id, owner_device_id, $3 FROM shared_lists
@@ -248,6 +271,7 @@ impl SharingService {
             Some(owner) if owner != owner_id => Ok(Some(false)),
             Some(_) => {
                 state.owners.remove(list_id);
+                state.names.remove(list_id);
                 state
                     .members
                     .retain(|(member_list, _), _| member_list != list_id);

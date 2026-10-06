@@ -1,22 +1,40 @@
 #!/usr/bin/env python3
+"""Append a measured drill once, preserving its actual execution timestamp."""
 import argparse
-import datetime as dt
-import json
 import pathlib
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-parser = argparse.ArgumentParser()
-parser.add_argument("result")
-parser.add_argument("--evidence", required=True)
-parser.add_argument("--output", default=str(ROOT / "ops/recovery-history.json"))
-args = parser.parse_args()
-result = json.loads(pathlib.Path(args.result).read_text())
-objectives = json.loads((ROOT / "ops/recovery-objectives.json").read_text())
-rto, rpo = result["measured_rto_seconds"], result["measured_rpo_seconds"]
-entry = {"status": "passed" if rto <= objectives["rto_seconds"] and rpo <= objectives["rpo_seconds"] else "failed", "exercised_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"), "measured_rto_seconds": rto, "measured_rpo_seconds": rpo, "evidence": args.evidence}
-output = pathlib.Path(args.output)
-history = json.loads(output.read_text()) if output.exists() else {"version": 1, "exercises": []}
-history["exercises"].append(entry)
-output.write_text(json.dumps(history, indent=2) + "\n")
-print(json.dumps(entry))
-raise SystemExit(0 if entry["status"] == "passed" else 1)
+from beta_evidence import ROOT, history, measurement, objectives, read_object, write_json
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("result", type=pathlib.Path)
+    parser.add_argument("--evidence", required=True)
+    parser.add_argument("--exercised-at", help="actual exercise time, required unless present in the result")
+    parser.add_argument("--output", type=pathlib.Path, default=ROOT / "ops/recovery-history.json")
+    args = parser.parse_args()
+    try:
+        result = read_object(args.result)
+        targets = objectives(read_object(ROOT / "ops/recovery-objectives.json"))
+        rto = measurement(result.get("measured_rto_seconds"))
+        rpo = measurement(result.get("measured_rpo_seconds"))
+        if args.exercised_at and result.get("exercised_at") and args.exercised_at != result["exercised_at"]:
+            raise ValueError("exercise timestamp conflicts with result")
+        entry = {
+            "status": "passed" if rto <= targets["rto_seconds"] and rpo <= targets["rpo_seconds"] else "failed",
+            "exercised_at": args.exercised_at or result.get("exercised_at"),
+            "measured_rto_seconds": rto, "measured_rpo_seconds": rpo, "evidence": args.evidence,
+        }
+        data = read_object(args.output) if args.output.exists() else {"version": 1, "exercises": []}
+        history(data, targets)
+        data["exercises"].append(entry)
+        history(data, targets)
+        write_json(args.output, data)
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        parser.error(str(exc))
+    print(f"Recorded {entry['status']} recovery exercise: {entry['exercised_at']}")
+    return int(entry["status"] != "passed")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

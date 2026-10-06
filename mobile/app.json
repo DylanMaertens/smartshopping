@@ -1,28 +1,40 @@
 {
   "expo": {
-    "name": "Shopping List",
+    "name": "SmartShopping",
     "slug": "shopping-list-app",
     "scheme": "smartshopping",
-    "version": "0.1.0",
+    "version": "0.1.6",
     "orientation": "portrait",
-    "platforms": ["android", "ios"],
+    "platforms": [
+      "android",
+      "ios"
+    ],
     "plugins": [
       [
         "expo-camera",
         {
-          "cameraPermission": "Autoriser SmartShopping à scanner les codes-barres de vos produits."
+          "cameraPermission": "Autoriser SmartShopping à scanner des produits, des invitations et des listes écrites.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       "expo-secure-store"
     ],
     "android": {
+      "versionCode": 7,
       "package": "com.smartshopping.app",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "softwareKeyboardLayoutMode": "resize"
     },
     "ios": {
       "bundleIdentifier": "com.smartshopping.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Autoriser SmartShopping à scanner les codes-barres de vos produits."
+        "NSCameraUsageDescription": "Autoriser SmartShopping à scanner des produits, des invitations et des listes écrites."
       }
     }
   }

@@ -2,11 +2,11 @@ name: Beta readiness
 
 on:
   pull_request:
-    paths: ["beta/**", "ops/check-beta-readiness.py", "ops/recovery-objectives.json", ".github/workflows/beta-readiness.yml"]
+    paths: ["beta/**", "ops/**", ".github/workflows/beta-readiness.yml"]
   workflow_dispatch:
     inputs:
       strict:
-        description: Require all human approvals
+        description: Require all release evidence
         required: true
         default: true
         type: boolean
@@ -19,8 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Test evidence validation and collection
+        run: python3 -B -m unittest discover -s ops/tests -v
       - name: Validate artifact schema
-        run: python3 ops/check-beta-readiness.py
-      - name: Require human sign-off for a release dispatch
+        run: python3 -B ops/check-beta-readiness.py --output beta-readiness-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beta-readiness-report
+          path: beta-readiness-report.json
+          retention-days: 30
+      - name: Require complete evidence for a release dispatch
         if: github.event_name == 'workflow_dispatch' && inputs.strict
         run: python3 ops/check-beta-readiness.py --strict

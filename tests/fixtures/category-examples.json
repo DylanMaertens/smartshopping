@@ -1,0 +1,628 @@
+[
+  {
+    "name": "Cahiers",
+    "tags": [],
+    "categoryId": "papeterie-bureau"
+  },
+  {
+    "name": "Stylos bleus",
+    "tags": [],
+    "categoryId": "papeterie-bureau"
+  },
+  {
+    "name": "Fournitures scolaires",
+    "tags": [],
+    "categoryId": "papeterie-bureau"
+  },
+  {
+    "name": "Papier A4",
+    "tags": [],
+    "categoryId": "papeterie-bureau"
+  },
+  {
+    "name": "Cartouche pour imprimante",
+    "tags": [],
+    "categoryId": "papeterie-bureau"
+  },
+  {
+    "name": "Post-it",
+    "tags": [],
+    "categoryId": "papeterie-bureau"
+  },
+  {
+    "name": "Vis inox",
+    "tags": [],
+    "categoryId": "bricolage-quincaillerie"
+  },
+  {
+    "name": "Écrous",
+    "tags": [],
+    "categoryId": "bricolage-quincaillerie"
+  },
+  {
+    "name": "Pinceaux",
+    "tags": [],
+    "categoryId": "bricolage-quincaillerie"
+  },
+  {
+    "name": "Papier de verre",
+    "tags": [],
+    "categoryId": "bricolage-quincaillerie"
+  },
+  {
+    "name": "Clé à molette",
+    "tags": [],
+    "categoryId": "bricolage-quincaillerie"
+  },
+  {
+    "name": "Terreau",
+    "tags": [],
+    "categoryId": "jardin-exterieur"
+  },
+  {
+    "name": "Engrais pour tomates",
+    "tags": [],
+    "categoryId": "jardin-exterieur"
+  },
+  {
+    "name": "Râteau",
+    "tags": [],
+    "categoryId": "jardin-exterieur"
+  },
+  {
+    "name": "Graines à semer",
+    "tags": [],
+    "categoryId": "jardin-exterieur"
+  },
+  {
+    "name": "Huile moteur",
+    "tags": [],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Huile pour moteur",
+    "tags": [],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Lave-glace",
+    "tags": [],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Essuie-glaces",
+    "tags": [],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Nettoyant jantes",
+    "tags": [],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Pneus moto",
+    "tags": [],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Huile d’olive",
+    "tags": [],
+    "categoryId": "epicerie-salee"
+  },
+  {
+    "name": "Glace vanille",
+    "tags": [],
+    "categoryId": "surgeles"
+  },
+  {
+    "name": "Papier toilette",
+    "tags": [],
+    "categoryId": "entretien-maison"
+  },
+  {
+    "name": "Savon pour le visage",
+    "tags": [],
+    "categoryId": "soins-visage-corps"
+  },
+  {
+    "name": "Crème fraîche",
+    "tags": [],
+    "categoryId": "cremerie"
+  },
+  {
+    "name": "Objet mystérieux",
+    "tags": [],
+    "categoryId": "non-categorise"
+  },
+  {
+    "name": "Produit",
+    "tags": [
+      "fr:fournitures-de-bureau"
+    ],
+    "categoryId": "papeterie-bureau"
+  },
+  {
+    "name": "Cristaline",
+    "tags": [
+      "en:beverages",
+      "en:waters",
+      "en:spring-waters"
+    ],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Evian",
+    "tags": [
+      "en:mineral-waters"
+    ],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Perrier",
+    "tags": [
+      "fr:eaux-gazeuses"
+    ],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Jus de pomme",
+    "tags": [
+      "en:fruits-and-vegetables",
+      "en:fruit-juices"
+    ],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Jus de pomme",
+    "tags": [
+      "Boissons"
+    ],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Jus de pomme",
+    "tags": [],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Eau minérale",
+    "tags": [],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Cristaline",
+    "tags": [
+      "en:unknown-category"
+    ],
+    "categoryId": "non-categorise"
+  },
+  {
+    "name": "Pâtes complètes",
+    "tags": [
+      "en:unknown-category"
+    ],
+    "categoryId": "epicerie-salee"
+  },
+  {
+    "name": "Dessert chocolat",
+    "tags": [
+      "en:dairy-products"
+    ],
+    "categoryId": "cremerie"
+  },
+  {
+    "name": "Petits pois",
+    "tags": [
+      "en:vegetables",
+      "en:frozen-foods"
+    ],
+    "categoryId": "surgeles"
+  },
+  {
+    "name": "Lait infantile",
+    "tags": [
+      "en:dairies",
+      "en:baby-milks"
+    ],
+    "categoryId": "bebe"
+  },
+  {
+    "name": "Lait de soja",
+    "tags": [
+      "en:plant-based-beverages"
+    ],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Chocolat",
+    "tags": [
+      "Épicerie salée"
+    ],
+    "categoryId": "epicerie-salee"
+  },
+  {
+    "name": "Courgettes",
+    "tags": [
+      "Fruits & légumes"
+    ],
+    "categoryId": "fruits-legumes"
+  },
+  {
+    "name": "Ratatouille",
+    "tags": [
+      "en:vegetables",
+      "en:canned-foods"
+    ],
+    "categoryId": "epicerie-salee"
+  },
+  {
+    "name": "Fromage",
+    "tags": [
+      "À classer"
+    ],
+    "categoryId": "cremerie"
+  },
+  {
+    "name": "Crème visage",
+    "tags": [
+      "en:cosmetics"
+    ],
+    "categoryId": "hygiene-beaute"
+  },
+  {
+    "name": "Poulet en sauce",
+    "tags": [
+      "en:cat-food"
+    ],
+    "categoryId": "alimentation-animale"
+  },
+  {
+    "name": "Produit",
+    "tags": [
+      "en:stationery"
+    ],
+    "categoryId": "papeterie-bureau"
+  },
+  {
+    "name": "Huile",
+    "tags": [
+      "en:motor-oils"
+    ],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Shampooing",
+    "tags": [],
+    "categoryId": "soins-cheveux"
+  },
+  {
+    "name": "Soin réparateur",
+    "tags": [
+      "en:cosmetic-products",
+      "en:hair",
+      "en:shampoos"
+    ],
+    "categoryId": "soins-cheveux"
+  },
+  {
+    "name": "Crème visage",
+    "tags": [],
+    "categoryId": "soins-visage-corps"
+  },
+  {
+    "name": "Lait corporel",
+    "tags": [],
+    "categoryId": "soins-visage-corps"
+  },
+  {
+    "name": "Marque inconnue",
+    "tags": [
+      "en:hygiene",
+      "en:mouthwash"
+    ],
+    "categoryId": "hygiene-dentaire"
+  },
+  {
+    "name": "Dentifrice",
+    "tags": [],
+    "categoryId": "hygiene-dentaire"
+  },
+  {
+    "name": "Eau de toilette",
+    "tags": [],
+    "categoryId": "maquillage-parfums"
+  },
+  {
+    "name": "Pinceau de maquillage",
+    "tags": [],
+    "categoryId": "maquillage-parfums"
+  },
+  {
+    "name": "Baume",
+    "tags": [
+      "en:body",
+      "en:lip-balms"
+    ],
+    "categoryId": "soins-visage-corps"
+  },
+  {
+    "name": "Poulet en sauce",
+    "tags": [
+      "en:meats",
+      "en:wet-cat-food"
+    ],
+    "categoryId": "alimentation-animale"
+  },
+  {
+    "name": "Croquettes",
+    "tags": [],
+    "categoryId": "alimentation-animale"
+  },
+  {
+    "name": "Shampooing pour chien",
+    "tags": [],
+    "categoryId": "accessoires-animaux"
+  },
+  {
+    "name": "Litière",
+    "tags": [],
+    "categoryId": "accessoires-animaux"
+  },
+  {
+    "name": "Jouet pour chat",
+    "tags": [],
+    "categoryId": "accessoires-animaux"
+  },
+  {
+    "name": "Gamelle",
+    "tags": [],
+    "categoryId": "accessoires-animaux"
+  },
+  {
+    "name": "Verre à eau",
+    "tags": [],
+    "categoryId": "maison-cuisine"
+  },
+  {
+    "name": "Film alimentaire",
+    "tags": [],
+    "categoryId": "maison-cuisine"
+  },
+  {
+    "name": "Casserole",
+    "tags": [],
+    "categoryId": "maison-cuisine"
+  },
+  {
+    "name": "Ustensile",
+    "tags": [
+      "en:kitchen-dining"
+    ],
+    "categoryId": "maison-cuisine"
+  },
+  {
+    "name": "Chaussettes",
+    "tags": [],
+    "categoryId": "vetements-linge"
+  },
+  {
+    "name": "Serviette de bain",
+    "tags": [],
+    "categoryId": "vetements-linge"
+  },
+  {
+    "name": "Produit",
+    "tags": [
+      "en:apparel-accessories"
+    ],
+    "categoryId": "vetements-linge"
+  },
+  {
+    "name": "Piles",
+    "tags": [],
+    "categoryId": "electricite-electronique"
+  },
+  {
+    "name": "Ampoule",
+    "tags": [],
+    "categoryId": "electricite-electronique"
+  },
+  {
+    "name": "Ordinateur",
+    "tags": [
+      "en:electronics"
+    ],
+    "categoryId": "electricite-electronique"
+  },
+  {
+    "name": "Ampoule auto",
+    "tags": [],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Livre",
+    "tags": [],
+    "categoryId": "jeux-loisirs"
+  },
+  {
+    "name": "Jouet",
+    "tags": [],
+    "categoryId": "jeux-loisirs"
+  },
+  {
+    "name": "Livre de recettes",
+    "tags": [
+      "en:books"
+    ],
+    "categoryId": "jeux-loisirs"
+  },
+  {
+    "name": "Lessive",
+    "tags": [
+      "en:laundry-supplies"
+    ],
+    "categoryId": "entretien-maison"
+  },
+  {
+    "name": "Crème fraîche",
+    "tags": [],
+    "categoryId": "cremerie"
+  },
+  {
+    "name": "Farine de blé",
+    "tags": [],
+    "categoryId": "epicerie-salee"
+  },
+  {
+    "name": "Jus de pomme",
+    "tags": [],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Marque",
+    "tags": [
+      "Hygiène & beauté"
+    ],
+    "categoryId": "hygiene-beaute"
+  },
+  {
+    "name": "Marque",
+    "tags": [
+      "Soins des cheveux"
+    ],
+    "categoryId": "soins-cheveux"
+  },
+  {
+    "name": "Produit en:portable-cooking-stove-accessories",
+    "tags": [
+      "en:portable-cooking-stove-accessories"
+    ],
+    "categoryId": "maison-cuisine"
+  },
+  {
+    "name": "Produit en:network-cables",
+    "tags": [
+      "en:network-cables"
+    ],
+    "categoryId": "electricite-electronique"
+  },
+  {
+    "name": "Produit en:vehicle-engine-degreasers",
+    "tags": [
+      "en:vehicle-engine-degreasers"
+    ],
+    "categoryId": "auto-moto"
+  },
+  {
+    "name": "Produit en:cleaning-gloves",
+    "tags": [
+      "en:cleaning-gloves"
+    ],
+    "categoryId": "entretien-maison"
+  },
+  {
+    "name": "Produit en:hair-conditioners-for-colored-hair",
+    "tags": [
+      "en:hair-conditioners-for-colored-hair"
+    ],
+    "categoryId": "soins-cheveux"
+  },
+  {
+    "name": "Produit en:whitening-toothpastes",
+    "tags": [
+      "en:whitening-toothpastes"
+    ],
+    "categoryId": "hygiene-dentaire"
+  },
+  {
+    "name": "Produit en:livestock-feed",
+    "tags": [
+      "en:livestock-feed"
+    ],
+    "categoryId": "alimentation-animale"
+  },
+  {
+    "name": "Produit en:frozen-artichoke-bottom",
+    "tags": [
+      "en:frozen-artichoke-bottom"
+    ],
+    "categoryId": "surgeles"
+  },
+  {
+    "name": "Produit en:bavarian-mustards",
+    "tags": [
+      "en:bavarian-mustards"
+    ],
+    "categoryId": "epicerie-salee"
+  },
+  {
+    "name": "Produit en:garden-hose-spray-nozzles",
+    "tags": [
+      "en:garden-hose-spray-nozzles"
+    ],
+    "categoryId": "jardin-exterieur"
+  },
+  {
+    "name": "Sirop d’érable",
+    "tags": [
+      "en:maple-syrups"
+    ],
+    "categoryId": "epicerie-sucree"
+  },
+  {
+    "name": "Vin rouge",
+    "tags": [],
+    "categoryId": "alcools"
+  },
+  {
+    "name": "Bière blonde",
+    "tags": [],
+    "categoryId": "alcools"
+  },
+  {
+    "name": "Whisky",
+    "tags": [],
+    "categoryId": "alcools"
+  },
+  {
+    "name": "Champagne",
+    "tags": [],
+    "categoryId": "alcools"
+  },
+  {
+    "name": "Bière sans alcool",
+    "tags": [],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Bière 0,0 %",
+    "tags": [],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Vin sans alcool",
+    "tags": [
+      "en:wines"
+    ],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Marque inconnue",
+    "tags": [
+      "en:bourbon-whiskeys"
+    ],
+    "categoryId": "alcools"
+  },
+  {
+    "name": "Marque inconnue",
+    "tags": [
+      "en:non-alcoholic-beers"
+    ],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Vinaigre de vin",
+    "tags": [],
+    "categoryId": "epicerie-salee"
+  }
+]

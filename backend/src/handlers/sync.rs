@@ -27,6 +27,24 @@ pub struct SyncRequest {
     pub list_id: String,
     pub items: Vec<SyncItem>,
     pub last_sync: i64,
+    pub list_name: Option<SyncListName>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SyncListName {
+    pub name: String,
+    pub updated_at: i64,
+}
+
+impl SyncListName {
+    // Zero initializes legacy lists only. Equal-time renames converge regardless
+    // of arrival order, using the UTF-8 name as a deterministic tie breaker.
+    pub fn replaces(&self, current: Option<&Self>, is_owner: bool) -> bool {
+        if self.updated_at == 0 {
+            return is_owner && current.is_none();
+        }
+        current.is_none_or(|old| (self.updated_at, &self.name) > (old.updated_at, &old.name))
+    }
 }
 
 #[derive(Serialize)]
@@ -44,6 +62,7 @@ pub struct SyncResponse {
     pub server_time: i64,
     pub conflicts: Vec<SyncConflict>,
     pub updated_items: Vec<SyncItem>,
+    pub list_name: Option<SyncListName>,
 }
 
 pub async fn sync_list(
@@ -58,6 +77,15 @@ pub async fn sync_list(
     }
     validate_list_id(&req.list_id)?;
     let now = Utc::now().timestamp_millis();
+    if let Some(name) = &req.list_name {
+        if name.name.trim().is_empty()
+            || name.name.chars().count() > 200
+            || name.updated_at < 0
+            || name.updated_at > now.saturating_add(5 * 60 * 1_000)
+        {
+            return Err(ApiError::bad_request("invalid list name or name timestamp"));
+        }
+    }
     for item in &req.items {
         validate_sync_item(item, now)?;
         if item.list_id != req.list_id {
@@ -74,65 +102,75 @@ pub async fn sync_list(
         .register_sync(&device_id)
         .map_err(|_| ApiError::internal_server_error("failed to persist device profile"))?;
 
-    let authorized = state
-        .sharing
-        .authorize_or_claim(state.db_pool.as_ref(), &req.list_id, &device_id)
+    let updated_items;
+    let list_name;
+    let mut conflicts = Vec::new();
+    if let Some(pool) = &state.db_pool {
+        (updated_items, list_name) = persistent_sync::sync_authorized_list(
+            pool,
+            &device_id,
+            &req.list_id,
+            &req.items,
+            req.list_name.as_ref(),
+        )
         .await
         .map_err(|error| {
-            tracing::error!(%error, "failed to verify list access");
-            ApiError::internal_server_error("failed to verify list access")
-        })?;
-    if !authorized {
-        return Err(ApiError::forbidden("device is not a member of this list"));
-    }
-
-    let mut remote_items = match state.synced_items.get(&req.list_id).await {
-        Some(items) => items,
-        None => match &state.db_pool {
-            Some(pool) => persistent_sync::load_sync_items(pool, &req.list_id)
-                .await
-                .map_err(|error| {
-                    tracing::error!(%error, "failed to load persisted shopping list");
-                    ApiError::internal_server_error("failed to load persisted shopping list")
-                })?,
-            None => Vec::new(),
-        },
-    };
-    let mut conflicts = Vec::new();
-
-    for incoming in req.items {
-        match remote_items.iter_mut().find(|item| item.id == incoming.id) {
-            Some(remote) if incoming.updated_at >= remote.updated_at => *remote = incoming,
-            Some(remote) => conflicts.push(SyncConflict {
-                entity_id: incoming.id,
-                local_updated_at: incoming.updated_at,
-                remote_updated_at: remote.updated_at,
-                resolution: "remote_wins_lww",
-            }),
-            None => remote_items.push(incoming),
+            tracing::error!(%error, "failed to synchronize shopping list");
+            ApiError::internal_server_error("failed to synchronize shopping list")
+        })?
+        .ok_or_else(|| ApiError::forbidden("device is not a member of this list"))?;
+        for incoming in &req.items {
+            if let Some(remote) = updated_items
+                .iter()
+                .find(|item| item.id == incoming.id && item.updated_at > incoming.updated_at)
+            {
+                conflicts.push(SyncConflict {
+                    entity_id: incoming.id.clone(),
+                    local_updated_at: incoming.updated_at,
+                    remote_updated_at: remote.updated_at,
+                    resolution: "remote_wins_lww",
+                });
+            }
         }
-    }
-
-    remote_items.sort_by_key(|item| item.updated_at);
-    let updated_items = remote_items
-        .iter()
-        .filter(|item| item.updated_at > req.last_sync)
-        .cloned()
-        .collect::<Vec<_>>();
-
-    if let Some(pool) = &state.db_pool {
-        persistent_sync::persist_sync_items(pool, &device_id, &req.list_id, &remote_items)
+    } else {
+        let _guard = state.memory_list_operations.lock().await;
+        let authorized = state
+            .sharing
+            .authorize_or_claim(None, &req.list_id, &device_id)
             .await
-            .map_err(|error| {
-                tracing::error!(%error, "failed to persist synced shopping list");
-                ApiError::internal_server_error("failed to persist synced shopping list")
-            })?;
+            .map_err(|_| ApiError::internal_server_error("failed to verify list access"))?;
+        if !authorized {
+            return Err(ApiError::forbidden("device is not a member of this list"));
+        }
+        list_name = state
+            .sharing
+            .sync_memory_name(&req.list_id, &device_id, req.list_name.as_ref())
+            .await;
+        let mut remote_items = state
+            .synced_items
+            .get(&req.list_id)
+            .await
+            .unwrap_or_default();
+        for incoming in req.items {
+            match remote_items.iter_mut().find(|item| item.id == incoming.id) {
+                Some(remote) if incoming.updated_at >= remote.updated_at => *remote = incoming,
+                Some(remote) => conflicts.push(SyncConflict {
+                    entity_id: incoming.id,
+                    local_updated_at: incoming.updated_at,
+                    remote_updated_at: remote.updated_at,
+                    resolution: "remote_wins_lww",
+                }),
+                None => remote_items.push(incoming),
+            }
+        }
+        remote_items.sort_by_key(|item| item.updated_at);
+        updated_items = remote_items.clone();
+        state
+            .synced_items
+            .insert(req.list_id.clone(), remote_items)
+            .await;
     }
-
-    state
-        .synced_items
-        .insert(req.list_id.clone(), remote_items)
-        .await;
+    // Return the complete committed state: offline timestamps can predate last_sync.
 
     state.record_metric(MetricKind::SyncSuccess);
 
@@ -142,6 +180,7 @@ pub async fn sync_list(
         server_time: now,
         conflicts,
         updated_items,
+        list_name,
     }))
 }
 

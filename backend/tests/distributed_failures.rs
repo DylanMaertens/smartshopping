@@ -9,6 +9,9 @@ fn config() -> Config {
         allowed_origin: "http://localhost:8081".into(),
         enable_sync_endpoint: true,
         off_base_url: "http://127.0.0.1:1".into(),
+        products_base_url: "http://127.0.0.1:1".into(),
+        beauty_base_url: "http://127.0.0.1:1".into(),
+        petfood_base_url: "http://127.0.0.1:1".into(),
         enable_off_proxy: false,
         off_rate_limit_per_minute: 1,
         off_max_retries: 0,
@@ -21,6 +24,11 @@ fn config() -> Config {
         metrics_token: None,
         api_rate_limit_per_minute: 2,
         require_device_signatures: true,
+        enable_community_catalog: false,
+        community_consensus_min_devices: 5,
+        community_consensus_ratio: 0.8,
+        community_prohibited_terms: vec![],
+        community_prohibited_exceptions: vec![],
     }
 }
 

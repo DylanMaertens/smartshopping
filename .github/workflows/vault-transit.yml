@@ -2,7 +2,7 @@ name: Vault Transit integration
 
 on:
   pull_request:
-    paths: ["backend/**", "ops/vault-transit-policy.hcl", ".github/workflows/vault-transit.yml"]
+    paths: ["backend/**", "ops/**", ".github/workflows/vault-transit.yml"]
   workflow_dispatch:
 
 permissions:
@@ -29,9 +29,13 @@ jobs:
       SIEM_INGEST_TOKEN: ${{ secrets.SIEM_INGEST_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Test audit and SIEM tooling
+        run: python3 -B -m unittest discover -s ops/tests -v
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: backend }
+      - name: Compile integration test before issuing the short-lived token
+        run: cargo test --manifest-path backend/Cargo.toml --test vault_transit --no-run
       - name: Configure Transit and least-privilege application token
         run: |
           curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" -X POST -d '{"type":"transit"}' "$VAULT_ADDR/v1/sys/mounts/transit"
@@ -45,21 +49,47 @@ jobs:
           TEST_VAULT_TOKEN=$(python3 -c 'import json; print(json.load(open("token.json"))["auth"]["client_token"])')
           TEST_VAULT_ADDR="$VAULT_ADDR" TEST_VAULT_TOKEN="$TEST_VAULT_TOKEN" cargo test --manifest-path backend/Cargo.toml --test vault_transit -- --ignored
       - name: Export and validate Vault audit trail
+        id: audit
         if: always()
         run: |
           docker logs "$(docker ps -q --filter ancestor=hashicorp/vault:1.20)" > vault-audit.log 2>&1
           python3 ops/check-vault-audit.py vault-audit.log --output vault-audit-summary.json
-      - name: Forward aggregate event to staging SIEM
-        if: ${{ always() && env.SIEM_INGEST_URL != '' }}
+      - name: Provoke a denied Transit request in the disposable Vault
+        id: denial
+        if: success()
         run: |
+          APP_TOKEN=$(python3 -c 'import json; print(json.load(open("token.json"))["auth"]["client_token"])')
+          code=$(curl -sS -o "$RUNNER_TEMP/transit-denial.json" -w '%{http_code}' \
+            -H "X-Vault-Token: $APP_TOKEN" -X POST -d '{"ciphertext":"vault:v1:probe"}' \
+            "$VAULT_ADDR/v1/transit/decrypt/smartshopping-denied-probe")
+          test "$code" = 403
+          docker logs "$(docker ps -q --filter ancestor=hashicorp/vault:1.20)" > vault-audit-denial.log 2>&1
+          python3 ops/check-vault-audit.py vault-audit-denial.log --expect-denial --output vault-audit-alert.json
+      - name: Forward aggregates to staging SIEM
+        if: ${{ always() && (env.SIEM_INGEST_URL != '' || env.SIEM_INGEST_TOKEN != '') }}
+        run: |
+          test -n "$SIEM_INGEST_URL"
           test -n "$SIEM_INGEST_TOKEN"
-          printf '%s' "$SIEM_INGEST_TOKEN" > "$RUNNER_TEMP/siem-token"
-          python3 ops/export-security-event.py vault-audit-summary.json --url "$SIEM_INGEST_URL" --token-file "$RUNNER_TEMP/siem-token"
+          umask 077
+          token_file="$RUNNER_TEMP/siem-token"
+          trap 'rm -f "$token_file"' EXIT
+          printf '%s' "$SIEM_INGEST_TOKEN" > "$token_file"
+          sent=0
+          for event in vault-audit-summary.json vault-audit-alert.json; do
+            if test -f "$event"; then
+              python3 ops/export-security-event.py "$event" --url "$SIEM_INGEST_URL" --token-file "$token_file"
+              sent=$((sent + 1))
+            fi
+          done
+          test "$sent" -gt 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: vault-audit-redacted
+          name: vault-audit-aggregates
           path: |
-            vault-audit.log
             vault-audit-summary.json
+            vault-audit-alert.json
           retention-days: 30
+      - name: Remove temporary credentials and raw logs
+        if: always()
+        run: rm -f token.json vault-audit.log vault-audit-denial.log "$RUNNER_TEMP/transit-denial.json" "$RUNNER_TEMP/siem-token"

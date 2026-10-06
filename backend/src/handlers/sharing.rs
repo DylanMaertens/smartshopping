@@ -50,6 +50,11 @@ pub async fn delete_list(
     Path(list_id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<DeleteListResponse>, ApiError> {
+    let _memory_guard = if state.db_pool.is_none() {
+        Some(state.memory_list_operations.lock().await)
+    } else {
+        None
+    };
     let owner_id = validate_device_id(&headers)?;
     validate_list_id(&list_id)?;
     let deleted = state
@@ -102,6 +107,11 @@ pub async fn remove_member(
     Path((list_id, member_id)): Path<(String, String)>,
     headers: HeaderMap,
 ) -> Result<Json<RevocationResponse>, ApiError> {
+    let _memory_guard = if state.db_pool.is_none() {
+        Some(state.memory_list_operations.lock().await)
+    } else {
+        None
+    };
     let owner_id = validate_device_id(&headers)?;
     validate_list_id(&list_id)?;
     uuid::Uuid::parse_str(&member_id)

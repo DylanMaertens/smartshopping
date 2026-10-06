@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { classifyProductLocally } from './categoryService';
 
@@ -15,4 +16,12 @@ describe('classifyProductLocally', () => {
       confidence: 0.2,
     });
   });
+});
+
+// Both classifiers run the same examples, so a scanned product and a typed name agree.
+const examples: { name: string; tags: string[]; categoryId: string }[] = JSON.parse(
+  readFileSync(new URL('../../../../tests/fixtures/category-examples.json', import.meta.url), 'utf8'),
+);
+it.each(examples)('classe $name dans $categoryId', ({ name, tags, categoryId }) => {
+  expect(classifyProductLocally(name, tags).categoryId).toBe(categoryId);
 });
