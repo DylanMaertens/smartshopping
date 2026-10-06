@@ -63,5 +63,6 @@ impl RedisCache {
 }
 
 fn product_key(barcode: &str) -> String {
-    format!("product:{barcode}")
+    // Previous cached responses discarded taxonomy tags after an unreliable classification.
+    format!("product:v6:{barcode}")
 }

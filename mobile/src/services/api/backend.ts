@@ -1,3 +1,4 @@
+import { canConfigureTestServer, getTestServerUrl } from './testServer';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { ProductCache } from '@/services/cache/sqliteProductCache';
@@ -7,9 +8,9 @@ import { getDeviceAuthSecret, signDeviceRequest, storeDeviceAuthSecret } from '@
 import type { ShoppingItem } from '@/types';
 
 const API_BASE_URL = getApiBaseUrl();
-const PRODUCT_LOOKUP_TIMEOUT_MS = 3500;
+const PRODUCT_LOOKUP_TIMEOUT_MS = 22000;
 const SYNC_TIMEOUT_MS = 8000;
-let enrollmentPromise: Promise<string> | null = null;
+const enrollments = new Map<string, Promise<string>>();
 
 export type InvitationResponse = { code: string; list_id: string; expires_at: number };
 
@@ -24,6 +25,20 @@ export type BackendProduct = {
   ttl_seconds: number;
 };
 
+export type CommunitySuggestion = {
+  proposal_id: string;
+  field: 'name' | 'category';
+  value: string;
+  confirmations: number;
+  agreement_ratio: number;
+};
+
+export type CommunitySuggestions = {
+  barcode: string;
+  suggestions: CommunitySuggestion[];
+  contributions_enabled?: boolean;
+};
+
 export type SyncItemPayload = {
   id: string;
   list_id: string;
@@ -36,10 +51,13 @@ export type SyncItemPayload = {
   deleted_at?: number;
 };
 
+export type SyncListName = { name: string; updated_at: number };
+
 export type SyncPayload = {
   list_id: string;
   items: SyncItemPayload[];
   last_sync: number;
+  list_name?: SyncListName;
 };
 
 export type SyncResponse = {
@@ -53,6 +71,7 @@ export type SyncResponse = {
     resolution: string;
   }>;
   updated_items: SyncItemPayload[];
+  list_name?: SyncListName | null;
 };
 
 export class BackendApiError extends Error {
@@ -67,34 +86,48 @@ export class BackendApiError extends Error {
 }
 
 export async function getProduct(barcode: string): Promise<BackendProduct> {
-  const cached = ProductCache.get<BackendProduct>(barcode);
+  const cacheKey = `catalogues-v6:${barcode}`;
+  const cached = ProductCache.get<BackendProduct>(cacheKey);
   if (cached) return { ...cached, cached: true };
 
-  const response = await fetchWithTimeout(`${API_BASE_URL}/products/${barcode}`, PRODUCT_LOOKUP_TIMEOUT_MS);
-  if (!response.ok) {
-    throw apiError('Backend product lookup error', response);
-  }
-
-  const product = (await response.json()) as BackendProduct;
-  ProductCache.set(barcode, product);
+  const product = await requestJson<BackendProduct>(
+    `${API_BASE_URL}/products/${barcode}`, PRODUCT_LOOKUP_TIMEOUT_MS, {}, 'Backend product lookup error',
+  );
+  ProductCache.set(cacheKey, product);
   return product;
 }
 
+export async function getCommunitySuggestions(barcode: string): Promise<CommunitySuggestions> {
+  const result = await requestJson<CommunitySuggestions>(
+    `${API_BASE_URL}/community/products/${encodeURIComponent(barcode)}/suggestions`,
+    8000, {}, 'Community suggestions error',
+  );
+  return { ...result, suggestions: result.suggestions.slice(0, 3) };
+}
+
+export async function submitCommunityProposal(
+  barcode: string, proposal: { name?: string; category?: string },
+): Promise<{ proposal_ids: string[]; publication_status: string }> {
+  return requestJson(`${API_BASE_URL}/community/products/${encodeURIComponent(barcode)}/proposals`, 8000, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(proposal),
+  }, 'Community proposal error');
+}
+
+export async function confirmCommunityProposal(proposalId: string, agrees = true): Promise<void> {
+  await requestJson(`${API_BASE_URL}/community/proposals/${encodeURIComponent(proposalId)}/confirmations`, 8000, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agrees }),
+  }, 'Community confirmation error');
+}
+
 export async function syncList(deviceId: string, payload: SyncPayload): Promise<SyncResponse> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/sync`, SYNC_TIMEOUT_MS, {
+  return requestJson<SyncResponse>(`${API_BASE_URL}/sync`, SYNC_TIMEOUT_MS, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Device-Id': deviceId,
     },
     body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw apiError('Backend sync error', response);
-  }
-
-  return response.json() as Promise<SyncResponse>;
+  }, 'Backend sync error');
 }
 
 export async function createListInvitation(deviceId: string, listId: string): Promise<InvitationResponse> {
@@ -102,7 +135,7 @@ export async function createListInvitation(deviceId: string, listId: string): Pr
 }
 
 export async function joinListInvitation(deviceId: string, code: string): Promise<{ list_id: string }> {
-  return sharingRequest(`/invitations/${encodeURIComponent(code.trim())}/join`, deviceId);
+  return sharingRequest(`/invitations/${encodeURIComponent(code.trim().toLowerCase())}/join`, deviceId);
 }
 
 export async function revokeListInvitation(deviceId: string, code: string): Promise<{ revoked: boolean }> {
@@ -162,8 +195,11 @@ export function getConfiguredApiBaseUrl(): string {
 }
 
 function getApiBaseUrl(): string {
+  if (canConfigureTestServer()) return getTestServerUrl() ?? '';
+  const releaseUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+  if (typeof releaseUrl === 'string' && releaseUrl) return releaseUrl;
   const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-  if (configuredUrl) return configuredUrl.replace(/\/$/, '');
+  if (configuredUrl) return configuredUrl.trim().replace(/\/+$/, '');
 
   const metroHost = getMetroHost();
   if (metroHost) return `http://${metroHost}:3000/api/v1`;
@@ -181,63 +217,82 @@ function getMetroHost(): string | null {
   return hostUri?.split(':')[0] ?? null;
 }
 
-async function fetchWithTimeout(
-  url: string,
-  timeoutMs: number,
-  options: RequestInit = {},
-): Promise<Response> {
+async function withTimeout<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  const headers = new Headers(options.headers);
-  const requestId = createRequestId();
-  headers.set('X-Request-Id', requestId);
-  const deviceId = headers.get('X-Device-Id') ?? await getAnonymousDeviceId();
-  if (!headers.has('X-Device-Id')) {
-    headers.set('X-Device-Id', deviceId);
-  }
-  const secret = await ensureDeviceEnrollment(deviceId);
-  const timestamp = Date.now();
-  const body = typeof options.body === 'string' ? options.body : '';
-  const parsedUrl = new URL(url);
-  headers.set('X-Device-Timestamp', String(timestamp));
-  headers.set('X-Device-Signature', signDeviceRequest(
-    secret, timestamp, requestId, options.method ?? 'GET', `${parsedUrl.pathname}${parsedUrl.search}`, body,
-  ));
-
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error('Request timed out'));
+      controller.abort();
+    }, timeoutMs);
+  });
   try {
-    return await fetch(url, { ...options, headers, signal: controller.signal });
+    return await Promise.race([operation(controller.signal), timeout]);
   } finally {
-    clearTimeout(timeoutId);
+    clearTimeout(timeoutId!);
   }
+}
+
+async function requestJson<T>(
+  url: string, timeoutMs: number, options: RequestInit, errorMessage: string,
+): Promise<T> {
+  if (!API_BASE_URL) throw new Error('Configure le serveur HTTPS dans Réglages → Serveur de test.');
+  return withTimeout(async (signal) => {
+    const headers = new Headers(options.headers);
+    const requestId = createRequestId();
+    headers.set('X-Request-Id', requestId);
+    const deviceId = headers.get('X-Device-Id') ?? await getAnonymousDeviceId();
+    headers.set('X-Device-Id', deviceId);
+    const secret = await ensureDeviceEnrollment(deviceId);
+    // A shared enrollment can outlive this caller's shorter deadline.
+    if (signal.aborted) throw new Error('Request timed out');
+    const timestamp = Date.now();
+    const body = typeof options.body === 'string' ? options.body : '';
+    const parsedUrl = new URL(url);
+    headers.set('X-Device-Timestamp', String(timestamp));
+    headers.set('X-Device-Signature', signDeviceRequest(
+      secret, timestamp, requestId, options.method ?? 'GET', `${parsedUrl.pathname}${parsedUrl.search}`, body,
+    ));
+    const response = await fetch(url, { ...options, headers, signal });
+    if (!response.ok) throw apiError(errorMessage, response);
+    return response.json() as Promise<T>;
+  }, timeoutMs);
 }
 
 async function ensureDeviceEnrollment(deviceId: string): Promise<string> {
   const existing = getDeviceAuthSecret(deviceId);
   if (existing) return existing;
-  enrollmentPromise ??= enrollDevice(deviceId).finally(() => { enrollmentPromise = null; });
-  return enrollmentPromise;
+  let enrollment = enrollments.get(deviceId);
+  if (!enrollment) {
+    enrollment = enrollDevice(deviceId).finally(() => { enrollments.delete(deviceId); });
+    enrollments.set(deviceId, enrollment);
+  }
+  return enrollment;
 }
 
 async function enrollDevice(deviceId: string): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/devices/register`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
-    body: JSON.stringify({ device_id: deviceId }),
-  });
-  if (!response.ok) throw apiError('Device enrollment error', response);
-  const payload = await response.json() as { device_id: string; secret: string };
-  if (payload.device_id !== deviceId) throw new Error('Device enrollment mismatch');
-  storeDeviceAuthSecret(deviceId, payload.secret);
-  return payload.secret;
+  return withTimeout(async (signal) => {
+    const response = await fetch(`${API_BASE_URL}/devices/register`, {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+      body: JSON.stringify({ device_id: deviceId }),
+    });
+    if (!response.ok) throw apiError('Device enrollment error', response);
+    const payload = await response.json() as { device_id: string; secret: string };
+    if (signal.aborted) throw new Error('Request timed out');
+    if (payload.device_id !== deviceId) throw new Error('Device enrollment mismatch');
+    storeDeviceAuthSecret(deviceId, payload.secret);
+    return payload.secret;
+  }, SYNC_TIMEOUT_MS);
 }
 
 export async function rotateDeviceSecret(deviceId: string): Promise<void> {
-  const response = await fetchWithTimeout(
+  const payload = await requestJson<{ device_id: string; secret: string }>(
     `${API_BASE_URL}/devices/rotate-secret`,
     SYNC_TIMEOUT_MS,
     { method: 'POST', headers: { 'X-Device-Id': deviceId } },
+    'Device secret rotation error',
   );
-  if (!response.ok) throw apiError('Device secret rotation error', response);
-  const payload = await response.json() as { device_id: string; secret: string };
   if (payload.device_id !== deviceId) throw new Error('Device rotation mismatch');
   storeDeviceAuthSecret(deviceId, payload.secret);
 }
@@ -251,10 +306,16 @@ function apiError(message: string, response: Response): BackendApiError {
 }
 
 async function sharingRequest<T>(path: string, deviceId: string, method: 'GET' | 'POST' = 'POST'): Promise<T> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, SYNC_TIMEOUT_MS, {
+  return requestJson<T>(`${API_BASE_URL}${path}`, SYNC_TIMEOUT_MS, {
     method,
     headers: { 'X-Device-Id': deviceId },
-  });
-  if (!response.ok) throw apiError('Backend sharing error', response);
-  return response.json() as Promise<T>;
+  }, 'Backend sharing error');
+}
+
+export async function recognizeListPhoto(imageBase64: string): Promise<{ text: string }> {
+  if (!imageBase64 || imageBase64.length > 4 * 1024 * 1024 - 128) throw new Error('Photo trop volumineuse. Reprends la photo de plus près.');
+  return requestJson<{ text: string }>(`${API_BASE_URL}/ocr`, 30000, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image_base64: imageBase64 }),
+  }, 'OCR indisponible');
 }

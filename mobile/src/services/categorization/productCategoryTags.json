@@ -1,0 +1,428 @@
+[
+  {
+    "categoryId": "accessoires-animaux",
+    "tags": [
+      "en:pet-accessories",
+      "en:cat-litter",
+      "en:pet-hygiene",
+      "en:dog-toys",
+      "en:cat-toys",
+      "fr:litieres"
+    ]
+  },
+  {
+    "categoryId": "alimentation-animale",
+    "tags": [
+      "en:pet-food",
+      "en:pet-foods",
+      "en:dog-and-cat-food",
+      "en:cat-food",
+      "en:dog-food",
+      "en:dry-pet-food",
+      "en:wet-pet-food",
+      "en:wet-cat-food",
+      "en:dry-cat-food",
+      "en:dry-dog-food",
+      "en:adult-cat-food",
+      "en:wet-dog-food",
+      "en:dog-biscuit",
+      "en:cat-biscuits",
+      "en:bird-food",
+      "en:rodent-food",
+      "en:fish-food",
+      "en:rabbit-food",
+      "fr:aliments-pour-chats",
+      "fr:aliments-pour-chiens",
+      "fr:aliments-pour-animaux",
+      "fr:croquettes",
+      "fr:friandises-pour-chiens",
+      "en:open-pet-food-facts",
+      "en:bird-and-fowl-food",
+      "en:livestock-feed",
+      "en:miscellaneous-pet-food",
+      "en:horse-food",
+      "en:reptile-food"
+    ]
+  },
+  {
+    "categoryId": "hygiene-dentaire",
+    "tags": [
+      "en:oral-care",
+      "en:toothpastes",
+      "en:toothpaste",
+      "en:toothbrushes",
+      "en:mouthwash",
+      "en:mouthwashes",
+      "en:dental-floss"
+    ]
+  },
+  {
+    "categoryId": "soins-cheveux",
+    "tags": [
+      "en:hair",
+      "en:hair-care",
+      "en:shampoos",
+      "en:hair-conditioners",
+      "en:hair-masks",
+      "en:hair-colourants",
+      "fr:shampooings",
+      "nl:haarverzorging"
+    ]
+  },
+  {
+    "categoryId": "maquillage-parfums",
+    "tags": [
+      "en:makeup",
+      "en:make-up",
+      "en:nail-makeup",
+      "en:perfumes",
+      "en:mascaras",
+      "en:lipsticks",
+      "en:foundations",
+      "nl:parfum",
+      "nl:make-up",
+      "en:halloween-cosmetics",
+      "en:nail-products"
+    ]
+  },
+  {
+    "categoryId": "soins-visage-corps",
+    "tags": [
+      "en:face",
+      "en:body",
+      "en:showers-and-baths",
+      "en:shower-gels",
+      "en:soaps",
+      "en:deodorants",
+      "en:suncare",
+      "en:in-sun-protections",
+      "en:sunscreen",
+      "en:facial-creams",
+      "en:face-creams",
+      "en:body-creams",
+      "en:hand-creams",
+      "en:lip-balms",
+      "en:skin-care",
+      "nl:skincare",
+      "en:shaving",
+      "en:petroleum-jellies",
+      "en:massage-candle"
+    ]
+  },
+  {
+    "categoryId": "electricite-electronique",
+    "tags": [
+      "en:electronics",
+      "en:electronics-accessories",
+      "en:batteries",
+      "en:light-bulbs",
+      "en:chargers",
+      "en:computers",
+      "fr:ordinateur-portable",
+      "en:cameras-optics",
+      "en:software",
+      "en:screen-protection"
+    ]
+  },
+  {
+    "categoryId": "vetements-linge",
+    "tags": [
+      "en:apparel-accessories",
+      "en:clothing",
+      "en:shoes",
+      "en:household-linens",
+      "en:bed-linen",
+      "en:towels",
+      "en:luggage-bags"
+    ]
+  },
+  {
+    "categoryId": "jeux-loisirs",
+    "tags": [
+      "en:printed-publications",
+      "en:published-products",
+      "en:printed-media",
+      "en:publications",
+      "en:books",
+      "en:toys-games",
+      "en:toys",
+      "en:board-games",
+      "en:sporting-goods",
+      "en:arts-entertainment",
+      "en:media",
+      "en:tickets",
+      "fr:etui-de-raquettes",
+      "fr:jeux-de-hasard"
+    ]
+  },
+  {
+    "categoryId": "maison-cuisine",
+    "tags": [
+      "en:kitchen-dining",
+      "en:kitchenware",
+      "en:cookware",
+      "en:tableware",
+      "en:food-storage",
+      "en:home-accessories",
+      "en:furniture"
+    ]
+  },
+  {
+    "categoryId": "hygiene-beaute",
+    "tags": [
+      "en:cosmetics",
+      "fr:cosmetiques",
+      "en:hygiene",
+      "en:cosmetic-products",
+      "en:personal-care",
+      "en:health-beauty",
+      "en:open-beauty-facts",
+      "en:cotton-buds",
+      "en:eyes",
+      "en:eye-drops",
+      "en:eyewash",
+      "en:condoms",
+      "en:personal-lubricants",
+      "en:razors",
+      "en:razor-blades",
+      "en:moist-wipes"
+    ]
+  },
+  {
+    "categoryId": "entretien-maison",
+    "tags": [
+      "en:cleaning-products",
+      "en:laundry-detergents",
+      "en:dishwashing-liquids",
+      "fr:produits-d-entretien",
+      "en:household-chemicals",
+      "en:household-cleaning-supplies",
+      "en:household-cleaning-products",
+      "en:laundry-supplies",
+      "en:detergents",
+      "en:household-paper-products",
+      "en:liquid-detergent",
+      "fr:tissue-paper-and-tissue-products",
+      "fr:hard-surface-cleaning-products"
+    ]
+  },
+  {
+    "categoryId": "papeterie-bureau",
+    "tags": [
+      "en:stationery",
+      "en:pens",
+      "en:pencils",
+      "en:notebooks",
+      "en:office-supplies",
+      "en:papers"
+    ]
+  },
+  {
+    "categoryId": "auto-moto",
+    "tags": [
+      "en:motor-oils",
+      "en:engine-oils",
+      "en:car-products",
+      "en:vehicle-parts-accessories",
+      "en:motor-vehicles"
+    ]
+  },
+  {
+    "categoryId": "bebe",
+    "tags": [
+      "en:baby-foods",
+      "en:baby-milks",
+      "fr:aliments-pour-bebes",
+      "en:baby-toddler",
+      "en:baby-wipes"
+    ]
+  },
+  {
+    "categoryId": "surgeles",
+    "tags": [
+      "en:frozen-foods",
+      "en:frozen-vegetables",
+      "en:ice-creams",
+      "en:ice-creams-and-sorbets",
+      "fr:surgeles"
+    ]
+  },
+  {
+    "categoryId": "cremerie",
+    "tags": [
+      "en:dairies",
+      "en:dairy-products",
+      "en:milks",
+      "en:yogurts",
+      "en:cheeses",
+      "en:butters",
+      "en:creams",
+      "fr:produits-laitiers",
+      "en:eggs",
+      "en:eggs-and-their-products",
+      "en:fromages-blancs-petit-suisses-and-skyr"
+    ]
+  },
+  {
+    "categoryId": "alcools",
+    "tags": [
+      "en:alcoholic-beverages",
+      "en:beers",
+      "en:wines",
+      "en:ciders",
+      "en:spirits",
+      "en:liqueurs",
+      "en:aperitifs",
+      "en:champagnes",
+      "fr:boissons-alcoolisees",
+      "fr:bieres",
+      "fr:vins"
+    ],
+    "excludeTags": [
+      "en:non-alcoholic-beverages",
+      "en:non-alcoholic-beers",
+      "en:alcohol-free-beers",
+      "en:non-alcoholic-wines",
+      "en:alcohol-free-wines"
+    ]
+  },
+  {
+    "categoryId": "boissons",
+    "tags": [
+      "en:beverages",
+      "en:waters",
+      "en:spring-waters",
+      "en:mineral-waters",
+      "en:sparkling-waters",
+      "en:non-alcoholic-beverages",
+      "en:fruit-juices",
+      "en:fruit-based-beverages",
+      "en:plant-based-beverages",
+      "en:sodas",
+      "en:coffees",
+      "en:teas",
+      "en:beers",
+      "en:wines",
+      "fr:boissons",
+      "fr:eaux",
+      "fr:eaux-minerales",
+      "fr:eaux-de-source",
+      "fr:eaux-gazeuses",
+      "fr:jus-de-fruits",
+      "en:beverages-and-beverages-preparations"
+    ]
+  },
+  {
+    "categoryId": "boulangerie",
+    "tags": [
+      "en:breads",
+      "en:brioches",
+      "en:croissants",
+      "en:viennoiseries",
+      "fr:pains"
+    ]
+  },
+  {
+    "categoryId": "epicerie-sucree",
+    "tags": [
+      "en:biscuits",
+      "en:chocolates",
+      "en:confectioneries",
+      "en:breakfast-cereals",
+      "en:jams",
+      "en:honeys",
+      "en:sweet-spreads",
+      "fr:biscuits",
+      "fr:chocolats",
+      "en:bee-products",
+      "en:sweeteners",
+      "en:cocoa-and-its-products",
+      "en:food-decorations",
+      "en:sweet-pies"
+    ]
+  },
+  {
+    "categoryId": "epicerie-salee",
+    "tags": [
+      "en:pastas",
+      "en:rices",
+      "en:flours",
+      "en:vegetable-oils",
+      "en:olive-oils",
+      "en:sauces",
+      "en:canned-foods",
+      "en:salty-snacks",
+      "fr:pates-alimentaires",
+      "fr:conserves",
+      "en:condiments",
+      "en:meals",
+      "en:broths",
+      "en:cooking-helpers",
+      "en:pastas-and-dumplings",
+      "en:meal-kits",
+      "en:pizzas-pies-and-quiches"
+    ]
+  },
+  {
+    "categoryId": "boucherie-poissonnerie",
+    "tags": [
+      "en:meats",
+      "en:poultries",
+      "en:fishes",
+      "en:seafood",
+      "en:hams",
+      "fr:viandes",
+      "fr:poissons",
+      "en:meats-and-their-products"
+    ]
+  },
+  {
+    "categoryId": "fruits-legumes",
+    "tags": [
+      "en:fruits",
+      "en:vegetables",
+      "en:fresh-fruits",
+      "en:fresh-vegetables",
+      "en:fruits-and-vegetables",
+      "fr:fruits",
+      "fr:legumes"
+    ]
+  },
+  {
+    "categoryId": "bricolage-quincaillerie",
+    "tags": [
+      "en:hardware",
+      "fr:indoor-and-outdoor-paints-and-varnishes",
+      "en:adhesives-sealants"
+    ]
+  },
+  {
+    "categoryId": "jardin-exterieur",
+    "tags": [
+      "en:lawn-garden"
+    ]
+  },
+  {
+    "categoryId": "animaux",
+    "tags": [
+      "en:pet-supplies",
+      "en:animals-pet-supplies"
+    ]
+  },
+  {
+    "categoryId": "non-alimentaire",
+    "tags": [
+      "en:business-industrial",
+      "en:religious-ceremonial",
+      "en:tobacco-products",
+      "en:burial-or-grave-products",
+      "en:halloween-supplies",
+      "en:st-patrick-s-day-supplies",
+      "en:mature",
+      "en:feather-down-fillings",
+      "en:vehicles-parts",
+      "en:home-garden",
+      "fr:produits-pyrotechniques"
+    ]
+  }
+]

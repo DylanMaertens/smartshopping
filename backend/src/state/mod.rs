@@ -28,7 +28,8 @@ pub struct AppState {
     pub products_cache: Cache<String, ProductResponse>,
     pub redis_cache: Option<RedisCache>,
     pub db_pool: Option<PgPool>,
-    pub off_client: OpenFoodFactsClient,
+    pub product_clients: Vec<(&'static str, OpenFoodFactsClient)>,
+    pub memory_list_operations: Arc<Mutex<()>>,
     pub synced_items: Cache<String, Vec<SyncItem>>,
     pub metrics: Arc<AppMetrics>,
     pub device_registry: Arc<Mutex<DeviceRegistry>>,
@@ -75,11 +76,24 @@ pub enum MetricKind {
 
 impl AppState {
     pub fn new(config: Config) -> Self {
-        let off_client = OpenFoodFactsClient::new(
-            config.off_base_url.clone(),
-            config.off_rate_limit_per_minute,
-            config.off_max_retries,
-        );
+        let product_clients = [
+            ("openfoodfacts", &config.off_base_url),
+            ("openproductsfacts", &config.products_base_url),
+            ("openbeautyfacts", &config.beauty_base_url),
+            ("openpetfoodfacts", &config.petfood_base_url),
+        ]
+        .into_iter()
+        .map(|(source, url)| {
+            (
+                source,
+                OpenFoodFactsClient::new(
+                    url.clone(),
+                    config.off_rate_limit_per_minute,
+                    config.off_max_retries,
+                ),
+            )
+        })
+        .collect();
         let products_cache = Cache::builder()
             .max_capacity(config.product_cache_capacity)
             .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
@@ -119,8 +133,9 @@ impl AppState {
             products_cache,
             redis_cache,
             db_pool,
-            off_client,
+            product_clients,
             synced_items,
+            memory_list_operations: Arc::new(Mutex::new(())),
             metrics: Arc::new(AppMetrics::default()),
             device_registry: Arc::new(Mutex::new(device_registry)),
             sharing: SharingService::default(),

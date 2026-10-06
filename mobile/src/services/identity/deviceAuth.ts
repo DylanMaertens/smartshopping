@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import * as SecureStore from 'expo-secure-store';
 
-const SECRET_PREFIX = 'device-auth-secret:';
+const SECRET_PREFIX = 'device-auth-secret-';
 
 export function getDeviceAuthSecret(deviceId: string): string | null {
   return SecureStore.getItem(`${SECRET_PREFIX}${deviceId}`);

@@ -1,99 +1,91 @@
 #!/usr/bin/env python3
+"""Validate evidence; strict mode also rejects outstanding release blockers."""
 import argparse
-import json
 import pathlib
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+from beta_evidence import (ROOT, ROLES, PLATFORMS, attestation, history,
+                           objectives, read_object, scenarios, versioned, write_json)
+
 REQUIRED = [
-    "beta/PRIVACY.fr.md",
-    "beta/DATA_RETENTION.md",
-    "beta/SUPPORT.md",
-    "beta/CLOSED_BETA_CHECKLIST.md",
-    "beta/APPROVALS.json",
-    "beta/DEVICE_VALIDATION.json",
-    "ops/RUNBOOK.md",
-    "ops/recovery-objectives.json",
-    "ops/recovery-history.json",
+    "beta/PRIVACY.fr.md", "beta/DATA_RETENTION.md", "beta/SUPPORT.md",
+    "beta/CLOSED_BETA_CHECKLIST.md", "beta/APPROVALS.json",
+    "beta/DEVICE_VALIDATION.json", "beta/SIEM_VALIDATION.json", "ops/RUNBOOK.md",
+    "ops/recovery-objectives.json", "ops/recovery-history.json",
 ]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--strict", action="store_true", help="fail while an approval is pending")
-    args = parser.parse_args()
-    missing = [path for path in REQUIRED if not (ROOT / path).is_file()]
+def evaluate(root):
+    blockers, errors = [], []
+    missing = [name for name in REQUIRED if not (root / name).is_file()]
     if missing:
-        print("Missing beta artifacts: " + ", ".join(missing), file=sys.stderr)
-        return 1
-    objectives = json.loads((ROOT / "ops/recovery-objectives.json").read_text())
-    if any(not isinstance(objectives.get(name), int) or objectives[name] <= 0 for name in ("rto_seconds", "rpo_seconds", "exercise_frequency_days")):
-        print("Recovery objectives must be positive integers", file=sys.stderr)
-        return 1
-    approvals = json.loads((ROOT / "beta/APPROVALS.json").read_text())["approvals"]
-    invalid = [name for name, item in approvals.items() if item.get("status") not in {"pending", "approved"}]
-    if invalid:
-        print("Invalid approval status: " + ", ".join(invalid), file=sys.stderr)
-        return 1
-    pending = [name for name, item in approvals.items() if item["status"] != "approved"]
-    if pending:
-        print("Pending beta approvals: " + ", ".join(pending))
-    incomplete = [
-        name for name, item in approvals.items()
-        if item["status"] == "approved" and (not item.get("approver") or not iso_timestamp(item.get("approved_at")) or not item.get("evidence"))
-    ]
-    if incomplete:
-        print("Approved entries require approver and approved_at: " + ", ".join(incomplete), file=sys.stderr)
-        return 1
-    validations = json.loads((ROOT / "beta/DEVICE_VALIDATION.json").read_text())["platforms"]
-    invalid_devices = [
-        platform for platform, evidence in validations.items()
-        if evidence.get("status") not in {"pending", "passed", "failed"}
-    ]
-    if set(validations) != {"android", "ios"} or invalid_devices:
-        print("Invalid physical validation evidence", file=sys.stderr)
-        return 1
-    required_scenarios = {"camera", "offline", "recovery", "restart"}
-    incomplete_devices = [
-        platform for platform, evidence in validations.items()
-        if evidence.get("status") != "passed"
-        or not all(evidence.get(field) for field in ("tester", "build_id", "evidence"))
-        or not iso_timestamp(evidence.get("tested_at"))
-        or not required_scenarios.issubset(evidence.get("scenarios", []))
-    ]
-    history = json.loads((ROOT / "ops/recovery-history.json").read_text())["exercises"]
-    valid_drills = [
-        drill for drill in history
-        if drill.get("status") == "passed"
-        and drill.get("measured_rto_seconds", objectives["rto_seconds"] + 1) <= objectives["rto_seconds"]
-        and drill.get("measured_rpo_seconds", objectives["rpo_seconds"] + 1) <= objectives["rpo_seconds"]
-        and drill.get("evidence")
-        and iso_timestamp(drill.get("exercised_at"))
-    ]
-    drill_count = len({drill.get("exercised_at") for drill in valid_drills})
-    blockers = []
-    if pending:
-        blockers.append("human approvals")
-    if incomplete_devices:
-        blockers.append("physical Android/iOS evidence")
-    if drill_count < 3:
-        blockers.append(f"recovery exercises ({drill_count}/3)")
-    if blockers:
-        print("Closed beta blockers: " + ", ".join(blockers))
-        return 1 if args.strict else 0
-    print("Closed beta readiness: approved")
-    return 0
+        return {"ready": False, "blockers": [], "errors": ["Missing artifacts: " + ", ".join(missing)]}
+
+    def check(label, action):
+        try:
+            action()
+        except (ValueError, TypeError, KeyError, OSError) as exc:
+            errors.append(f"{label}: {exc}")
+
+    def approvals():
+        entries = versioned(read_object(root / "beta/APPROVALS.json")).get("approvals")
+        if not isinstance(entries, dict) or set(entries) != ROLES:
+            raise ValueError("exactly privacy_legal, support_owner and data_retention_owner are required")
+        for role, item in entries.items():
+            if not attestation(item, "approved", {"pending", "approved"}, ["approver"], "approved_at"):
+                blockers.append(f"human approval: {role}")
+
+    def devices():
+        entries = versioned(read_object(root / "beta/DEVICE_VALIDATION.json")).get("platforms")
+        if not isinstance(entries, dict) or set(entries) != PLATFORMS:
+            raise ValueError("exactly android and ios are required")
+        for platform, item in entries.items():
+            passed = attestation(item, "passed", {"pending", "passed", "failed"}, ["tester", "build_id"], "tested_at")
+            scenarios(item)
+            if not passed:
+                blockers.append(f"physical device evidence: {platform}")
+
+    def siem():
+        item = versioned(read_object(root / "beta/SIEM_VALIDATION.json"))
+        passed = attestation(item, "passed", {"pending", "passed", "failed"}, ["tester"], "tested_at")
+        for name in ("aggregate_received", "transit_denial_alert_received"):
+            if type(item.get(name)) is not bool:
+                raise ValueError(f"{name} must be a boolean")
+            if passed and not item[name]:
+                raise ValueError("passed SIEM evidence requires aggregate and denial alert reception")
+        if not passed:
+            blockers.append("SIEM aggregate and Transit denial alert evidence")
+
+    def recovery():
+        targets = objectives(read_object(root / "ops/recovery-objectives.json"))
+        passed = history(read_object(root / "ops/recovery-history.json"), targets)
+        if len(passed) < 3:
+            blockers.append(f"recovery exercises ({len(passed)}/3)")
+        if passed and (datetime.now(timezone.utc) - max(passed)).total_seconds() > targets["exercise_frequency_days"] * 86400:
+            blockers.append("latest successful recovery exercise is overdue")
+
+    for label, action in (("Approvals", approvals), ("Devices", devices), ("SIEM", siem), ("Recovery", recovery)):
+        check(label, action)
+    return {"ready": not blockers and not errors, "blockers": blockers, "errors": errors}
 
 
-def iso_timestamp(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return True
-    except ValueError:
-        return False
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--root", type=pathlib.Path, default=ROOT)
+    parser.add_argument("--output", type=pathlib.Path, help="write a JSON readiness report")
+    args = parser.parse_args()
+    report = evaluate(args.root)
+    if args.output:
+        write_json(args.output, report)
+    for error in report["errors"]:
+        print(error, file=sys.stderr)
+    for blocker in report["blockers"]:
+        print("Closed beta blocker: " + blocker)
+    if report["ready"]:
+        print("Closed beta readiness: approved")
+    return int(bool(report["errors"]) or (args.strict and not report["ready"]))
 
 
 if __name__ == "__main__":

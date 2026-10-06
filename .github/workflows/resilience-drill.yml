@@ -28,6 +28,16 @@ jobs:
       RESTORE_DATABASE_URL: postgres://smartshopping:drill-only-password@localhost:5432/smartshopping_restore
     steps:
       - uses: actions/checkout@v4
+      - name: Install PostgreSQL client matching the server major version
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o "$RUNNER_TEMP/postgresql.asc"
+          sudo install -m 644 "$RUNNER_TEMP/postgresql.asc" /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          . /etc/os-release
+          printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/smartshopping-pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
       - uses: dtolnay/rust-toolchain@stable
       - name: Seed and migrate source
         run: |
@@ -61,6 +71,13 @@ jobs:
           test -s "$RUNNER_TEMP/keys/device_secret_previous_key"
       - name: Produce versionable recovery evidence
         run: |
+          python3 - <<'PYTHON'
+          import datetime, json, pathlib
+          path = pathlib.Path("resilience-result.json")
+          result = json.loads(path.read_text())
+          result["exercised_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+          path.write_text(json.dumps(result) + "\n")
+          PYTHON
           cp ops/recovery-history.json recovery-history-candidate.json
           python3 ops/record-recovery-result.py resilience-result.json --evidence "github-actions://$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --output recovery-history-candidate.json
       - uses: actions/upload-artifact@v4

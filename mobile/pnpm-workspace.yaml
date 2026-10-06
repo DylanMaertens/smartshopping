@@ -1,0 +1,3 @@
+# Allow only esbuild's platform-binary installation hook.
+allowBuilds:
+  esbuild: true

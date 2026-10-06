@@ -73,6 +73,9 @@ async fn sync_requires_device_id_when_enabled() {
         allowed_origin: "http://localhost:8081".into(),
         enable_sync_endpoint: true,
         off_base_url: "https://world.openfoodfacts.org/api/v2".into(),
+        products_base_url: "http://127.0.0.1:1".into(),
+        beauty_base_url: "http://127.0.0.1:1".into(),
+        petfood_base_url: "http://127.0.0.1:1".into(),
         enable_off_proxy: false,
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
@@ -82,6 +85,11 @@ async fn sync_requires_device_id_when_enabled() {
         metrics_token: None,
         api_rate_limit_per_minute: 120,
         require_device_signatures: false,
+        enable_community_catalog: false,
+        community_consensus_min_devices: 5,
+        community_consensus_ratio: 0.8,
+        community_prohibited_terms: vec![],
+        community_prohibited_exceptions: vec![],
     };
 
     let state = AppState::new(config);
@@ -118,6 +126,30 @@ async fn categories_endpoint_returns_store_aisles() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn community_mutations_are_not_routed_without_device_signatures() {
+    let mut config = test_config();
+    config.enable_community_catalog = true;
+    config.database_url = Some("postgres://invalid:invalid@127.0.0.1:1/invalid".into());
+    config.require_device_signatures = false;
+    let app = create_router(AppState::new(config));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/community/products/3017620422003/proposals")
+                .header("content-type", "application/json")
+                .header("x-device-id", "00000000-0000-4000-8000-000000000001")
+                .body(Body::from(r#"{"name":"Nom public"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -176,6 +208,9 @@ async fn sync_merges_items_and_returns_updates() {
         allowed_origin: "http://localhost:8081".into(),
         enable_sync_endpoint: true,
         off_base_url: "https://world.openfoodfacts.org/api/v2".into(),
+        products_base_url: "http://127.0.0.1:1".into(),
+        beauty_base_url: "http://127.0.0.1:1".into(),
+        petfood_base_url: "http://127.0.0.1:1".into(),
         enable_off_proxy: false,
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
@@ -185,6 +220,11 @@ async fn sync_merges_items_and_returns_updates() {
         metrics_token: None,
         api_rate_limit_per_minute: 120,
         require_device_signatures: false,
+        enable_community_catalog: false,
+        community_consensus_min_devices: 5,
+        community_consensus_ratio: 0.8,
+        community_prohibited_terms: vec![],
+        community_prohibited_exceptions: vec![],
     };
 
     let state = AppState::new(config);
@@ -440,7 +480,10 @@ async fn signed_device_requests_are_verified_and_replays_rejected() {
 
 fn temp_registry_path(name: &str) -> String {
     std::env::temp_dir()
-        .join(format!("smartshopping-{name}-{}.json", std::process::id()))
+        .join(format!(
+            "smartshopping-{name}-{}.json",
+            uuid::Uuid::new_v4()
+        ))
         .to_string_lossy()
         .to_string()
 }
@@ -456,6 +499,9 @@ async fn sync_persists_anonymous_device_profile() {
         allowed_origin: "http://localhost:8081".into(),
         enable_sync_endpoint: true,
         off_base_url: "https://world.openfoodfacts.org/api/v2".into(),
+        products_base_url: "http://127.0.0.1:1".into(),
+        beauty_base_url: "http://127.0.0.1:1".into(),
+        petfood_base_url: "http://127.0.0.1:1".into(),
         enable_off_proxy: false,
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
@@ -465,6 +511,11 @@ async fn sync_persists_anonymous_device_profile() {
         metrics_token: None,
         api_rate_limit_per_minute: 120,
         require_device_signatures: false,
+        enable_community_catalog: false,
+        community_consensus_min_devices: 5,
+        community_consensus_ratio: 0.8,
+        community_prohibited_terms: vec![],
+        community_prohibited_exceptions: vec![],
     };
 
     let state = AppState::new(config);
@@ -502,6 +553,9 @@ async fn invitation_grants_sync_access_and_can_be_revoked() {
         allowed_origin: "http://localhost:8081".into(),
         enable_sync_endpoint: true,
         off_base_url: "https://world.openfoodfacts.org/api/v2".into(),
+        products_base_url: "http://127.0.0.1:1".into(),
+        beauty_base_url: "http://127.0.0.1:1".into(),
+        petfood_base_url: "http://127.0.0.1:1".into(),
         enable_off_proxy: false,
         off_rate_limit_per_minute: 100,
         off_max_retries: 0,
@@ -511,6 +565,11 @@ async fn invitation_grants_sync_access_and_can_be_revoked() {
         metrics_token: None,
         api_rate_limit_per_minute: 120,
         require_device_signatures: false,
+        enable_community_catalog: false,
+        community_consensus_min_devices: 5,
+        community_consensus_ratio: 0.8,
+        community_prohibited_terms: vec![],
+        community_prohibited_exceptions: vec![],
     };
     let app = create_router(AppState::new(config));
     let owner = "00000000-0000-4000-8000-000000000010";
@@ -731,4 +790,303 @@ fn test_config() -> Config {
     let mut config = Config::from_env();
     config.require_device_signatures = false;
     config
+}
+
+#[tokio::test]
+async fn sync_returns_offline_changes_and_conflict_winners_older_than_cursor() {
+    let mut config = test_config();
+    config.enable_sync_endpoint = true;
+    config.device_registry_path = temp_registry_path("offline_cursor");
+    let app = create_router(AppState::new(config));
+    let request = |last_sync: i64, items: serde_json::Value| {
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/sync")
+            .header("content-type", "application/json")
+            .header("x-device-id", "00000000-0000-4000-8000-000000000001")
+            .body(Body::from(
+                serde_json::json!({
+                    "list_id": "offline-list", "last_sync": last_sync, "items": items,
+                })
+                .to_string(),
+            ))
+            .unwrap()
+    };
+    let item = |updated_at: i64, quantity: i32, deleted_at: Option<i64>| {
+        serde_json::json!({
+            "id": "milk", "list_id": "offline-list", "name": "Lait",
+            "quantity": quantity, "checked": false, "updated_at": updated_at, "deleted_at": deleted_at,
+        })
+    };
+    let response = app
+        .clone()
+        .oneshot(request(0, serde_json::json!([item(100, 2, None)])))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let first: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let cursor = first["server_time"].as_i64().unwrap();
+
+    // An outdated sender must receive the winning value even after its cursor.
+    let response = app
+        .clone()
+        .oneshot(request(cursor, serde_json::json!([item(50, 1, None)])))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let conflict: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(conflict["conflicts"].as_array().unwrap().len(), 1);
+    assert_eq!(conflict["updated_items"][0]["quantity"], 2);
+
+    // A deletion edited offline arrives later, with a timestamp older than the reader's cursor.
+    let response = app
+        .clone()
+        .oneshot(request(0, serde_json::json!([item(200, 2, Some(200))])))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app
+        .oneshot(request(cursor, serde_json::json!([])))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let received: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(received["updated_items"][0]["deleted_at"], 200);
+}
+
+#[tokio::test]
+async fn ocr_requires_signatures_and_uses_a_separate_bounded_body_limit() {
+    let mut config = test_config();
+    config.require_device_signatures = true;
+    config.device_registry_path = temp_registry_path("ocr-signed");
+    let app = create_router(AppState::new(config));
+    let device_id = uuid::Uuid::new_v4().to_string();
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/devices/register")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({"device_id": device_id}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let enrollment: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let secret = enrollment["secret"].as_str().unwrap();
+    let unsigned = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/ocr")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unsigned.status(), StatusCode::UNAUTHORIZED);
+    for (path, data, expected) in [
+        ("/api/v1/ocr", "A".repeat(100_000), StatusCode::BAD_REQUEST),
+        (
+            "/api/v1/sync",
+            "A".repeat(100_000),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+        (
+            "/api/v1/ocr",
+            "A".repeat(4 * 1024 * 1024),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+        (
+            "/api/v1/ocr",
+            "https://example.com/image.jpg".into(),
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let payload = serde_json::json!({"image_base64": data}).to_string();
+        let id = uuid::Uuid::new_v4().to_string();
+        let time = chrono::Utc::now().timestamp_millis();
+        let message = format!(
+            "{time}\n{id}\nPOST\n{path}\n{}",
+            hex::encode(Sha256::digest(payload.as_bytes()))
+        );
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(message.as_bytes());
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(path)
+                    .header("content-type", "application/json")
+                    .header("x-device-id", &device_id)
+                    .header("x-request-id", id)
+                    .header("x-device-timestamp", time.to_string())
+                    .header(
+                        "x-device-signature",
+                        hex::encode(mac.finalize().into_bytes()),
+                    )
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{path}");
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires installed OCR_PYTHON, OCR_MODELS_DIR and TEST_OCR_IMAGE fixture"]
+async fn ocr_reads_a_real_image() {
+    use base64::Engine;
+    let bytes = std::fs::read(std::env::var("TEST_OCR_IMAGE").expect("fixture path")).unwrap();
+    let payload = serde_json::json!({"image_base64": base64::engine::general_purpose::STANDARD.encode(bytes)});
+    let response = create_router(AppState::new(test_config()))
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/ocr")
+                .header("content-type", "application/json")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(value["text"].as_str().unwrap().contains("Pain"));
+    assert!(value["text"].as_str().unwrap().contains("Crème fraîche"));
+}
+
+#[tokio::test]
+async fn list_names_follow_membership_and_converge_after_offline_renames() {
+    use serde_json::{json, Value};
+    let mut config = test_config();
+    config.enable_sync_endpoint = true;
+    config.database_url = None;
+    config.redis_url = None;
+    config.device_registry_path = temp_registry_path("list-names");
+    let state = AppState::new(config);
+    let owner = "00000000-0000-4000-8000-000000000031";
+    let member = "00000000-0000-4000-8000-000000000032";
+    let stranger = "00000000-0000-4000-8000-000000000033";
+    let app = create_router(state.clone());
+    let request = |device: &str, name: Value| {
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/sync")
+            .header("content-type", "application/json")
+            .header("x-device-id", device)
+            .body(Body::from(
+                json!({"list_id":"named-list", "last_sync":999999,"items":[],"list_name":name})
+                    .to_string(),
+            ))
+            .unwrap()
+    };
+    let initial = json!({"name":"Courses famille", "updated_at":0});
+    let response = app
+        .clone()
+        .oneshot(request(owner, initial.clone()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let invitation = state
+        .sharing
+        .create_invitation(None, "named-list", owner)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        state
+            .sharing
+            .join(None, &invitation.code, member)
+            .await
+            .unwrap(),
+        Some("named-list".into())
+    );
+    let winner = json!({"name":"Vacances", "updated_at":100});
+    for (device, incoming, expected) in [
+        (member, Value::Null, initial.clone()), // immediately after joining
+        (member, winner.clone(), winner.clone()),
+        (
+            owner,
+            json!({"name":"Ancien nom hors ligne","updated_at":50}),
+            winner.clone(),
+        ),
+        (owner, initial, winner.clone()), // legacy seed cannot overwrite a rename
+        (
+            owner,
+            json!({"name":"Autre nom","updated_at":100}),
+            winner.clone(),
+        ), // deterministic tie
+        (member, Value::Null, winner.clone()), // older client does not erase it
+    ] {
+        let response = app
+            .clone()
+            .oneshot(request(device, incoming))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: Value = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), 65536)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(body["list_name"], expected);
+    }
+    assert_eq!(
+        app.clone()
+            .oneshot(request(stranger, winner.clone()))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    for bad in [
+        json!({"name":" ","updated_at":1}),
+        json!({"name":"a".repeat(201),"updated_at":1}),
+        json!({"name":"Nom","updated_at":i64::MAX}),
+    ] {
+        assert_eq!(
+            app.clone()
+                .oneshot(request(owner, bad))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        state
+            .sharing
+            .remove_member(None, "named-list", owner, member)
+            .await
+            .unwrap(),
+        Some(true)
+    );
+    assert_eq!(
+        app.oneshot(request(member, winner)).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
 }

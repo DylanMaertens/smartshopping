@@ -1,4 +1,5 @@
 pub mod categories;
+pub mod community_catalog;
 pub mod device_auth;
 pub mod device_registry;
 pub mod openfoodfacts;

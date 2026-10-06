@@ -1,8 +1,30 @@
 {
-  "cli": { "version": ">= 16.0.0" },
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
   "build": {
-    "development": { "developmentClient": true, "distribution": "internal" },
-    "preview": { "distribution": "internal" },
-    "production": { "autoIncrement": true }
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "env": { "SMARTSHOPPING_CHANNEL": "development" }
+    },
+    "preview": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "environment": "preview",
+      "env": { "SMARTSHOPPING_CHANNEL": "preview" },
+      "android": { "buildType": "apk" }
+    },
+    "direct": {
+      "extends": "production",
+      "env": { "SMARTSHOPPING_CHANNEL": "direct" },
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "developmentClient": false,
+      "autoIncrement": true,
+      "environment": "production",
+      "env": { "SMARTSHOPPING_CHANNEL": "store" },
+      "android": { "buildType": "app-bundle" }
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { signDeviceRequest } from './deviceAuth';
+import { signDeviceRequest, getDeviceAuthSecret, storeDeviceAuthSecret, clearDeviceAuthSecret } from './deviceAuth';
 
 describe('device request signature', () => {
   it('produit le même HMAC SHA-256 que le serveur', () => {
@@ -14,4 +14,12 @@ describe('device request signature', () => {
       'POST', '/api/v1/sync', body,
     )).toBe(expected);
   });
+});
+
+it('stores, reloads and removes a secret with a valid native SecureStore key', async () => {
+  const id = '00000000-0000-4000-8000-000000000001';
+  storeDeviceAuthSecret(id, 'A'.repeat(64));
+  expect(getDeviceAuthSecret(id)).toBe('a'.repeat(64));
+  await clearDeviceAuthSecret(id);
+  expect(getDeviceAuthSecret(id)).toBeNull();
 });

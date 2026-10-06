@@ -1,0 +1,39 @@
+name: PostgreSQL backup and recovery
+
+on:
+  pull_request:
+    paths: ["ops/**", "backend/migrations/**", ".github/workflows/postgres-recovery.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery-regressions:
+    runs-on: ubuntu-latest
+    container: postgres:17-bookworm
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: smartshopping
+          POSTGRES_PASSWORD: regression-only-password
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U smartshopping -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGPASSWORD: regression-only-password
+      RUN_POSTGRES_BACKUP_TESTS: "1"
+      TEST_BACKUP_SOURCE_URL: postgres://smartshopping@postgres/backup_regression_source
+      TEST_BACKUP_TARGET_URL: postgres://smartshopping@postgres/backup_regression_target
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python test runner
+        run: apt-get update && apt-get install -y --no-install-recommends python3
+      - name: Create disposable databases
+        run: |
+          createdb -h postgres -U smartshopping backup_regression_source
+          createdb -h postgres -U smartshopping backup_regression_target
+      - name: Exercise real backup, rollback and retention
+        run: python3 -B -m unittest discover -s ops/tests -p test_postgres_restore_integration.py -v

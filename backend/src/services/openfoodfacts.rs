@@ -30,7 +30,10 @@ struct OffResponse {
 
 #[derive(Deserialize)]
 struct OffProductRaw {
+    code: Option<String>,
     product_name: Option<String>,
+    product_name_fr: Option<String>,
+    generic_name: Option<String>,
     categories_tags: Option<Vec<String>>,
     image_url: Option<String>,
 }
@@ -39,7 +42,8 @@ impl OpenFoodFactsClient {
     pub fn new(base_url: String, rate_limit_per_minute: u32, max_retries: u32) -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(8))
-            .user_agent("SmartShoppingBackend/0.1 (contact: dev@smartshopping.local)")
+            .redirect(reqwest::redirect::Policy::none())
+            .user_agent("SmartShopping/0.1.2 (https://github.com/DylanMaertens/smartshopping)")
             .build()
             .expect("failed building reqwest client");
 
@@ -80,13 +84,19 @@ impl OpenFoodFactsClient {
             self.base_url.trim_end_matches('/'),
             barcode
         );
-        let payload = self
+        let response = self
             .client
             .get(url)
+            .query(&[(
+                "fields",
+                "code,product_name,product_name_fr,generic_name,categories_tags,image_url",
+            )])
             .send()
-            .await?
-            .json::<OffResponse>()
             .await?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let payload = response.error_for_status()?.json::<OffResponse>().await?;
 
         if payload.status != 1 {
             return Ok(None);
@@ -96,10 +106,23 @@ impl OpenFoodFactsClient {
             return Ok(None);
         };
 
+        if raw
+            .code
+            .as_ref()
+            .is_some_and(|code| code.trim_start_matches('0') != barcode.trim_start_matches('0'))
+        {
+            return Ok(None);
+        }
+        let Some(name) = [raw.product_name_fr, raw.product_name, raw.generic_name]
+            .into_iter()
+            .flatten()
+            .map(|name| name.trim().to_string())
+            .find(|name| !name.is_empty())
+        else {
+            return Ok(None);
+        };
         Ok(Some(OffProduct {
-            name: raw
-                .product_name
-                .unwrap_or_else(|| "Produit inconnu".to_string()),
+            name,
             categories: raw.categories_tags.unwrap_or_default(),
             image_url: raw.image_url,
         }))

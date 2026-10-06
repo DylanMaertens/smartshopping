@@ -134,7 +134,16 @@ pub async fn device_signature(
         return unauthorized();
     };
     let body = std::mem::replace(request.body_mut(), Body::empty());
-    let Ok(bytes) = to_bytes(body, 64 * 1024).await else {
+    let Ok(bytes) = to_bytes(
+        body,
+        if path == "/api/v1/ocr" {
+            crate::handlers::ocr::BODY_LIMIT
+        } else {
+            64 * 1024
+        },
+    )
+    .await
+    else {
         return (
             axum::http::StatusCode::PAYLOAD_TOO_LARGE,
             "request body too large",
@@ -175,6 +184,14 @@ pub async fn device_signature(
 fn normalized_endpoint(path: &str) -> &'static str {
     if path.starts_with("/api/v1/products/") {
         "/api/v1/products/:barcode"
+    } else if path.starts_with("/api/v1/community/products/") && path.ends_with("/suggestions") {
+        "/api/v1/community/products/:barcode/suggestions"
+    } else if path.starts_with("/api/v1/community/products/") && path.ends_with("/proposals") {
+        "/api/v1/community/products/:barcode/proposals"
+    } else if path.starts_with("/api/v1/community/proposals/") && path.ends_with("/confirmations") {
+        "/api/v1/community/proposals/:proposal_id/confirmations"
+    } else if path.starts_with("/api/v1/community/proposals/") && path.ends_with("/reports") {
+        "/api/v1/community/proposals/:proposal_id/reports"
     } else if path.starts_with("/api/v1/lists/") && path.ends_with("/invitations") {
         "/api/v1/lists/:list_id/invitations"
     } else if path.starts_with("/api/v1/lists/") && path.ends_with("/members") {
@@ -191,6 +208,7 @@ fn normalized_endpoint(path: &str) -> &'static str {
         match path {
             "/health" => "/health",
             "/metrics" => "/metrics",
+            "/api/v1/ocr" => "/api/v1/ocr",
             "/api/v1/categories" => "/api/v1/categories",
             "/api/v1/categories/classify" => "/api/v1/categories/classify",
             "/api/v1/sync" => "/api/v1/sync",
