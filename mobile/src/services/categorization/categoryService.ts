@@ -27,7 +27,9 @@ export const STORE_CATEGORIES: StoreCategory[] = [
   { id: 'epicerie-sucree', name: 'Épicerie sucrée', orderIndex: 70, icon: 'cookie', keywords: ['sucre', 'chocolat', 'biscuit', 'cereale', 'céréale', 'confiture', 'miel', 'dessert'] },
   { id: 'alcools', name: 'Alcools', orderIndex: 85, icon: 'wine', keywords: ['vin', 'vins', 'bière', 'bières', 'cidre', 'champagne', 'prosecco', 'rhum', 'whisky', 'whiskey', 'vodka', 'gin', 'tequila', 'cognac', 'liqueur', 'pastis', 'porto', 'apéritif', 'boisson alcoolisée'] },
   { id: 'boissons', name: 'Boissons', orderIndex: 80, icon: 'bottle', keywords: ['eau', 'jus', 'soda', 'cafe', 'café', 'the', 'thé', 'boisson', 'biere', 'bière'] },
-  { id: 'hygiene-beaute', name: 'Hygiène & beauté', orderIndex: 90, icon: 'sparkles', keywords: ['shampooing', 'savon', 'dentifrice', 'deodorant', 'déodorant', 'hygiene', 'hygiène'] },
+  { id: 'hygiene-beaute', name: 'Hygiène & beauté', orderIndex: 90, icon: 'sparkles', keywords: ['shampooing', 'savon', 'dentifrice', 'deodorant', 'déodorant', 'hygiene', 'hygiène', 'serviette hygiénique', 'serviettes hygiéniques', 'tampon périodique', 'tampons périodiques', 'protège-slip', 'protège-slips', 'coupe menstruelle', 'culotte menstruelle'] },
+  { id: 'complements-alimentaires', name: 'Compléments alimentaires', orderIndex: 95, icon: 'pill', keywords: ['complément alimentaire', 'compléments alimentaires', 'complément nutritionnel', 'compléments nutritionnels', 'gélules de vitamines', 'comprimés de vitamines', 'comprimés de magnésium', 'vitamine c en comprimés', 'vitamine d en gouttes', 'gélules oméga 3', 'capsules oméga 3', 'magnésium', 'multivitamines', 'vitamine c', 'vitamine d', 'vitamine d3', 'vitamine b12', 'oméga 3', 'probiotiques'] },
+  { id: 'premiers-soins', name: 'Premiers soins', orderIndex: 96, icon: 'bandage', keywords: ['pansement', 'pansements', 'compresse stérile', 'compresses stériles', 'sparadrap', 'bande de gaze', 'bandes de gaze', 'antiseptique', 'désinfectant cutané', 'désinfectant pour plaies', 'sérum physiologique', 'trousse de secours', 'thermomètre médical'] },
   { id: 'entretien-maison', name: 'Entretien maison', orderIndex: 100, icon: 'spray-can', keywords: ['lessive', 'nettoyant', 'vaisselle', 'essuie-tout', 'papier toilette', 'menage', 'ménage'] },
   { id: 'bebe', name: 'Bébé', orderIndex: 110, icon: 'baby', keywords: ['couche', 'bebe', 'bébé', 'lingette', 'petit pot'] },
   { id: 'animaux', name: 'Animaux', orderIndex: 120, icon: 'paw-print', keywords: ['chat', 'chien', 'croquette', 'litiere', 'litière', 'animal'] },
@@ -51,6 +53,10 @@ export const STORE_CATEGORIES: StoreCategory[] = [
 
 // Specific non-food terms take priority over generic words such as huile or glace.
 const specializedIds = new Set(['papeterie-bureau', 'bricolage-quincaillerie', 'jardin-exterieur', 'auto-moto', 'soins-cheveux', 'soins-visage-corps', 'hygiene-dentaire', 'maquillage-parfums', 'alimentation-animale', 'accessoires-animaux', 'maison-cuisine', 'vetements-linge', 'electricite-electronique', 'jeux-loisirs']);
+specializedIds.add('complements-alimentaires');
+specializedIds.add('premiers-soins');
+// A nutrient in a food/cosmetic name is not evidence that it is a supplement.
+const standaloneSupplements = new Set(['magnesium', 'multivitamines', 'vitamine c', 'vitamine d', 'vitamine d3', 'vitamine b12', 'omega 3', 'probiotiques']);
 function wholeWords(input: string): string {
   return ` ${normalize(input).split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(' ')} `;
 }
@@ -79,7 +85,9 @@ function classifyWords(value: string): CategoryResult {
   // Prefer the most specific phrase: "shampooing pour chien" beats "shampooing".
   const specialized = STORE_CATEGORIES.filter((candidate) => specializedIds.has(candidate.id))
     .map((category) => ({ category, score: Math.max(0, ...category.keywords
-      .filter((keyword) => words.includes(wholeWords(keyword))).map((keyword) => wholeWords(keyword).length)) }))
+      .filter((keyword) => words.includes(wholeWords(keyword)) && (category.id !== 'complements-alimentaires'
+        || !standaloneSupplements.has(normalize(keyword)) || words === wholeWords(keyword)))
+      .map((keyword) => wholeWords(keyword).length)) }))
     .filter(({ score }) => score > 0).sort((a, b) => b.score - a.score)[0]?.category;
   const alcohol = STORE_CATEGORIES.find((candidate) => candidate.id === 'alcools' && !words.includes(' vinaigre ')
     && candidate.keywords.some((keyword) => words.includes(wholeWords(keyword))));

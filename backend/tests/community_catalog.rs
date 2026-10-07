@@ -12,16 +12,26 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 fn signed(path: &str, device: &str, secret: &str, body: &str) -> Request<Body> {
+    signed_method("POST", path, device, secret, body)
+}
+
+fn signed_method(
+    method: &str,
+    path: &str,
+    device: &str,
+    secret: &str,
+    body: &str,
+) -> Request<Body> {
     let id = Uuid::new_v4().to_string();
     let time = chrono::Utc::now().timestamp_millis();
     let message = format!(
-        "{time}\n{id}\nPOST\n{path}\n{}",
+        "{time}\n{id}\n{method}\n{path}\n{}",
         hex::encode(Sha256::digest(body.as_bytes()))
     );
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
     mac.update(message.as_bytes());
     Request::builder()
-        .method("POST")
+        .method(method)
         .uri(path)
         .header("content-type", "application/json")
         .header("x-device-id", device)
@@ -113,6 +123,76 @@ async fn community_persistence_consensus_privacy_and_signed_routes() {
         .unwrap();
     assert_eq!(found.name, "Lait entier");
     assert!(found.category.is_none());
+    let validated_path = format!("/api/v1/community/products/{barcode}/validated");
+    let validated_app = create_router(state.clone());
+    let response = validated_app
+        .clone()
+        .oneshot(signed_method(
+            "GET",
+            &validated_path,
+            &devices[6].0,
+            &devices[6].1,
+            "",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let body: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "barcode": barcode, "contributions_enabled": true,
+            "fields": [{"proposal_id": name, "field": "name", "value": "Lait entier"}],
+        })
+    );
+    // Reporting a validated name does not withdraw its consensus automatically.
+    let response = validated_app
+        .clone()
+        .oneshot(signed(
+            &format!("/api/v1/community/proposals/{name}/reports"),
+            &devices[7].0,
+            &devices[7].1,
+            r#"{"reason":"wrong_name"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(
+        validated_fields(pool, &barcode, &config)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    // Read-only deployments expose values but do not advertise reporting.
+    let mut read_only = state.clone();
+    read_only.config.require_device_signatures = false;
+    let response = create_router(read_only)
+        .oneshot(
+            Request::builder()
+                .uri(&validated_path)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap();
+    assert_eq!(body["contributions_enabled"], false);
+    let response = validated_app
+        .oneshot(signed_method(
+            "GET",
+            "/api/v1/community/products/not-a-barcode/validated",
+            &devices[6].0,
+            &devices[6].1,
+            "",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     // Exercise the entire external -> community lookup with four local mock sources.
     let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let received = calls.clone();
@@ -185,6 +265,10 @@ async fn community_persistence_consensus_privacy_and_signed_routes() {
         .await
         .unwrap()
         .is_none());
+    assert!(validated_fields(pool, &barcode, &config)
+        .await
+        .unwrap()
+        .is_empty());
     let missing = shopping_list_backend::handlers::products::get_product(
         axum::extract::State(lookup_state.clone()),
         axum::extract::Path(barcode.clone()),
@@ -210,6 +294,19 @@ async fn community_persistence_consensus_privacy_and_signed_routes() {
     .err()
     .unwrap();
     assert_eq!(unavailable.status, StatusCode::SERVICE_UNAVAILABLE);
+    for device in &devices[1..5] {
+        confirm(pool, category, &device.0, true, &config)
+            .await
+            .unwrap();
+    }
+    let fields = validated_fields(pool, &barcode, &config).await.unwrap();
+    assert_eq!(fields.len(), 1);
+    assert_eq!(fields[0].proposal_id, category);
+    assert_eq!(fields[0].field, "category");
+    assert!(validated_product(pool, &barcode, &config)
+        .await
+        .unwrap()
+        .is_none());
     // Reports are idempotent and never create restrictions automatically.
     let first = report(pool, name, &devices[6].0, "wrong_name")
         .await
@@ -237,6 +334,10 @@ async fn community_persistence_consensus_privacy_and_signed_routes() {
         .bind(first).execute(pool).await.unwrap();
     sqlx::query("INSERT INTO community_contributor_restrictions(id,device_id,report_id,starts_at,reason,created_by) VALUES($1,$2,$3,0,'test examined case','integration')")
         .bind(restriction).bind(&devices[0].0).bind(first).execute(pool).await.unwrap();
+    assert!(validated_fields(pool, &barcode, &config)
+        .await
+        .unwrap()
+        .is_empty());
     assert!(!suggestions(pool, &barcode)
         .await
         .unwrap()
@@ -279,6 +380,61 @@ async fn community_persistence_consensus_privacy_and_signed_routes() {
     );
     // HTTP writes must reject an unsigned request even with a plausible UUID.
     let app = create_router(state.clone());
+    // Reports use the same signed mobile contract, and duplicate retries are harmless.
+    let report_path = format!("/api/v1/community/proposals/{category}/reports");
+    let unsigned_report = Request::builder()
+        .method("POST")
+        .uri(&report_path)
+        .header("content-type", "application/json")
+        .header("x-device-id", &devices[6].0)
+        .body(Body::from(r#"{"reason":"wrong_category"}"#))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(unsigned_report).await.unwrap().status(),
+        StatusCode::UNAUTHORIZED
+    );
+    for reason in [
+        "wrong_product",
+        "wrong_name",
+        "wrong_category",
+        "abuse",
+        "spam",
+        "spam",
+    ] {
+        let payload = serde_json::json!({ "reason": reason }).to_string();
+        let response = app
+            .clone()
+            .oneshot(signed(&report_path, &devices[6].0, &devices[6].1, &payload))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap();
+        assert_eq!(receipt["recorded"], true);
+        assert_eq!(receipt["publication_status"], "received");
+    }
+    assert_eq!(sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM community_proposal_reports WHERE proposal_id=$1 AND reporter_device_id=$2"
+    ).bind(category).bind(&devices[6].0).fetch_one(pool).await.unwrap(), 5);
+    for (target, payload, expected) in [
+        (
+            report_path.clone(),
+            r#"{"reason":"invalid"}"#,
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/api/v1/community/proposals/{}/reports", Uuid::new_v4()),
+            r#"{"reason":"spam"}"#,
+            StatusCode::NOT_FOUND,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(signed(&target, &devices[6].0, &devices[6].1, payload))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
     let path = format!("/api/v1/community/products/{barcode}/proposals");
     assert_eq!(
         app.clone()

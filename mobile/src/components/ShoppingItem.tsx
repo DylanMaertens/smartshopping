@@ -5,12 +5,13 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { STORE_CATEGORIES } from '@/services/categorization/categoryService';
 import { normalizeItemName, truncateUtf8 } from '@/services/itemValidation';
 import type { ShoppingItem as ShoppingItemType } from '@/types';
+import { CommunityProductPanel } from './CommunityProductPanel';
 
 const ALPHABETICAL_CATEGORIES = [...STORE_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
-type Props = { item: ShoppingItemType; onDecreaseQuantity: (id: string) => void; onIncreaseQuantity: (id: string) => void;
+type Props = { item: ShoppingItemType; communityBarcodes?: string[]; onDecreaseQuantity: (id: string) => void; onIncreaseQuantity: (id: string) => void;
   onRename: (id: string, name: string, category?: string) => void; onRemove: (id: string) => void; onToggle: (id: string) => void };
-export function ShoppingItem({ item, onDecreaseQuantity, onIncreaseQuantity, onRemove, onRename, onToggle }: Props) {
+export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.barcode] : [], onDecreaseQuantity, onIncreaseQuantity, onRemove, onRename, onToggle }: Props) {
   const { theme } = useTheme();
   const currentCategory = STORE_CATEGORIES.find((entry) => entry.name === item.category)?.name ?? 'À classer';
   const displayName = normalizeItemName(item.name);
@@ -19,6 +20,7 @@ export function ShoppingItem({ item, onDecreaseQuantity, onIncreaseQuantity, onR
   const [category, setCategory] = useState(currentCategory);
   const [choosingCategory, setChoosingCategory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [communityOpen, setCommunityOpen] = useState(false);
   function saveName() {
     const name = normalizeItemName(draft);
     if (!name || truncateUtf8(name, 200) !== name) { setError(!name ? 'Le nom ne peut pas être vide.' : 'Ce nom est trop long.'); return; }
@@ -36,7 +38,7 @@ export function ShoppingItem({ item, onDecreaseQuantity, onIncreaseQuantity, onR
       </View>
     </Pressable>
     <Pressable accessibilityLabel={`Modifier ${displayName}`} accessibilityHint="Permet de modifier le nom, choisir un rayon ou supprimer cet article"
-      onPress={() => { setDraft(displayName); setCategory(currentCategory); setChoosingCategory(false); setError(null); setEditing(true); }} style={{ flex: 1, minWidth: 82, paddingVertical: 8 }}>
+      onPress={() => { setDraft(displayName); setCategory(currentCategory); setChoosingCategory(false); setCommunityOpen(false); setError(null); setEditing(true); }} style={{ flex: 1, minWidth: 82, paddingVertical: 8 }}>
       <Text style={{ fontWeight: '600', textDecorationLine: item.checked ? 'line-through' : 'none', color: item.checked ? theme.muted : theme.text }}>{displayName}</Text>
     </Pressable>
     <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 'auto' }}>
@@ -52,6 +54,9 @@ export function ShoppingItem({ item, onDecreaseQuantity, onIncreaseQuantity, onR
       {error ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{error}</Text> : null}
       <Button label="Enregistrer" onPress={saveName} />
       <Button label="Annuler" variant="ghost" onPress={() => setEditing(false)} />
+      {communityBarcodes.length > 0 ? <Button label="Consulter la fiche communautaire" variant="secondary"
+        onPress={() => { Keyboard.dismiss(); setCommunityOpen(true); }} /> : null}
+      {communityOpen ? <CommunityProductPanel barcodes={communityBarcodes} onClose={() => setCommunityOpen(false)} /> : null}
       <Button label="Supprimer cet article" accessibilityLabel={`Supprimer ${displayName}`} variant="danger" onPress={() => { setEditing(false); onRemove(item.id); }} />
       {choosingCategory ? <PageModal title="Choisir un rayon" onClose={() => setChoosingCategory(false)}>
         {ALPHABETICAL_CATEGORIES.map((entry) => <Pressable key={entry.id} accessibilityRole="radio"

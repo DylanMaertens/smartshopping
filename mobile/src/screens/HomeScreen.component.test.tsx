@@ -10,6 +10,7 @@ import type { ShoppingItem } from '@/types';
 let mockActiveList = 'home';
 let mockTestServerEnabled = false;
 let mockDisabledLists = new Set<string>();
+let mockLocalLists = new Set<string>();
 let mockCategoryOrders = new Map<string, string[]>();
 let mockItems = new Map<string, ShoppingItem[]>();
 const mockPreferencesDisk = new Map<string, string>();
@@ -24,9 +25,11 @@ const mockNetwork = { isConnected: true, isInternetReachable: true };
 
 jest.mock('@/services/storage/shoppingListStorage', () => ({
   ShoppingListStorage: {
+    isSyncEnabled: (id: string) => !mockLocalLists.has(id) && !mockDisabledLists.has(id),
+    enableSyncForSharing: jest.fn((id: string) => { mockLocalLists.delete(id); }),
     isSyncDisabled: (id: string) => mockDisabledLists.has(id),
     disableSync: (id: string) => { mockDisabledLists.add(id); },
-    importSharedList: (id: string) => { mockDisabledLists.delete(id); if (!mockItems.has(id)) mockItems.set(id, []); },
+    importSharedList: (id: string) => { mockLocalLists.delete(id); mockDisabledLists.delete(id); if (!mockItems.has(id)) mockItems.set(id, []); },
     getLists: () => ['home', 'other'].map((id) => ({ id, syncDisabled: mockDisabledLists.has(id), name: id, createdAt: 1, updatedAt: 1 })),
     getActiveListId: () => mockActiveList,
     createList: jest.fn((name: string) => ({ id: 'created', name, createdAt: 1, updatedAt: 1 })),
@@ -99,11 +102,13 @@ jest.mock('@/components/ListManager', () => {
 jest.mock('@/components/CategorySection', () => {
   const React = require('react');
   const { Pressable, Text, View } = require('react-native');
-  return { CategorySection: ({ section, onIncreaseQuantity, onDecreaseQuantity, onToggleItem, onRemoveItem, onRenameItem }: {
+  return { CategorySection: ({ section, getItemBarcodes, onIncreaseQuantity, onDecreaseQuantity, onToggleItem, onRemoveItem, onRenameItem }: {
+    getItemBarcodes?: (id: string) => string[];
     section: { categoryName: string; items: ShoppingItem[] }; onIncreaseQuantity: (id: string) => void;
     onRenameItem: (id: string, name: string, category?: string) => void;
     onDecreaseQuantity: (id: string) => void; onToggleItem: (id: string) => void; onRemoveItem: (id: string) => void;
   }) => <View testID={`section-${section.categoryName}`}>{section.items.map((item) => <View key={item.id}>
+    <Text testID={`barcodes-${item.id}`}>{getItemBarcodes?.(item.id).join(',')}</Text>
     <Pressable testID={`decrease-${item.id}`} onPress={() => onDecreaseQuantity(item.id)}><Text>Diminuer</Text></Pressable>
     <Pressable testID={`toggle-${item.id}`} onPress={() => onToggleItem(item.id)}><Text>Cocher</Text></Pressable>
     <Pressable testID={`remove-${item.id}`} onPress={() => onRemoveItem(item.id)}><Text>Supprimer</Text></Pressable>
@@ -143,11 +148,27 @@ beforeEach(() => {
   jest.mocked(Storage.getPendingListName).mockReset().mockReturnValue(undefined);
   mockActiveList = 'home';
   mockDisabledLists = new Set();
+  mockLocalLists = new Set();
   mockCategoryOrders = new Map();
   mockItems = new Map([['home', [milk()]], ['other', [milk('other')]]]);
 });
 
 describe('HomeScreen during synchronization', () => {
+  it('passes all distinct valid barcodes from grouped rows to the community lookup', async () => {
+    mockItems.set('home', [
+      { ...milk(), id: 'a', barcode: '3017620422003' },
+      { ...milk(), id: 'b', barcode: '3254569920478' },
+      { ...milk(), id: 'c', barcode: '3017620422003' },
+      { ...milk(), id: 'd', barcode: 'invalid' },
+      { ...milk(), id: 'e', barcode: '12345678', deletedAt: 1 },
+    ]);
+    const screen = render(<HomeScreen />);
+    try {
+      await act(async () => {});
+      expect(screen.getByTestId('barcodes-a').props.children).toBe('3017620422003,3254569920478');
+      expect(getProduct).not.toHaveBeenCalled();
+    } finally { screen.unmount(); }
+  });
   it('persists edits immediately and acknowledges only the original snapshot', async () => {
     const request = deferred<typeof success>();
     mockSync.mockReturnValue(request.promise);
@@ -1206,13 +1227,91 @@ it('lets the standalone APK edit locally before any server is configured', async
   mockTestServerEnabled = true;
   const screen = render(<HomeScreen />);
   await act(async () => {});
-  screen.getByText(/Mode local · Serveur à configurer/);
+  expect(screen.queryByLabelText('État de synchronisation')).toBeNull();
   expect(mockSync).not.toHaveBeenCalled();
   fireEvent.press(screen.getByTestId('increase-home'));
   expect(screen.getByTestId('quantity-home').props.children).toBe('2');
-  fireEvent.press(screen.getByLabelText('État de synchronisation'));
+  fireEvent.press(screen.getByLabelText('Réglages'));
+  expect(screen.queryByText('Synchronisation')).toBeNull();
   screen.getByText('Serveur de test');
   screen.getByLabelText('Adresse HTTPS du serveur');
+});
+
+describe('local-only lists', () => {
+  const initialAppState = AppState.currentState;
+  beforeEach(() => {
+    jest.useFakeTimers();
+    AppState.currentState = 'active';
+    mockNetwork.isConnected = true; mockNetwork.isInternetReachable = true;
+    mockLocalLists = new Set(['home', 'other']);
+  });
+  afterEach(() => {
+    jest.useRealTimers(); jest.restoreAllMocks();
+    AppState.currentState = initialAppState;
+    mockNetwork.isConnected = true; mockNetwork.isInternetReachable = true;
+  });
+  it('hides sync controls and sends nothing on edits, refresh, reconnect or backgrounding', async () => {
+    let onChange!: (state: AppStateStatus) => void;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_, callback) => {
+      onChange = callback; return { remove: jest.fn() };
+    });
+    const screen = render(<HomeScreen />);
+    try {
+      await act(async () => {});
+      expect(screen.queryByLabelText('État de synchronisation')).toBeNull();
+      fireEvent.press(screen.getByTestId('increase-home'));
+      expect(mockItems.get('home')![0].quantity).toBe(2);
+      await act(async () => jest.advanceTimersByTimeAsync(60_000));
+      mockNetwork.isConnected = false; screen.rerender(<HomeScreen />);
+      mockNetwork.isConnected = true; screen.rerender(<HomeScreen />);
+      await act(async () => onChange('background'));
+      await act(async () => onChange('active'));
+      await act(async () => jest.advanceTimersByTimeAsync(60_000));
+      expect(mockSync).not.toHaveBeenCalled();
+      fireEvent.press(screen.getByLabelText('Réglages'));
+      expect(screen.queryByText('Synchronisation')).toBeNull();
+      expect(screen.queryByText('Synchroniser maintenant')).toBeNull();
+    } finally { screen.unmount(); }
+  });
+  it('enables sharing only on explicit invitation preparation and sends the saved content', async () => {
+    const screen = render(<HomeScreen />);
+    try {
+      fireEvent.press(screen.getByTestId('increase-home'));
+      fireEvent.press(screen.getByText('Partager'));
+      await act(async () => jest.advanceTimersByTimeAsync(15_000));
+      expect(Storage.enableSyncForSharing).not.toHaveBeenCalled();
+      expect(mockSync).not.toHaveBeenCalled();
+      await act(async () => fireEvent.press(screen.getByText('Préparer partage test')));
+      expect(Storage.enableSyncForSharing).toHaveBeenCalledWith('home');
+      expect(mockSync).toHaveBeenCalledWith('home', [expect.objectContaining({ quantity: 2 })], 0);
+      fireEvent.press(screen.getByLabelText('Fermer Partager une liste'));
+      screen.getByLabelText('État de synchronisation');
+      fireEvent.press(screen.getByLabelText('Réglages'));
+      screen.getByText('Synchronisation');
+    } finally { screen.unmount(); }
+  });
+  it('enables and immediately fetches a joined list while keeping the personal list local', async () => {
+    const screen = renderNative(<HomeScreen />);
+    try {
+      fireEvent.press(screen.getByText('Rejoindre une liste'));
+      await act(async () => fireEvent.press(screen.getByText('Rejoindre liste test')));
+      expect(mockSync).toHaveBeenCalledWith('other', expect.any(Array), 0);
+      expect(Storage.isSyncEnabled('home')).toBe(false);
+      screen.getByLabelText('État de synchronisation');
+    } finally { screen.unmount(); }
+  });
+  it('keeps barcode lookup available without synchronizing the local list', async () => {
+    jest.mocked(getProduct).mockResolvedValue({ barcode: '3017620422003', product_name: 'Chocolat', categories: [], source: 'test', cached: false, stale: false, ttl_seconds: 60 });
+    const screen = render(<HomeScreen />);
+    try {
+      fireEvent.press(screen.getByLabelText('Ajouter un article'));
+      fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+      await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+      expect(getProduct).toHaveBeenCalledWith('3017620422003');
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(mockSync).not.toHaveBeenCalled();
+    } finally { screen.unmount(); }
+  });
 });
 
 it('reuses a renamed barcode after removal and in another list, even offline', async () => {

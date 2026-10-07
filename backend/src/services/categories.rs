@@ -135,6 +135,62 @@ pub const STORE_CATEGORIES: &[StoreCategory] = &[
             "déodorant",
             "hygiene",
             "hygiène",
+            "serviette hygiénique",
+            "serviettes hygiéniques",
+            "tampon périodique",
+            "tampons périodiques",
+            "protège-slip",
+            "protège-slips",
+            "coupe menstruelle",
+            "culotte menstruelle",
+        ],
+    },
+    StoreCategory {
+        id: "complements-alimentaires",
+        name: "Compléments alimentaires",
+        order_index: 95,
+        icon: "pill",
+        keywords: &[
+            "complément alimentaire",
+            "compléments alimentaires",
+            "complément nutritionnel",
+            "compléments nutritionnels",
+            "gélules de vitamines",
+            "comprimés de vitamines",
+            "comprimés de magnésium",
+            "vitamine c en comprimés",
+            "vitamine d en gouttes",
+            "gélules oméga 3",
+            "capsules oméga 3",
+            "magnésium",
+            "multivitamines",
+            "vitamine c",
+            "vitamine d",
+            "vitamine d3",
+            "vitamine b12",
+            "oméga 3",
+            "probiotiques",
+        ],
+    },
+    StoreCategory {
+        id: "premiers-soins",
+        name: "Premiers soins",
+        order_index: 96,
+        icon: "bandage",
+        keywords: &[
+            "pansement",
+            "pansements",
+            "compresse stérile",
+            "compresses stériles",
+            "sparadrap",
+            "bande de gaze",
+            "bandes de gaze",
+            "antiseptique",
+            "désinfectant cutané",
+            "désinfectant pour plaies",
+            "sérum physiologique",
+            "trousse de secours",
+            "thermomètre médical",
         ],
     },
     StoreCategory {
@@ -518,6 +574,8 @@ fn specialized(id: &str) -> bool {
     matches!(
         id,
         "papeterie-bureau"
+            | "complements-alimentaires"
+            | "premiers-soins"
             | "bricolage-quincaillerie"
             | "jardin-exterieur"
             | "auto-moto"
@@ -673,7 +731,22 @@ fn classify_words(value: &str) -> CategoryMatch {
         let score = category
             .keywords
             .iter()
-            .filter(|keyword| words.contains(&whole_words(keyword)))
+            .filter(|keyword| {
+                words.contains(&whole_words(keyword))
+                    && (category.id != "complements-alimentaires"
+                        || !matches!(
+                            normalize(keyword).as_str(),
+                            "magnesium"
+                                | "multivitamines"
+                                | "vitamine c"
+                                | "vitamine d"
+                                | "vitamine d3"
+                                | "vitamine b12"
+                                | "omega 3"
+                                | "probiotiques"
+                        )
+                        || words == whole_words(keyword))
+            })
             .map(|keyword| whole_words(keyword).chars().count())
             .max()
             .unwrap_or(0);

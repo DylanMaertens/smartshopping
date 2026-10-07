@@ -130,6 +130,31 @@ export class ShoppingListStorage {
     return getMetadata(`sync-disabled:${listId}`) === 'revoked';
   }
 
+  /** Fresh lists and restored copies stay local until sharing is requested. */
+  static isSyncEnabled(listId: string): boolean {
+    if (this.isSyncDisabled(listId)) return false;
+    if (getMetadata(`sync-enabled:${listId}`) === 'shared') return true;
+    // Older versions synchronized personal and shared lists alike. Keep any
+    // evidence of an existing remote relationship rather than break a share.
+    let legacyShared = this.getLastSyncTimestamp(listId) > 0
+      || !!getDatabase().getFirstSync('SELECT id FROM items WHERE list_id = ? AND synced_at > 0 LIMIT 1', listId);
+    try {
+      const name = JSON.parse(getMetadata(`list-name:${listId}`) ?? 'null');
+      legacyShared ||= name?.pending === false;
+    } catch { /* A damaged name must not discard other evidence of sharing. */ }
+    // Persist the transition: renaming or editing every item can otherwise
+    // remove legacy evidence before the next successful synchronization.
+    if (legacyShared) setMetadata(`sync-enabled:${listId}`, 'shared');
+    return legacyShared;
+  }
+
+  static enableSyncForSharing(listId: string): void {
+    if (this.isSyncDisabled(listId)) throw new Error('Rejoins cette liste avec une nouvelle invitation.');
+    const exists = getDatabase().getFirstSync('SELECT id FROM shopping_lists WHERE id = ? AND deleted_at IS NULL', listId);
+    if (!exists) throw new Error('Cette liste n’existe plus.');
+    setMetadata(`sync-enabled:${listId}`, 'shared');
+  }
+
   static disableSync(listId: string): void {
     setMetadata(`sync-disabled:${listId}`, 'revoked');
   }
@@ -143,6 +168,7 @@ export class ShoppingListStorage {
       listId, 'Liste partagée', now, now,
     );
     getDatabase().runSync('DELETE FROM app_metadata WHERE key = ?', `sync-disabled:${listId}`);
+    this.enableSyncForSharing(listId);
     // A joining device has no name to propose. Rejoining preserves unsent edits.
     if (!existed) setMetadata(`list-name:${listId}`, JSON.stringify({ name: 'Liste partagée', updated_at: 0, pending: false }));
     this.setActiveList(listId);
@@ -197,6 +223,7 @@ export class ShoppingListStorage {
       db.runSync('DELETE FROM shopping_lists WHERE id = ?', listId);
       db.runSync('DELETE FROM app_metadata WHERE key = ?', lastSyncKey(listId));
       db.runSync('DELETE FROM app_metadata WHERE key = ?', `sync-disabled:${listId}`);
+      db.runSync('DELETE FROM app_metadata WHERE key = ?', `sync-enabled:${listId}`);
       db.runSync('DELETE FROM app_metadata WHERE key = ?', `category-order:${listId}`);
       db.runSync('DELETE FROM app_metadata WHERE key = ?', `list-name:${listId}`);
     });

@@ -1,5 +1,152 @@
 [
   {
+    "name": "Complément alimentaire au chocolat",
+    "tags": [],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Magnésium",
+    "tags": [],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Vitamine D3",
+    "tags": [],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Multivitamines",
+    "tags": [],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Vitamine C en comprimés",
+    "tags": [],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Gélules oméga 3",
+    "tags": [],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Compléments alimentaires",
+    "tags": [],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Jus de fruits à la vitamine C",
+    "tags": [],
+    "categoryId": "boissons"
+  },
+  {
+    "name": "Lait enrichi en vitamine D",
+    "tags": [],
+    "categoryId": "cremerie"
+  },
+  {
+    "name": "Crème visage vitamine C",
+    "tags": [],
+    "categoryId": "soins-visage-corps"
+  },
+  {
+    "name": "Yaourt aux probiotiques",
+    "tags": [],
+    "categoryId": "cremerie"
+  },
+  {
+    "name": "Céréales au magnésium",
+    "tags": [],
+    "categoryId": "epicerie-sucree"
+  },
+  {
+    "name": "Pansements",
+    "tags": [],
+    "categoryId": "premiers-soins"
+  },
+  {
+    "name": "Compresses stériles",
+    "tags": [],
+    "categoryId": "premiers-soins"
+  },
+  {
+    "name": "Sérum physiologique",
+    "tags": [],
+    "categoryId": "premiers-soins"
+  },
+  {
+    "name": "Désinfectant cutané",
+    "tags": [],
+    "categoryId": "premiers-soins"
+  },
+  {
+    "name": "Nettoyant désinfectant pour la maison",
+    "tags": [],
+    "categoryId": "entretien-maison"
+  },
+  {
+    "name": "Serviettes hygiéniques",
+    "tags": [],
+    "categoryId": "hygiene-beaute"
+  },
+  {
+    "name": "Tampons périodiques",
+    "tags": [],
+    "categoryId": "hygiene-beaute"
+  },
+  {
+    "name": "Culotte menstruelle",
+    "tags": [],
+    "categoryId": "hygiene-beaute"
+  },
+  {
+    "name": "Serviette de bain",
+    "tags": [],
+    "categoryId": "vetements-linge"
+  },
+  {
+    "name": "Produit vitaminé",
+    "tags": [
+      "en:dietary-supplements"
+    ],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Produit calcium",
+    "tags": [
+      "en:calcium-supplements"
+    ],
+    "categoryId": "complements-alimentaires"
+  },
+  {
+    "name": "Produit pansement",
+    "tags": [
+      "en:adhesive-bandages-for-kids"
+    ],
+    "categoryId": "premiers-soins"
+  },
+  {
+    "name": "Vitamines pour chat",
+    "tags": [
+      "en:pet-vitamins-supplements"
+    ],
+    "categoryId": "alimentation-animale"
+  },
+  {
+    "name": "Trousse de secours chien",
+    "tags": [
+      "en:pet-first-aid-emergency-kits"
+    ],
+    "categoryId": "accessoires-animaux"
+  },
+  {
+    "name": "Complément alimentaire",
+    "tags": [
+      "Boissons"
+    ],
+    "categoryId": "boissons"
+  },
+  {
     "name": "Cahiers",
     "tags": [],
     "categoryId": "papeterie-bureau"

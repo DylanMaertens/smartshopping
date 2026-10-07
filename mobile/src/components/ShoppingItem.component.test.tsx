@@ -1,14 +1,35 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ShoppingItem } from './ShoppingItem';
+import { getValidatedCommunityFields } from '@/services/api/backend';
+jest.mock('@/services/api/backend', () => ({ getValidatedCommunityFields: jest.fn() }));
 const item = { id: 'milk', listId: 'home', name: 'Lait', quantity: 1, checked: false, updatedAt: 1 };
 const callbacks = () => ({ onRename: jest.fn(), onToggle: jest.fn(), onRemove: jest.fn(), onIncreaseQuantity: jest.fn(), onDecreaseQuantity: jest.fn() });
+it('consults a public field without losing the private name draft or saving it', async () => {
+  jest.mocked(getValidatedCommunityFields).mockResolvedValue({ barcode: '3017620422003', fields: [], contributions_enabled: true });
+  const props = callbacks();
+  const screen = render(<ShoppingItem item={{ ...item, barcode: '3017620422003' }} {...props} />);
+  expect(getValidatedCommunityFields).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByLabelText('Modifier Lait'));
+  fireEvent.changeText(screen.getByLabelText('Nom de l’article'), 'Mon nom privé');
+  fireEvent.press(screen.getByText('Consulter la fiche communautaire'));
+  await waitFor(() => screen.getByText(/Aucune valeur communautaire actuellement validée/));
+  fireEvent.press(screen.getByLabelText('Fermer Fiche communautaire'));
+  expect(screen.getByLabelText('Nom de l’article').props.value).toBe('Mon nom privé');
+  expect(props.onRename).not.toHaveBeenCalled();
+});
+
+it('does not offer a community lookup for a manual item without a barcode', () => {
+  const screen = render(<ShoppingItem item={item} {...callbacks()} />);
+  fireEvent.press(screen.getByLabelText('Modifier Lait'));
+  expect(screen.queryByText('Consulter la fiche communautaire')).toBeNull();
+});
 it('presents all manual aisle choices in French alphabetical order', () => {
   const screen = render(<ShoppingItem item={item} {...callbacks()} />);
   fireEvent.press(screen.getByLabelText('Modifier Lait'));
   fireEvent.press(screen.getByLabelText('Choisir le rayon'));
   const names = screen.getAllByRole('radio').map((radio) => radio.props.accessibilityLabel);
-  expect(names).toHaveLength(29);
+  expect(names).toHaveLength(31);
   expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })));
 });
 it('edits a trimmed name and closes the editor', () => {

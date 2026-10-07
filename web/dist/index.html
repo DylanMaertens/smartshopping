@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Organisez vos courses par rayon, scannez vos produits et partagez vos listes. Découvrez SmartShopping, une application Android en version de test.">
+  <meta name="theme-color" content="#245c46">
+  <title>SmartShopping — Les courses, l’esprit léger.</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23245c46'/%3E%3Cpath d='m7 11 3 3 5-6m-8 14 3 3 5-6M19 12h6m-6 10h6' fill='none' stroke='%23faf8f3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="site-config.js" defer></script>
+  <script src="main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
+  <header class="header wrap">
+    <a class="brand" href="#" aria-label="SmartShopping, accueil"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9"/><path d="m7 11 3 3 5-6m-8 14 3 3 5-6M19 12h6m-6 10h6"/></svg><span data-brand>SmartShopping</span></a>
+    <nav aria-label="Navigation principale"><a href="#fonctionnalites">L’application</a><a href="#personnalisation">À votre goût</a><a href="#questions">Questions</a><a href="contact.html">Contact</a></nav>
+    <a class="button button-small" href="#android">Tester sur Android</a>
+  </header>
+  <main id="contenu">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">MOINS D’OUBLIS. PLUS DE TRANQUILLITÉ.</p>
+        <h1 id="hero-title">Les courses,<br>l’esprit <em>léger.</em></h1>
+        <p class="hero-intro">La bonne liste, au bon moment. Notez ce qu’il vous faut, retrouvez vos produits par rayon et faites vos courses à votre façon.</p>
+        <div class="hero-actions"><a class="button" href="#android">Découvrir la version Android</a><a class="text-link" href="#fonctionnalites">Comment ça marche ?</a></div>
+        <p class="hero-note">Sans compte obligatoire · Vos listes disponibles hors ligne</p>
+      </div>
+      <figure class="hero-visual" id="apercu">
+        <div class="visual-heading"><span>Le quotidien, bien organisé.</span><span class="edition">01 / LA LISTE</span></div>
+        <img class="app-screen" src="assets/app-origine.png" width="390" height="780" alt="La liste Courses de la semaine avec le thème Origine : fond ivoire, rayons sauge et bouton Ajouter vert profond." fetchpriority="high">
+        <figcaption>Thème Origine · aperçu en développement · données fictives</figcaption>
+      </figure>
+    </section>
+    <div class="principles"><div class="wrap"><span>Une liste qui vous suit.</span><span>Un rayon après l’autre.</span><span>À plusieurs, si vous voulez.</span></div></div>
+    <section class="section wrap" id="fonctionnalites" aria-labelledby="features-title">
+      <div class="section-heading"><p class="eyebrow">DU FRIGO AU PANIER</p><h2 id="features-title">Moins à retenir.<br>Plus simple à faire.</h2><p>Le petit coup de main pour les grandes courses comme pour les trois choses oubliées.</p></div>
+      <div class="features-grid">
+        <article class="feature feature-main"><span class="feature-number">01</span><h3>Notez.<br>C’est déjà rangé.</h3><p>Ajoutez vos articles et retrouvez-les par rayon. Ajustez le nom, la quantité ou le classement : votre liste reste la vôtre.</p><div class="sample-list" aria-label="Exemple de classement"><div><span>Fruits & légumes</span><strong>Pommes <span>× 4</span></strong></div><div><span>Boulangerie</span><strong>Pain complet <span>× 1</span></strong></div><div><span>Crémerie & produits laitiers</span><strong>Lait <span>× 2</span></strong></div></div><p class="small-note">Exemple de liste</p></article>
+        <article class="feature"><span class="feature-number">02</span><h3>Un scan.<br>Un article en plus.</h3><p>Scannez un code-barres pour rechercher le produit. Introuvable ? Donnez-lui votre propre nom : l’app le mémorise sur votre appareil.</p><span class="feature-label">Recherche en ligne · choix privés conservés</span></article>
+        <article class="feature"><span class="feature-number">03</span><h3>Une liste pour vous.<br>Ou pour vous tous.</h3><p>Invitez une autre personne à rejoindre une liste. Les changements se synchronisent lorsque la connexion est disponible.</p><span class="feature-label">Partage facultatif par invitation</span></article>
+        <article class="feature feature-wide"><span class="feature-number">04</span><div><h3>Votre bout de papier a encore de l’avenir.</h3><p>Photographiez une liste écrite, relisez le texte reconnu et choisissez les articles à importer. Vous gardez le dernier mot.</p></div><span class="feature-label">Reconnaissance en ligne · relecture nécessaire</span></article>
+      </div>
+    </section>
+    <section class="personalisation" id="personnalisation" aria-labelledby="themes-title"><div class="wrap theme-layout">
+      <div class="theme-preview"><img id="theme-screen" src="assets/app-origine.png" width="390" height="780" loading="lazy" alt="La liste de courses avec le thème Origine de l’application."></div>
+      <div class="theme-copy"><p class="eyebrow">UN PEU PLUS VOUS</p><h2 id="themes-title">La même liste.<br>Votre <em>ambiance.</em></h2><p>Un carnet chaleureux, un écran épuré ou une interface sombre. Choisissez parmi les sept thèmes de l’app, sans changer vos habitudes.</p>
+        <div class="theme-buttons" role="group" aria-label="Choisir un aperçu de thème"><button type="button" data-theme="origine" aria-pressed="true"><span class="swatch swatch-origine"></span>Origine</button><button type="button" data-theme="minimal" aria-pressed="false"><span class="swatch swatch-minimal"></span>Minimal</button><button type="button" data-theme="papier" aria-pressed="false"><span class="swatch swatch-papier"></span>Papier</button><button type="button" data-theme="nuit" aria-pressed="false"><span class="swatch swatch-nuit"></span>Nuit</button></div>
+        <p class="small-note" id="theme-status" aria-live="polite">Aperçu du thème Origine en développement. Aussi disponibles dans l’app : Pastel, Pixel et Contraste.</p>
+      </div>
+    </div></section>
+    <section class="section wrap quiet-section" aria-labelledby="offline-title"><p class="eyebrow">L’ESSENTIEL RESTE AVEC VOUS</p><h2 id="offline-title">Même au fond du magasin.</h2><div class="quiet-grid"><article><h3>Votre liste, hors ligne.</h3><p>Consultez, cochez et modifiez vos articles sans réseau. Les changements d’une liste partagée attendent le retour de la connexion.</p></article><article><h3>Vos préférences, en privé.</h3><p>Le nom et le rayon que vous choisissez pour un produit sont mémorisés sur l’appareil. Participer à un catalogue public n’est pas obligatoire.</p></article><article><h3>Vous gardez une copie.</h3><p>Exportez une sauvegarde de vos listes depuis l’application. Pour une mise à jour Android, installez la nouvelle version sans désinstaller l’ancienne.</p></article></div></section>
+    <section class="download wrap" id="android" aria-labelledby="android-title"><div><p class="eyebrow">ON PASSE À LA LISTE ?</p><h2 id="android-title">À essayer<br>sur Android.</h2><p>Une première version de test autonome.<br>Pas besoin d’Expo Go pour l’utiliser.</p></div><div class="download-details"><span class="version-pill">VERSION DE TEST <span data-version>0.1.8</span></span><h3>Votre prochaine liste commence ici.</h3><a id="download-link" class="button button-light" href="downloads/smartshopping-0.1.8-preview.apk" download>Télécharger l’APK Android</a><p>Android 7 ou plus récent · environ 54 Mio<br>Installer par-dessus la version précédente, sans désinstaller.</p><a class="checksum-link" href="downloads/smartshopping-0.1.8-preview.apk.sha256" download>Fichier de vérification SHA-256</a><p class="small-note">La recherche, le partage et la reconnaissance de texte nécessitent un serveur de test configuré. Le catalogue communautaire n’est pas ouvert au public.</p><p class="small-note">Dans la 0.1.8 : thème Origine, rayons Compléments alimentaires et Premiers soins. L’optimisation des listes locales sans synchronisation arrivera dans un prochain APK ; les captures Origine montrent cet aperçu en développement.</p></div></section>
+    <section class="section wrap faq" id="questions" aria-labelledby="faq-title"><div><p class="eyebrow">AVANT DE REMPLIR LE PANIER</p><h2 id="faq-title">Quelques réponses<br>dans la poche.</h2></div><div class="faq-items">
+      <details><summary>Faut-il créer un compte ?</summary><p>Non, vous pouvez gérer vos listes sans compte obligatoire. Le partage utilise une invitation et un identifiant anonyme propre à l’installation.</p></details>
+      <details><summary>Qu’est-ce qui fonctionne sans Internet ?</summary><p>Vos listes et les noms de produits mémorisés restent sur votre appareil. La synchronisation, les nouvelles recherches en ligne et la reconnaissance d’une photo demandent une connexion au serveur.</p></details>
+      <details><summary>Et si un produit n’est pas reconnu ?</summary><p>Vous pouvez saisir son nom et choisir son rayon. L’app garde ce choix privé pour les prochains scans sur cet appareil, même après suppression de l’article de la liste.</p></details>
+      <details><summary>Comment installer la version de test ?</summary><p>Téléchargez l’APK sur votre téléphone Android et ouvrez-le. Android peut vous demander d’autoriser l’installation depuis cette source. Gardez l’application précédente : une mise à jour s’installe par-dessus.</p><p>Les listes sont utilisables immédiatement hors ligne. Pour les fonctions en ligne, renseignez l’adresse HTTPS de votre serveur de test dans Réglages → Serveur de test. Aucune adresse publique permanente n’est encore fournie.</p></details>
+      <details><summary>L’application est-elle disponible sur iPhone ?</summary><p>Pas encore sous forme d’application distribuée. La version proposée ici est destinée à Android.</p></details>
+      <details><summary>Le catalogue communautaire est-il disponible ?</summary><p>Les fonctions communautaires sont en préparation. Elles restent désactivées par défaut, le temps de mettre en place la modération et les protections nécessaires.</p></details>
+    </div></section>
+  </main>
+  <footer class="footer wrap"><a class="brand" href="#"><span data-brand>SmartShopping</span></a><p>Un peu d’ordre. Beaucoup plus simple.</p><a href="contact.html">Contact · démonstration</a><a href="#contenu">Retour en haut</a><p class="footer-note">Présentation de la version de test · nom provisoire. Contact non connecté ; informations légales à compléter avant l’ouverture publique.</p></footer>
+</body>
+</html>

@@ -10,6 +10,7 @@ use crate::{
     error::ApiError,
     services::community_catalog::{
         self, CommunitySuggestions, ProposalInput, ProposalReceipt, SubmitError,
+        ValidatedCommunityFields,
     },
     state::AppState,
 };
@@ -41,6 +42,25 @@ pub async fn get_suggestions(
         .map_err(database_error)?;
     result.contributions_enabled = state.config.require_device_signatures;
     Ok(Json(result))
+}
+
+pub async fn get_validated_fields(
+    State(state): State<AppState>,
+    Path(barcode): Path<String>,
+) -> Result<impl axum::response::IntoResponse, ApiError> {
+    validate_barcode(&barcode)?;
+    let fields =
+        community_catalog::validated_fields(community_pool(&state)?, &barcode, &state.config)
+            .await
+            .map_err(database_error)?;
+    Ok((
+        [("cache-control", "no-store")],
+        Json(ValidatedCommunityFields {
+            barcode,
+            fields,
+            contributions_enabled: state.config.require_device_signatures,
+        }),
+    ))
 }
 
 pub async fn propose(

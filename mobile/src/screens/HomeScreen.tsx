@@ -83,6 +83,7 @@ export function HomeScreen() {
   const sections = useMemo(() => groupItemsByCategory(visibleItems.filter((item) => !item.checked), categoryOrder), [visibleItems, categoryOrder]);
   const remainingCount = visibleItems.filter((item) => !item.checked).length;
   const pendingChangesCount = ShoppingListStorage.getPendingChangesCount(activeListId);
+  const syncEnabledListIds = JSON.stringify(lists.filter((list) => ShoppingListStorage.isSyncEnabled(list.id)).map((list) => list.id).sort());
 
   useEffect(() => {
     let mounted = true;
@@ -322,7 +323,7 @@ export function HomeScreen() {
     listId = activeListIdRef.current,
   ): Promise<boolean> => {
     if (serverMissing) return Promise.resolve(false);
-    if (ShoppingListStorage.isSyncDisabled(listId)) return Promise.resolve(false);
+    if (!ShoppingListStorage.isSyncEnabled(listId)) return Promise.resolve(false);
     const inFlight = syncInFlightRef.current;
     if (inFlight) {
       if (inFlight.listId === listId) return inFlight.promise;
@@ -405,6 +406,7 @@ export function HomeScreen() {
 
   const pendingSync = useMemo(() => new DebouncedListSync({
     hasPending: (listId) => ShoppingListStorage.getLists().some((list) => list.id === listId)
+      && !serverMissing && ShoppingListStorage.isSyncEnabled(listId)
       && ShoppingListStorage.getPendingChangesCount(listId) > 0,
     waitForIdle: async () => {
       await backgroundSyncRef.current;
@@ -458,9 +460,9 @@ export function HomeScreen() {
         if (ShoppingListStorage.getPendingChangesCount(list.id)) pendingSync.schedule(list.id);
       }
     }
-    pendingSync.setEnabled(foreground);
+    pendingSync.setEnabled(foreground && !serverMissing);
     return () => pendingSync.setEnabled(false);
-  }, [foreground, pendingSync]);
+  }, [foreground, pendingSync, serverMissing]);
 
   useEffect(() => {
     const online = networkState.isConnected === true && networkState.isInternetReachable !== false;
@@ -488,12 +490,14 @@ export function HomeScreen() {
 
   useEffect(() => {
     const online = networkState.isConnected === true && networkState.isInternetReachable !== false;
-    if (!online || !foreground) return undefined;
+    if (!online || !foreground || serverMissing || syncEnabledListIds === '[]') return undefined;
+    if (listOpen && !ShoppingListStorage.isSyncEnabled(activeListId)) return undefined;
     let directoryCursor = 0;
     let cancelled = false;
     const stop = startRemoteRefresh(async () => {
       if (cancelled || AppState.currentState !== 'active' || syncInFlightRef.current || backgroundSyncRef.current) return null;
-      const ids = listOpen ? [activeListIdRef.current] : ShoppingListStorage.getLists().map((list) => list.id).sort();
+      const ids = (listOpen ? [activeListIdRef.current] : ShoppingListStorage.getLists().map((list) => list.id).sort())
+        .filter((id) => ShoppingListStorage.isSyncEnabled(id));
       // Refresh names on the home page too. Bound each round to avoid a burst
       // when someone has imported a large backup with many lists.
       let refreshed = false;
@@ -503,14 +507,14 @@ export function HomeScreen() {
         if (cancelled || AppState.currentState !== 'active' || syncInFlightRef.current || backgroundSyncRef.current) return null;
         // Advance even on failure so a revoked list cannot starve the others.
         directoryCursor = (start + offset + 1) % ids.length;
-        if (ShoppingListStorage.isSyncDisabled(id) || pendingSync.hasScheduled(id) || !ShoppingListStorage.getLists().some((list) => list.id === id)) continue;
+        if (!ShoppingListStorage.isSyncEnabled(id) || pendingSync.hasScheduled(id) || !ShoppingListStorage.getLists().some((list) => list.id === id)) continue;
         refreshed = true;
         if (!await syncCurrentList('periodic', id)) return false;
       }
       return refreshed ? true : null;
     });
     return () => { cancelled = true; stop(); };
-  }, [foreground, activeListId, listOpen, networkState.isConnected, networkState.isInternetReachable, syncCurrentList, pendingSync]);
+  }, [foreground, activeListId, listOpen, networkState.isConnected, networkState.isInternetReachable, syncCurrentList, pendingSync, serverMissing, syncEnabledListIds]);
 
   function resetList() {
     showItems(ShoppingListStorage.clearCurrentList(activeListId));
@@ -567,6 +571,15 @@ export function HomeScreen() {
     setPanel('share');
   }
 
+  async function prepareSharing(listId: string) {
+    if (serverMissing || ShoppingListStorage.isSyncDisabled(listId)) return false;
+    // Opening the panel alone must not publish a personal list. This callback
+    // runs only after the user explicitly requests an invitation code.
+    ShoppingListStorage.enableSyncForSharing(listId);
+    setLists(ShoppingListStorage.getLists());
+    return syncCurrentList('manual', listId);
+  }
+
   function deleteSharedListLocally(listId: string) {
     const selectedId = activeListIdRef.current;
     const nextId = ShoppingListStorage.deleteListPermanently(listId);
@@ -586,12 +599,17 @@ export function HomeScreen() {
   const checkedItems = sortItemsForDisplay(visibleItems.filter((item) => item.checked));
   const offline = networkState.isConnected === false || networkState.isInternetReachable === false;
   const syncDisabled = ShoppingListStorage.isSyncDisabled(activeListId);
+  const syncEnabled = ShoppingListStorage.isSyncEnabled(activeListId);
+  // A revoked share still needs an explanation; a purely local list does not.
+  const showSync = !serverMissing && (syncEnabled || syncDisabled);
   const statusLabel = serverMissing ? 'Mode local · Serveur à configurer' : syncDisabled ? 'Synchronisation coupée' : syncPhase === 'syncing' ? 'Envoi en cours…'
     : offline || syncPhase === 'offline' ? `Hors ligne${pendingChangesCount ? ` · ${pendingChangesCount} en attente` : ''}`
     : syncPhase === 'error' ? 'Envoi interrompu · Réessayer'
     : pendingChangesCount ? `${pendingChangesCount} changement${pendingChangesCount > 1 ? 's' : ''} en attente`
     : syncPhase === 'synced' || lastSyncAt > 0 ? 'À jour' : 'Connexion en cours…';
   const rowCallbacks = { onDecreaseQuantity: decreaseQuantity, onIncreaseQuantity: increaseQuantity,
+    getItemBarcodes: (id: string) => [...new Set(getEquivalentItems(itemsRef.current, id)
+      .map((item) => item.barcode).filter((barcode): barcode is string => !!barcode && /^[0-9]{8,14}$/.test(barcode)))],
     onRenameItem: renameItem, onRemoveItem: removeItem, onToggleItem: toggleItem };
   const closePanel = () => { Keyboard.dismiss(); setPanel(null); };
   const openAdd = () => { setAddedMessage(null); setInputError(null); setPanel('add'); };
@@ -624,11 +642,11 @@ export function HomeScreen() {
             </Pressable>
           </View>
           <Heading accessibilityRole="header">{activeName}</Heading>
-          <Pressable accessibilityLabel="État de synchronisation" onPress={() => setPanel('sync')}>
+          {showSync ? <Pressable accessibilityLabel="État de synchronisation" onPress={() => setPanel('sync')}>
             <Text accessibilityLiveRegion="polite" style={{ color: !syncDisabled && syncPhase === 'error' ? theme.danger : theme.muted, fontSize: 14 }}>
               {syncDisabled ? '' : syncPhase === 'synced' && !pendingChangesCount && !offline ? '✓ ' : '↻ '}{statusLabel}
             </Text>
-          </Pressable>
+          </Pressable> : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Button variant="secondary" label="Partager" disabled={syncDisabled} onPress={() => openShare(activeListId)} style={{ flexGrow: 1 }} />
             <Button variant="secondary" label="Trier" accessibilityLabel="Trier les rayons" onPress={() => setOrderingListId(activeListIdRef.current)} style={{ flexGrow: 1 }} />
@@ -689,7 +707,7 @@ export function HomeScreen() {
       </PageModal> : null}
       {panel === 'share' && sharingListId ? <PageModal title="Partager une liste" onClose={closePanel}>
         <Text style={{ color: theme.muted }}>{lists.find((list) => list.id === sharingListId)?.name}</Text>
-        {ShoppingListStorage.isSyncDisabled(sharingListId) ? <Text style={{ color: theme.muted }}>Synchronisation coupée. Cette copie reste disponible sur cet appareil. Pour rétablir le partage, rejoins cette liste avec une nouvelle invitation.</Text> : <ShareListCard session={invitationSession} onBeforeInvite={() => syncCurrentList('manual', sharingListId)}
+        {ShoppingListStorage.isSyncDisabled(sharingListId) ? <Text style={{ color: theme.muted }}>Synchronisation coupée. Cette copie reste disponible sur cet appareil. Pour rétablir le partage, rejoins cette liste avec une nouvelle invitation.</Text> : <ShareListCard session={invitationSession} onBeforeInvite={() => prepareSharing(sharingListId)}
           listId={sharingListId} onDeleted={() => deleteSharedListLocally(sharingListId)} />}
       </PageModal> : null}
       {panel === 'join' ? <PageModal title="Rejoindre une liste" onClose={() => { setInvitationCode(undefined); closePanel(); }}>
@@ -699,11 +717,11 @@ export function HomeScreen() {
         <TestServerCard />
         <AppearancePicker />
         <Button variant="secondary" label="Sauvegarde et restauration" onPress={() => setPanel('backup')} />
-        <Button variant="secondary" label="Synchronisation" onPress={() => setPanel('sync')} />
+        {showSync ? <Button variant="secondary" label="Synchronisation" onPress={() => setPanel('sync')} /> : null}
         <DeviceDiagnosticsCard />
         <Text style={{ color: theme.muted, textAlign: 'center', fontSize: 13 }}>SmartShopping · Tes courses, à ton rythme.</Text>
       </PageModal> : null}
-      {panel === 'sync' ? <PageModal title="Synchronisation" onClose={closePanel}>
+      {panel === 'sync' && showSync ? <PageModal title="Synchronisation" onClose={closePanel}>
         {serverMissing ? <TestServerCard /> : <SyncStatusCard lastSyncAt={lastSyncAt} message={syncStatus} networkState={networkState}
           onSync={() => void syncCurrentList('manual')} pendingCount={pendingChangesCount} phase={syncDisabled ? 'disconnected' : syncPhase} />}
       </PageModal> : null}
@@ -718,7 +736,7 @@ export function HomeScreen() {
         <ListActions key={activeListId} list={{ id: activeListId, name: activeName }} canDelete={lists.length > 1}
           shareDisabled={syncDisabled} onShare={openShare} onRename={renameList} onDelete={archiveList} />
         <Button variant="danger" label="Vider la liste" onPress={() => Alert.alert('Vider la liste ?',
-          syncDisabled ? 'Tous les articles de cette copie locale seront retirés de cet appareil.' : 'Tous les articles seront retirés, y compris pour les personnes avec qui tu partages cette liste.', [
+          !syncEnabled ? 'Tous les articles de cette copie locale seront retirés de cet appareil.' : 'Tous les articles seront retirés, y compris pour les personnes avec qui tu partages cette liste.', [
             { text: 'Annuler', style: 'cancel' }, { text: 'Vider', style: 'destructive', onPress: () => { resetList(); closePanel(); } },
           ])} />
       </PageModal> : null}

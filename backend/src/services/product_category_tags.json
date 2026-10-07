@@ -7,7 +7,7 @@
       "en:pet-hygiene",
       "en:dog-toys",
       "en:cat-toys",
-      "fr:litieres"
+      "fr:litieres", "en:pet-first-aid-emergency-kits", "en:pet-medical-tape-bandages"
     ]
   },
   {
@@ -41,8 +41,16 @@
       "en:livestock-feed",
       "en:miscellaneous-pet-food",
       "en:horse-food",
-      "en:reptile-food"
+      "en:reptile-food", "en:pet-vitamins-supplements", "en:horse-vitamins-supplements"
     ]
+  },
+  {
+    "categoryId": "premiers-soins",
+    "tags": ["en:first-aid", "en:first-aid-kits", "en:adhesive-bandages", "en:medical-tape-bandages", "en:bandages", "en:medical-dressings", "en:antiseptics", "fr:pansements"]
+  },
+  {
+    "categoryId": "complements-alimentaires",
+    "tags": ["en:dietary-supplements", "en:food-supplements", "en:nutritional-supplements", "en:vitamins-and-supplements", "en:vitamins-supplements", "fr:complements-alimentaires"]
   },
   {
     "categoryId": "hygiene-dentaire",
@@ -185,7 +193,8 @@
       "en:personal-lubricants",
       "en:razors",
       "en:razor-blades",
-      "en:moist-wipes"
+      "en:moist-wipes",
+      "en:menstrual-products", "en:sanitary-pads", "en:tampons", "en:menstrual-cups"
     ]
   },
   {
