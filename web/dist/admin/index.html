@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Supervision · SmartShopping Admin — maquette</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23245c46'/%3E%3Cpath d='m7 11 3 3 5-6m-8 14 3 3 5-6M19 12h6m-6 10h6' fill='none' stroke='%23faf8f3' stroke-width='2.5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="admin.css"><script src="../site-config.js" defer></script><script src="admin.js" type="module"></script>
+</head>
+<body>
+  <a class="skip" href="#contenu">Aller au contenu</a>
+  <aside class="sidebar">
+    <a href="../index.html" class="brand"><span class="brand-mark" aria-hidden="true">✓</span><span data-brand>SmartShopping</span></a>
+    <p class="side-label">ESPACE ADMINISTRATION</p>
+    <nav aria-label="Administration">
+      <a href="#supervision" aria-current="page"><span class="nav-symbol" aria-hidden="true">◫</span>Supervision</a>
+      <a href="#journaux"><span class="nav-symbol" aria-hidden="true">≡</span>Journaux</a>
+      <a href="#moderation"><span class="nav-symbol" aria-hidden="true">◇</span>Modération</a>
+      <a href="#messages"><span class="nav-symbol" aria-hidden="true">✉</span>Messages</a>
+    </nav>
+    <div class="side-footer"><span class="demo-tag">Maquette interactive</span><p>Aucun serveur connecté.<br>Aucune donnée réelle.</p><a href="../index.html">Voir le site public</a></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span>Administration <span class="separator">/</span> <span id="breadcrumb">Supervision</span></span><span class="connection">Non connecté au backend</span></header>
+    <div class="demo-notice"><strong>Mode démonstration</strong><span>Les données et décisions sont fictives. Aucun accès protégé n’est encore en place.</span></div>
+    <main id="contenu" tabindex="-1">
+      <section id="view-supervision" data-page="supervision" aria-labelledby="supervision-title">
+        <div class="page-heading"><div><p class="eyebrow">VUE D’ENSEMBLE</p><h1 id="supervision-title">Supervision</h1><p>Repérer les incidents et les dossiers à examiner.</p></div><span class="period">Scénario fictif · 7 octobre, 14 h 30</span></div>
+        <div class="metrics">
+          <article class="card metric"><span>Requêtes sur 24 h</span><strong>1 248</strong><small>Activité serveur simulée</small></article>
+          <article class="card metric"><span>Temps de réponse médian</span><strong>84 <span>ms</span></strong><small>Ne mesure pas la fluidité de l’app</small></article>
+          <article class="card metric"><span>Erreurs sur 24 h</span><strong>12</strong><a href="#journaux?level=error">Examiner les erreurs</a></article>
+          <article class="card metric"><span>Signalements à examiner</span><strong id="pending-total">3</strong><a href="#moderation">Ouvrir la file de modération</a></article>
+        </div>
+        <div class="overview-grid">
+          <article class="card"><div class="card-heading"><h2>Services</h2><span class="muted">État simulé</span></div>
+            <ul class="service-list"><li><div><strong>API de l’application</strong><span>Listes et synchronisation</span></div><span class="badge good">Disponible</span></li><li><div><strong>Base de données</strong><span>PostgreSQL · données persistantes</span></div><span class="badge good">Disponible</span></li><li><div><strong>Recherche de produits</strong><span>Un catalogue externe répond lentement</span></div><span class="badge warning">À surveiller</span></li><li><div><strong>Catalogue communautaire</strong><span>Ouverture publique non activée</span></div><span class="badge neutral">Désactivé</span></li></ul>
+          </article>
+          <article class="card attention"><p class="eyebrow">À EXAMINER</p><h2>Une recherche produit a expiré</h2><p>Le scénario montre un délai dépassé sur un catalogue externe. Le nom peut toujours être saisi dans l’app.</p><code>DEMO-REQ-1042</code><a class="button" href="#journaux?search=DEMO-REQ-1042">Consulter cet événement</a><p class="small muted">Exemple de diagnostic, pas un incident en cours.</p></article>
+        </div>
+        <article class="card connection-card"><h2>Connexion et accès : prochaine étape</h2><p>L’adresse du serveur, l’authentification et les droits seront raccordés avec le backend. Ne saisissez aucun mot de passe ou jeton dans cette maquette.</p><p class="muted">Ces écrans ne lisent ni les listes privées, ni les photos OCR, ni les journaux réels.</p></article>
+      </section>
+      <section id="view-journaux" data-page="journaux" hidden aria-labelledby="journaux-title">
+        <div class="page-heading"><div><p class="eyebrow">DIAGNOSTIC</p><h1 id="journaux-title">Journaux</h1><p>Retrouver un événement sans exposer les données personnelles.</p></div><span class="period">Événements fictifs</span></div>
+        <div id="logs-content"></div>
+      </section>
+      <section id="view-moderation" data-page="moderation" hidden aria-labelledby="moderation-title">
+        <div class="page-heading"><div><p class="eyebrow">CATALOGUE COMMUNAUTAIRE</p><h1 id="moderation-title">Modération</h1><p>Examiner les signalements, puis motiver chaque décision.</p></div><span class="period">Dossiers fictifs</span></div>
+        <div id="moderation-content"></div>
+      </section>
+      <section id="view-messages" data-page="messages" hidden aria-labelledby="messages-title">
+        <div class="page-heading"><div><p class="eyebrow">CONTACT & SUPPORT</p><h1 id="messages-title">Messages</h1><p>Lire les demandes, suivre leur traitement et préparer une réponse.</p></div><span class="period">Boîte de réception fictive</span></div>
+        <div id="messages-content"></div>
+      </section>
+      <noscript><p class="card">Activez JavaScript pour explorer les journaux, la modération et les messages de démonstration.</p></noscript>
+      <footer class="page-footer">Aperçu local · aucune action envoyée au serveur · les simulations disparaissent au rechargement.</footer>
+    </main>
+  </div>
+  <dialog id="confirm-decision" aria-labelledby="confirm-title"><h2 id="confirm-title">Confirmer la simulation</h2><p id="confirm-summary"></p><p class="muted">Aucun produit ni contributeur réel ne sera modifié.</p><div class="actions"><button type="button" id="cancel-decision" class="secondary">Annuler</button><button type="button" id="apply-decision">Confirmer la simulation</button></div></dialog>
+  <dialog id="reply-preview" aria-labelledby="reply-preview-title"><p class="eyebrow">BROUILLON · AUCUN ENVOI</p><h2 id="reply-preview-title">Relire la réponse</h2><p id="reply-recipient" class="small muted"></p><p id="reply-preview-body" class="message-body"></p><p class="small muted">Aucun e-mail ne sera envoyé. La réponse reste dans cet onglet jusqu’au rechargement.</p><div class="actions"><button type="button" id="close-reply" class="secondary">Revenir au brouillon</button><button type="button" disabled>Envoi indisponible</button></div></dialog>
+  <p id="announcement" role="status" class="sr-only"></p>
+</body>
+</html>

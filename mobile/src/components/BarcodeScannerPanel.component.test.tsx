@@ -1,7 +1,7 @@
 import React from 'react';
 import { AppState, Linking, type AppStateStatus } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { themes } from '@/theme/themes';
+import { DEFAULT_THEME_ID, themes } from '@/theme/themes';
 import * as themeContext from '@/theme/ThemeProvider';
 import { BarcodeScannerPanel } from './BarcodeScannerPanel';
 const mockPermission = { granted: true, canAskAgain: true };
@@ -42,7 +42,7 @@ it('waits for a stable code, pauses between products and permits deliberate repe
     scan('3017620422003');
     expect(onScanned).toHaveBeenCalledTimes(1);
     screen.getByText('Patiente un instant…');
-    expect(screen.getByTestId('camera-frame').props.style.borderColor).toBe(themes.minimal.muted);
+    expect(screen.getByTestId('camera-frame').props.style.borderColor).toBe(themes[DEFAULT_THEME_ID].muted);
     scan('3274080005003');
     act(() => jest.advanceTimersByTime(250));
     scan('3274080005003');
@@ -111,7 +111,7 @@ it('shows camera failures and remounts the camera on retry', () => {
   fireEvent(screen.getByTestId('barcode-camera-view'), 'mountError', { message: 'Camera unavailable' });
   screen.getByText('La caméra n’a pas pu démarrer.');
   expect(screen.queryByText('Camera unavailable')).toBeNull();
-  expect(screen.getByTestId('camera-frame').props.style.borderColor).toBe(themes.minimal.danger);
+  expect(screen.getByTestId('camera-frame').props.style.borderColor).toBe(themes[DEFAULT_THEME_ID].danger);
   expect(screen.queryByTestId('barcode-camera-view')).toBeNull();
   fireEvent.press(screen.getByText('Relancer la caméra'));
   expect(screen.queryByText('Camera unavailable')).toBeNull();

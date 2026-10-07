@@ -4,7 +4,7 @@ L’APK se construit sur le PC, sans compte Expo, sans EAS et sans publication e
 
 ## Installer et essayer
 
-Le fichier produit par le lanceur est `artifacts/android/smartshopping-0.1.7-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle prend en charge les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent.
+Le fichier produit par le lanceur est `artifacts/android/smartshopping-0.1.8-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle prend en charge les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent.
 
 1. Copier l’APK sur le téléphone et l’ouvrir pour l’installer. Android peut demander d’autoriser cette source d’installation.
 2. Ouvrir SmartShopping : les listes sont utilisables hors ligne immédiatement.
@@ -18,7 +18,13 @@ Utiliser l’adresse du **même backend SmartShopping** : changer d’adresse de
 
 **Les données d’Expo Go ne sont pas transférées automatiquement.** Conserver Expo Go et sa sauvegarde. Restaurer une sauvegarde dans l’APK crée des copies indépendantes ; pour conserver une liste partagée, la rejoindre avec une invitation valide. Les deux applications ont des identités d’appareil différentes.
 
-## Mise à jour 0.1.7
+## Mise à jour 0.1.8
+
+Thème **Origine**, assorti au site : ivoire, sauge et vert profond, disponible dans **Réglages → Apparence**. Il devient le défaut sans préférence valide ; les thèmes déjà choisis sont conservés. Ajout de **Compléments alimentaires** et **Premiers soins** (31 entrées avec À classer), meilleure reconnaissance des protections périodiques dans Hygiène & beauté et taxonomies actualisées. Aucun reclassement des articles déjà enregistrés.
+
+Installer **par-dessus la version précédente, sans désinstaller**, code Android **9**. Le backend devra lui aussi utiliser les nouvelles correspondances pour les recherches en ligne ; il n’est pas redémarré par la compilation. Le réglage du serveur de test et les limites communautaires de la 0.1.7 restent inchangés. Le site local propose désormais ce même APK 0.1.8, préparé après contrôle SHA-256, sans recompilation. Les changements ultérieurs de synchronisation locale ne sont pas inclus dans cet APK.
+
+## Historique 0.1.7
 
 Première tranche du catalogue communautaire : propositions de nom/rayon après échec de recherche, participation facultative et signalement avec cinq motifs. Depuis **Modifier l’article → Consulter la fiche communautaire**, accès aux valeurs actuellement validées et signalement séparé du nom ou du rayon. Si une ligne regroupe plusieurs codes-barres, le produit à consulter doit être choisi. Les choix privés et brouillons restent inchangés.
 
@@ -76,9 +82,11 @@ Cet APK utilise `com.smartshopping.app`. Augmenter `android.versionCode` lors de
 
 ## Contrôles
 
-Compilation réalisée le 6 octobre 2026 : APK d’environ 54 Mio, version `0.1.7` / code `8`, Android 7 minimum. Signature v2 et SHA-256 vérifiés, certificat identique à la 0.1.6, bundle embarqué présent, bibliothèques `arm64-v8a` et `armeabi-v7a` présentes. La configuration embarquée active uniquement le serveur de test du canal `preview`, sans ancienne adresse de tunnel. Aucun fichier de clé privée de signature n’est inclus ; permission microphone absente.
+Compilation réalisée le 7 octobre 2026 : APK d’environ 54 Mio, version `0.1.8` / code `9`, Android 7 minimum. Signature v2 et SHA-256 vérifiés, certificat identique à la 0.1.7, bundle embarqué avec Origine et les nouveaux rayons présent, bibliothèques `arm64-v8a` et `armeabi-v7a` présentes. La configuration embarquée active uniquement le serveur de test du canal `preview`, sans ancienne adresse de tunnel. Aucun fichier de clé privée de signature n’est inclus ; permission microphone absente.
 
-Validation automatisée : TypeScript, 256 tests Vitest, 197 tests de composants Jest, 21 tests de configuration, 37 tests Rust standard et 6 tests PostgreSQL réussis. La compilation Android release a réussi. La recette physique ci-dessous reste à effectuer ; le serveur de test n’a pas été redémarré. Les quatre tests externes optionnels (OCR réel, catalogues réels, Redis réel, Vault réel) n’ont pas été exécutés.
+Validation automatisée de cette compilation : TypeScript, 285 tests Vitest, 208 tests de composants Jest et 21 tests de configuration réussis. La compilation Android release a réussi. Les 37 tests Rust standard et 6 tests PostgreSQL avaient réussi lors du complément des rayons ; ils n’ont pas été relancés pour cette compilation mobile. La recette physique ci-dessous reste à effectuer ; le serveur de test n’a pas été redémarré. Les quatre tests externes optionnels (OCR réel, catalogues réels, Redis réel, Vault réel) n’ont pas été exécutés.
+
+SHA-256 de l’APK 0.1.8 : `053389146c24cd0ed5b71ce8c57c95754bdba71ceeeb95c0f02f0b0ffa78af23`.
 
 - Signature vérifiable avec `apksigner verify --verbose` et intégrité avec le fichier `.sha256`.
 - Présence du bundle JavaScript embarqué et des bibliothèques ARM dans l’APK.
@@ -110,3 +118,12 @@ Validation automatisée : TypeScript, 256 tests Vitest, 197 tests de composants 
 - Regrouper deux produits de même nom mais de codes-barres distincts : vérifier le choix du code à consulter, puis changer de code pendant une lecture lente.
 - Après échec de recherche, sélectionner ou saisir un nom/rayon privé ; signaler une proposition ne doit ni activer la participation ni modifier ces choix.
 - Ces contrôles ne constituent pas une autorisation d’ouvrir les contributions publiques : la modération opérationnelle et l’invalidation anticipée du cache mobile restent à terminer.
+
+### Recette 0.1.8 sur téléphone
+
+- Installer par-dessus la 0.1.7 sans désinstaller ; vérifier les listes, le thème choisi et l’adresse du serveur conservés.
+- Dans Réglages → Apparence, sélectionner Origine ; fermer complètement et rouvrir l’app pour vérifier sa conservation.
+- Vérifier les titres, boutons, articles cochés et textes agrandis avec Origine.
+- Ajouter « Vitamine D3 » et « Pansements » ; vérifier respectivement Compléments alimentaires et Premiers soins, puis leur présence dans le choix manuel et le tri des rayons.
+- Vérifier que « Crème vitamine C » reste en Hygiène & beauté et que les anciens articles ne changent pas de rayon automatiquement.
+- Refaire un scan, un ajout hors ligne et une sauvegarde. Partage entre deux installations et communauté restent à essayer en environnement de test approprié.

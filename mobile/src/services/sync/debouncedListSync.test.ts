@@ -22,6 +22,13 @@ it('waits one second after the last edit and sends one batch', async () => {
   await vi.advanceTimersByTimeAsync(30000);
   expect(sync).toHaveBeenCalledTimes(1);
 });
+it('does not arm a timer for an ineligible local list', () => {
+  const { queue, hasPending } = setup();
+  hasPending.mockReturnValue(false);
+  queue.schedule('local');
+  expect(queue.hasScheduled('local')).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+});
 it('preserves edits made during a slow automatic request', async () => {
   const { queue, sync } = setup();
   let finish!: () => void;

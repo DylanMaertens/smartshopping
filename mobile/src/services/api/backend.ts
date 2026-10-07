@@ -96,7 +96,7 @@ export class BackendApiError extends Error {
 }
 
 export async function getProduct(barcode: string): Promise<BackendProduct> {
-  const cacheKey = `catalogues-v6:${barcode}`;
+  const cacheKey = `catalogues-v7:${barcode}`;
   const cached = ProductCache.get<BackendProduct>(cacheKey);
   if (cached) return { ...cached, cached: true };
 

@@ -61,6 +61,61 @@ function startSync() {
   return Storage.getPendingChanges('home');
 }
 
+describe('local lists and explicit sharing', () => {
+  it('keeps unsynchronized, new and restored lists local without losing their edits', () => {
+    expect(Storage.isSyncEnabled('home')).toBe(false);
+    const fresh = Storage.createList('Privée');
+    Storage.saveCurrentList(fresh.id, [milk({ id: 'private', listId: fresh.id })]);
+    Storage.renameList(fresh.id, 'Courses privées');
+    expect(Storage.isSyncEnabled(fresh.id)).toBe(false);
+    expect(Storage.getPendingChanges(fresh.id)).toHaveLength(1);
+    for (const id of Storage.restoreBackup(Storage.createBackup())) expect(Storage.isSyncEnabled(id)).toBe(false);
+  });
+  it('keeps the initial default list local', () => {
+    database.run('DELETE FROM shopping_lists');
+    expect(Storage.isSyncEnabled(Storage.getActiveListId())).toBe(false);
+  });
+  it('persists explicit sharing and keeps all edits for the first upload', () => {
+    const sent = startSync();
+    Storage.enableSyncForSharing('home');
+    const saved = database.export(); database.close(); database = createDatabase(saved);
+    expect(Storage.isSyncEnabled('home')).toBe(true);
+    expect(Storage.getPendingChanges('home')).toEqual(sent);
+    expect(Storage.getPendingListName('home')).toBeDefined();
+  });
+  it('preserves legacy synchronization without treating restored copies as shared', () => {
+    const sent = startSync();
+    Storage.completeSync('home', sent, [], 1000);
+    expect(Storage.isSyncEnabled('home')).toBe(true);
+    const restored = Storage.restoreBackup(Storage.createBackup());
+    expect(restored.every((id) => !Storage.isSyncEnabled(id))).toBe(true);
+  });
+  it('preserves legacy joins before a successful first sync', () => {
+    database.run("INSERT INTO app_metadata (key,value) VALUES ('list-name:home', ?)", [JSON.stringify({ name: 'Liste partagée', updated_at: 0, pending: false })]);
+    expect(Storage.isSyncEnabled('home')).toBe(true);
+    Storage.renameList('home', 'Liste renommée hors ligne');
+    expect(Storage.isSyncEnabled('home')).toBe(true);
+  });
+  it('enables joined lists but never bypasses a revoked access', () => {
+    Storage.importSharedList('joined');
+    expect(Storage.isSyncEnabled('joined')).toBe(true);
+    Storage.disableSync('joined');
+    expect(Storage.isSyncEnabled('joined')).toBe(false);
+    expect(() => Storage.enableSyncForSharing('joined')).toThrow(/invitation/);
+    Storage.importSharedList('joined');
+    expect(Storage.isSyncEnabled('joined')).toBe(true);
+  });
+  it('removes sharing metadata on deletion and rejects nonexistent or archived lists', () => {
+    expect(() => Storage.enableSyncForSharing('missing')).toThrow();
+    Storage.enableSyncForSharing('home');
+    Storage.deleteListPermanently('home');
+    expect(Storage.isSyncEnabled('home')).toBe(false);
+    const fresh = Storage.createList('Archive');
+    Storage.archiveList(fresh.id);
+    expect(() => Storage.enableSyncForSharing(fresh.id)).toThrow();
+  });
+});
+
 describe('portable list backups', () => {
   it('exports only visible list content, without credentials, IDs or tombstones', () => {
     Storage.saveCurrentList('home', [milk({ checked: true, barcode: '12345678' }), milk({ id: 'removed', deletedAt: 20 })]);

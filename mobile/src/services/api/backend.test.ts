@@ -92,7 +92,7 @@ it('returns a local product without enrollment or network and caches successful 
   vi.mocked(getDeviceAuthSecret).mockReturnValue('secret');
   fetch.mockResolvedValueOnce(response(product));
   await getProduct(product.barcode);
-  expect(ProductCache.set).toHaveBeenCalledWith('catalogues-v6:3274080005003', product);
+  expect(ProductCache.set).toHaveBeenCalledWith('catalogues-v7:3274080005003', product);
   vi.mocked(ProductCache.set).mockClear();
   fetch.mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Not found' }), { status: 404 }));
   await expect(getProduct('3017620422003')).rejects.toThrow();

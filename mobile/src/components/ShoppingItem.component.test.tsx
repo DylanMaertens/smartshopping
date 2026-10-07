@@ -29,7 +29,7 @@ it('presents all manual aisle choices in French alphabetical order', () => {
   fireEvent.press(screen.getByLabelText('Modifier Lait'));
   fireEvent.press(screen.getByLabelText('Choisir le rayon'));
   const names = screen.getAllByRole('radio').map((radio) => radio.props.accessibilityLabel);
-  expect(names).toHaveLength(29);
+  expect(names).toHaveLength(31);
   expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })));
 });
 it('edits a trimmed name and closes the editor', () => {

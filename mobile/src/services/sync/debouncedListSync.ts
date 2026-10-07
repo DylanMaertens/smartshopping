@@ -13,6 +13,7 @@ export class DebouncedListSync {
   }) {}
 
   schedule(listId: string) {
+    if (!this.options.hasPending(listId)) return;
     this.deadlines.set(listId, Date.now() + (this.options.delay ?? 1000));
     this.arm();
   }

@@ -1,4 +1,5 @@
-export type ThemeId = 'minimal' | 'papier' | 'pastel' | 'nuit' | 'pixel' | 'contraste';
+export type ThemeId = 'origine' | 'minimal' | 'papier' | 'pastel' | 'nuit' | 'pixel' | 'contraste';
+export const DEFAULT_THEME_ID: ThemeId = 'origine';
 export type Theme = {
   id: ThemeId; name: string; description: string; dark: boolean;
   bg: string; surface: string; raised: string; text: string; muted: string;
@@ -7,6 +8,7 @@ export type Theme = {
 };
 const base = { dark: false, radius: 16, stroke: 1, bodySize: 16, tap: 48 };
 export const themes: Record<ThemeId, Theme> = {
+  origine: { ...base, id: 'origine', name: 'Origine', description: 'Ivoire, sauge et vert profond', bg: '#FAF8F3', surface: '#FFFFFF', raised: '#E7EFE8', text: '#202824', muted: '#59655D', border: '#D7DED5', primary: '#245C46', onPrimary: '#FFFFFF', danger: '#A62D27', success: '#245C46', warning: '#79500C' },
   minimal: { ...base, id: 'minimal', name: 'Minimal', description: 'Clair, net et essentiel', bg: '#F8F9FC', surface: '#FFFFFF', raised: '#EAF0FF', text: '#172033', muted: '#556176', border: '#CDD5E2', primary: '#2855CC', onPrimary: '#FFFFFF', danger: '#B42332', success: '#246545', warning: '#85520A' },
   papier: { ...base, id: 'papier', name: 'Papier', description: 'La douceur d’un carnet', bg: '#FAF3E7', surface: '#FFF9EF', raised: '#EFE3D0', text: '#342718', muted: '#725B42', border: '#CDBDA5', primary: '#795735', onPrimary: '#FFFFFF', danger: '#A62D27', success: '#436437', warning: '#815509', radius: 10 },
   pastel: { ...base, id: 'pastel', name: 'Pastel', description: 'Des courses en couleur', bg: '#FAF7FE', surface: '#FFFFFF', raised: '#EEE4FA', text: '#342641', muted: '#6F5A7C', border: '#D3C3DF', primary: '#70438C', onPrimary: '#FFFFFF', danger: '#AB284F', success: '#29664D', warning: '#80500F', radius: 22 },
