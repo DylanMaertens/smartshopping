@@ -7,6 +7,9 @@ use axum::{
 use crate::state::AppState;
 
 pub async fn metrics(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    if state.config.metrics_token.as_ref().is_none_or(|token| token.is_empty()) {
+        return (StatusCode::NOT_FOUND, [(header::CONTENT_TYPE, "text/plain")], "not found".to_string());
+    }
     if let Some(expected) = &state.config.metrics_token {
         let authorized = headers
             .get(header::AUTHORIZATION)

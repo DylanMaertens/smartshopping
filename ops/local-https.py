@@ -99,13 +99,24 @@ def tool(name, settings):
     return str(candidate)
 
 
-def run_server(port):
+def run_server(port, enable_admin=False, enable_contact=False):
+    if enable_contact and not enable_admin:
+        raise RuntimeError('--contact exige --admin et son adresse HTTPS contrôlée.')
     settings_path = STATE / 'server-tools.json'
     settings = json.loads(settings_path.read_text()) if settings_path.exists() else {}
     cloudflared = settings.get('cloudflared', str(STATE / 'bin/cloudflared'))
     if not os.access(cloudflared, os.X_OK):
         raise RuntimeError('Installer le tunnel : bash ops/install-local-https.sh')
     origin = f'http://127.0.0.1:{port}'
+    admin_credentials = STATE / 'admin/credentials.json'
+    admin_origin = HTTPS / 'admin-origin'
+    if enable_admin:
+        if not admin_credentials.is_file():
+            raise RuntimeError('Créer le compte avec python3 ops/setup-admin.py avant --admin.')
+        if backend_ready(origin):
+            raise RuntimeError('Un backend tourne déjà. --admin exige un démarrage contrôlé ; arrêter volontairement la session actuelle avant de relancer. Aucune session arrêtée automatiquement.')
+        # No previous tunnel origin is trusted while the new tunnel is starting.
+        admin_origin.write_text('')
     stop = HTTPS / 'stop'
     stop.unlink(missing_ok=True)
     stopping = False
@@ -165,12 +176,16 @@ def run_server(port):
                 import base64
                 key.write_text(base64.b64encode(os.urandom(32)).decode() + '\n')
             env = dict(os.environ, HOST='127.0.0.1', PORT=str(port), ENABLE_SYNC_ENDPOINT='true',
+                       ENABLE_CONTACT_FORM='true' if enable_contact else 'false',
                        REQUIRE_DEVICE_SIGNATURES='true', DEVICE_SECRET_KEY_FILE=str(key),
                        DEVICE_REGISTRY_PATH=str(STATE / 'device-registry.json'),
                        DATABASE_URL='postgresql:///smartshopping_dev?host=' + urllib.parse.quote(str(pg_socket), safe=''))
             ocr_python = STATE / 'ocr/venv/bin/python'
             if ocr_python.exists() and (STATE / 'ocr/models/rec.onnx').exists():
                 env.update(OCR_PYTHON=str(ocr_python), OCR_MODELS_DIR=str(STATE / 'ocr/models'))
+            if enable_admin:
+                env.pop('ADMIN_ORIGIN', None)
+                env.update(ADMIN_CREDENTIALS_FILE=str(admin_credentials), ADMIN_ORIGIN_FILE=str(admin_origin))
             backend = spawn([binary], 'backend.log', env)
             deadline = time.monotonic() + 30
             while not backend_ready(origin):
@@ -202,6 +217,16 @@ def run_server(port):
             time.sleep(.5)
         else:
             return
+        if enable_admin:
+            status, html = request(origin + '/admin/')
+            if status != 200 or b'data-backend="true"' not in html:
+                raise RuntimeError('Le binaire backend ne contient pas encore l’administration. Recompiler avant --admin.')
+            temp = admin_origin.with_suffix('.tmp')
+            temp.write_text(url + '\n')
+            temp.replace(admin_origin)
+            print(f'Administration sécurisée : {url}/admin/', flush=True)
+            if enable_contact:
+                print(f'Contact de test : {url}/contact.html (réception en base, sans envoi d’e-mail)', flush=True)
         atomic_json(MOBILE_CONFIG, {'apiBaseUrl': url + '/api/v1'})
         atomic_json(HTTPS / 'status.json', {'url': url, 'apiBaseUrl': url + '/api/v1', 'backend': origin})
         print(f'\nServeur HTTPS prêt : {url}\nAPI : {url}/api/v1\n'
@@ -213,6 +238,8 @@ def run_server(port):
                 raise RuntimeError('Un service s’est arrêté. Consulter .local-dev/https/*.log puis relancer.')
             time.sleep(.5)
     finally:
+        if enable_admin:
+            admin_origin.write_text('')
         if url:
             remove_mobile_config(url)
         (HTTPS / 'status.json').unlink(missing_ok=True)
@@ -235,6 +262,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', nargs='?', choices=['start', 'status', 'stop'], default='start')
     parser.add_argument('--port', type=int, default=3000)
+    parser.add_argument('--admin', action='store_true', help='Activer le compte local préparé avec ops/setup-admin.py (HTTPS uniquement).')
+    parser.add_argument('--contact', action='store_true', help='Ouvrir le formulaire de contact pour les tests ; exige --admin. Ne publie pas le catalogue communautaire.')
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
         parser.error('Choisir un port entre 1024 et 65535.')
@@ -257,7 +286,7 @@ def main():
             else:
                 print('Démarrage en cours.' if running else 'Serveur HTTPS arrêté.')
         else:
-            run_server(args.port)
+            run_server(args.port, args.admin, args.contact)
 
 
 if __name__ == '__main__':

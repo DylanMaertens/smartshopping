@@ -15,7 +15,12 @@ use crate::state::MetricKind;
 
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 
-pub async fn request_id(request: Request, next: Next) -> Response {
+#[derive(Clone)]
+pub struct DiagnosticCode(pub &'static str);
+#[derive(Clone)]
+struct DiagnosticId(String);
+
+pub async fn request_id(mut request: Request, next: Next) -> Response {
     let request_id = request
         .headers()
         .get(&REQUEST_ID_HEADER)
@@ -26,6 +31,7 @@ pub async fn request_id(request: Request, next: Next) -> Response {
             HeaderValue::from_str(&Uuid::new_v4().to_string()).expect("uuid is a valid header")
         });
 
+    request.extensions_mut().insert(DiagnosticId(request_id.to_str().unwrap().to_owned()));
     let mut response = next.run(request).await;
     response.headers_mut().insert(REQUEST_ID_HEADER, request_id);
     response
@@ -37,11 +43,29 @@ pub async fn request_metrics(
     next: Next,
 ) -> Response {
     let endpoint = normalized_endpoint(request.uri().path());
+    let reference = request.extensions().get::<DiagnosticId>().map(|id| id.0.clone()).unwrap_or_else(|| Uuid::new_v4().to_string());
+    let method = match request.method().as_str() { "GET" => "GET", "POST" => "POST", "OPTIONS" => "OPTIONS", "HEAD" => "HEAD", _ => "OTHER" };
     let started_at = Instant::now();
     let response = next.run(request).await;
+    let elapsed = started_at.elapsed();
     state
         .metrics
-        .record_http_request(endpoint, started_at.elapsed());
+        .record_http_request(endpoint, elapsed);
+    let status = response.status().as_u16();
+    let code = response.extensions().get::<DiagnosticCode>().map(|code| code.0).unwrap_or(match status {
+        200..=399 => "HTTP_OK", 401 => "UNAUTHORIZED", 403 => "FORBIDDEN", 404 => "NOT_FOUND",
+        429 => "RATE_LIMITED", 500..=599 => "SERVER_ERROR", _ => "REQUEST_REJECTED",
+    });
+    let service = if endpoint.starts_with("/admin") { "admin" } else if endpoint == "/api/v1/ocr" { "ocr" }
+        else if endpoint.starts_with("/api/v1/products") { "catalogues" }
+        else if endpoint.starts_with("/api/v1/community") { "community" }
+        else if endpoint.starts_with("/api/v1/contact") { "contact" }
+        else if endpoint == "/api/v1/sync" || endpoint.starts_with("/api/v1/lists") || endpoint.starts_with("/api/v1/invitations") { "sync" } else { "api" };
+    state.admin.record(crate::services::admin::Event {
+        time: chrono::Utc::now().to_rfc3339(), reference, route: endpoint, method, service, status,
+        duration_ms: elapsed.as_millis().min(u64::MAX as u128) as u64, code,
+        level: if status >= 500 { "error" } else if status >= 400 { "warning" } else { "info" },
+    });
     response
 }
 
@@ -182,7 +206,18 @@ pub async fn device_signature(
 }
 
 fn normalized_endpoint(path: &str) -> &'static str {
-    if path.starts_with("/api/v1/products/") {
+    if path.starts_with("/admin/api/queues/") {
+        if path.ends_with("/decision") { "/admin/api/queues/:kind/:id/decision" }
+        else { "/admin/api/queues/:kind" }
+    } else if path == "/api/v1/contact" { "/api/v1/contact" }
+    else if path == "/api/v1/contact/status" { "/api/v1/contact/status" }
+    else if path.starts_with("/admin") {
+        match path {
+            "/admin/api/login" => "/admin/api/login", "/admin/api/logout" => "/admin/api/logout",
+            "/admin/api/session" => "/admin/api/session", "/admin/api/overview" => "/admin/api/overview",
+            "/admin/api/logs" => "/admin/api/logs", _ => "/admin/other",
+        }
+    } else if path.starts_with("/api/v1/products/") {
         "/api/v1/products/:barcode"
     } else if path.starts_with("/api/v1/community/products/") && path.ends_with("/validated") {
         "/api/v1/community/products/:barcode/validated"

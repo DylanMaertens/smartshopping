@@ -13,9 +13,10 @@ type Props = {
   onScanned: (barcode: string) => void;
   statusMessage?: string | null;
   paused?: boolean;
+  embedded?: boolean;
 };
 
-export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onPhotographed, statusMessage, paused = false }: Props) {
+export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onPhotographed, statusMessage, paused = false, embedded = false }: Props) {
   const { theme } = useTheme();
   const textMode = mode === 'text';
   const cameraRef = useRef<CameraView>(null);
@@ -35,7 +36,17 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [cameraAttempt, setCameraAttempt] = useState(0);
   const [torch, setTorch] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [active, setActive] = useState(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+
+  useEffect(() => {
+    if (capturedPhoto === null) return;
+    // Commit enableTorch=false to the native camera before the parent removes it.
+    setCapturedPhoto(null);
+    onPhotographed?.(capturedPhoto);
+  }, [capturedPhoto, onPhotographed]);
 
   useEffect(() => () => { if (cooldownTimer.current) clearTimeout(cooldownTimer.current); }, []);
   useEffect(() => { if (paused) scanGate.current.resetCandidate(); }, [paused]);
@@ -68,7 +79,7 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
       if (permission?.canAskAgain === false) await Linking.openSettings();
       else await requestPermission();
     } catch {
-      setPermissionError('Impossible d’ouvrir les permissions. Autorise la caméra dans les paramètres d’Expo Go ou de SmartShopping.');
+      setPermissionError('Impossible d’ouvrir les permissions. Autorise la caméra dans les paramètres d’Expo Go ou de Poduna.');
     }
   }
 
@@ -101,31 +112,33 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
   }
 
   async function takePhoto() {
-    if (lockedRef.current || !cameraReady || !cameraRef.current) return;
+    if (lockedRef.current || !active || paused || !cameraReady || !cameraRef.current) return;
     lockedRef.current = true;
     setCapturing(true);
     setScanError(null);
     try {
       const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.65, exif: false });
+      if (!mounted.current) return;
+      setTorch(false);
       if (!photo?.base64 || photo.base64.length > 4 * 1024 * 1024 - 128) {
         throw new Error('Photo trop volumineuse ou indisponible. Reprends la photo avec moins de détails autour de la liste.');
       }
-      onPhotographed?.(photo.base64);
+      setCapturedPhoto(photo.base64);
     } catch (error) {
+      if (!mounted.current) return;
       setScanError(error instanceof Error ? error.message : 'Impossible de prendre la photo.');
     } finally {
-      lockedRef.current = false;
-      setCapturing(false);
+      if (mounted.current) { setTorch(false); lockedRef.current = false; setCapturing(false); }
     }
   }
 
   function handleBarcodeScanned(result: BarcodeScanningResult) {
-    if (lockedRef.current || paused) return;
+    if (!mounted.current || textMode || lockedRef.current || paused) return;
     if (!active || !cameraReady || cameraError) return;
     const value = invitation ? parseInvitationCode(result.data)
       : scanGate.current.read(result.data, result.type, Date.now());
     if (!value) {
-      if (invitation) setScanError('Ce QR code n’est pas une invitation SmartShopping.');
+      if (invitation) setScanError('Ce QR code n’est pas une invitation Poduna.');
       return;
     }
     setScanError(null);
@@ -147,17 +160,17 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
 
   return (
     <ScrollView contentContainerStyle={{ padding: 20, gap: 16, flexGrow: 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      {!embedded ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <Heading style={{ fontSize: 24, flex: 1 }}>{textMode ? 'Photographier une liste' : invitation ? 'Scanner une invitation' : 'Scanner un produit'}</Heading>
         <Pressable accessibilityRole="button" onPress={onCancel} style={{ padding: 12 }}>
           <Text style={{ color: theme.danger, fontWeight: '700' }}>Fermer</Text>
         </Pressable>
-      </View>
+      </View> : null}
       {!permission ? <Text>Vérification de l’autorisation caméra…</Text> : !permission.granted ? (
         <View style={{ gap: 12 }}>
           <Text style={{ color: theme.muted }}>
             {permission.canAskAgain === false
-              ? 'L’accès caméra est bloqué. Dans les paramètres d’Expo Go ou de SmartShopping, ouvre Autorisations puis active Caméra.'
+              ? 'L’accès caméra est bloqué. Dans les paramètres d’Expo Go ou de Poduna, ouvre Autorisations puis active Caméra.'
               : textMode ? 'Autorise l’accès caméra pour photographier ta liste.' : invitation ? 'Autorise l’accès caméra pour scanner une invitation.' : 'Autorise l’accès caméra pour scanner les codes-barres de tes produits.'}
           </Text>
           <Pressable accessibilityRole="button" onPress={() => void allowCamera()} testID="request-camera-permission"
@@ -205,7 +218,7 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
             </Pressable>
           </View> : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            <Pressable accessibilityRole="button" disabled={!cameraReady || !!cameraError}
+            <Pressable accessibilityRole="button" disabled={!cameraReady || capturing || !!cameraError}
               onPress={() => setTorch((value) => !value)} style={{ backgroundColor: theme.raised, borderRadius: theme.radius, padding: 14 }}>
               <Text>{torch ? 'Éteindre la lampe' : 'Allumer la lampe'}</Text>
             </Pressable>

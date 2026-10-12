@@ -31,10 +31,10 @@ function createAppConfig(base, env = process.env, localApiUrl) {
   const profile = env.EAS_BUILD_PROFILE;
   const channel = env.SMARTSHOPPING_CHANNEL || PROFILE_CHANNELS[profile] || 'development';
   if (!CHANNELS.has(channel) || (profile && !PROFILE_CHANNELS[profile])) {
-    throw new Error('Canal ou profil de compilation SmartShopping inconnu.');
+    throw new Error('Canal ou profil de compilation Poduna inconnu.');
   }
   if (profile && PROFILE_CHANNELS[profile] !== channel) {
-    throw new Error('Le canal SmartShopping ne correspond pas au profil EAS.');
+    throw new Error('Le canal Poduna ne correspond pas au profil EAS.');
   }
   const testServerConfiguration = channel === 'preview' && env.SMARTSHOPPING_TEST_SERVER === 'true';
   const apiBaseUrl = channel === 'development'

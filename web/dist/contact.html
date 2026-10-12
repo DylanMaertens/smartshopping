@@ -2,23 +2,25 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Préparation du contact SmartShopping : poser une question, décrire un problème ou proposer une amélioration.">
+  <meta name="description" content="Préparation du contact Poduna : poser une question, décrire un problème ou proposer une amélioration.">
   <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>Contact · SmartShopping — maquette</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23245c46'/%3E%3Cpath d='m7 11 3 3 5-6m-8 14 3 3 5-6M19 12h6m-6 10h6' fill='none' stroke='%23faf8f3' stroke-width='2.5'/%3E%3C/svg%3E">
+  <title>Contact · Poduna — maquette</title>
+  <link rel="icon" href="assets/brand/favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="contact.css">
   <script src="site-config.js" defer></script><script src="contact.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#contenu">Aller au contenu</a>
   <header class="header wrap">
-    <a class="brand" href="index.html" aria-label="SmartShopping, accueil"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9"/><path d="m7 11 3 3 5-6m-8 14 3 3 5-6M19 12h6m-6 10h6"/></svg><span data-brand>SmartShopping</span></a>
+    <a class="brand" href="index.html" aria-label="Poduna, accueil"><img class="brand-logo" src="assets/brand/logo.svg" width="172" height="52" alt=""><span class="sr-only" data-brand>Poduna</span></a>
     <nav aria-label="Navigation principale"><a href="index.html">L’application</a><a href="index.html#questions">Questions</a><a href="contact.html" aria-current="page">Contact</a></nav>
     <a class="button button-small" href="index.html#android">Tester sur Android</a>
   </header>
   <main class="wrap contact-main" id="contenu" tabindex="-1">
     <div class="contact-notice"><strong>Formulaire de démonstration</strong><p>Aucun message n’est envoyé ni conservé après rechargement. Utilisez uniquement des informations fictives.</p></div>
+    <section class="contact-notice" aria-labelledby="connect-title"><h2 id="connect-title">Envoyer un vrai message pendant les tests</h2><p>Indiquez l’adresse HTTPS temporaire fournie par l’organisateur. Le formulaire sécurisé s’ouvrira sur ce serveur ; rien de ce qui est saisi dans la démonstration ci-dessous n’y sera transféré.</p><form id="contact-connect"><label for="contact-server">Adresse HTTPS du serveur<input id="contact-server" type="url" required placeholder="https://…trycloudflare.com" autocomplete="off"></label><button class="button button-small" type="submit">Préparer le lien</button></form><p id="contact-connect-status" role="status"></p><a id="contact-server-link" hidden rel="noopener noreferrer" target="_blank">Ouvrir le contact sécurisé</a></section>
     <div class="contact-layout">
       <section class="contact-intro" aria-labelledby="contact-title"><p class="eyebrow">UN RETOUR À PARTAGER</p><h1 id="contact-title">On vous <br><em>écoute.</em></h1><p>Une question, un problème dans l’app ou une idée pour vos prochaines courses ?</p></section>
       <section class="contact-card" aria-labelledby="form-title"><h2 id="form-title">Votre message</h2><p class="small-note">Tous les champs sont obligatoires. Aucune pièce jointe.</p>
@@ -35,10 +37,18 @@
         </form>
         <noscript><p class="contact-notice">JavaScript est nécessaire pour essayer ce formulaire. Aucun envoi n’est disponible.</p></noscript>
       </section>
-      <aside class="contact-assistance"><div class="contact-help"><h2>Un petit coup de main ?</h2><p>Installation Android, fonctionnement hors ligne et partage : les premières réponses sont déjà là.</p><a class="text-link" href="index.html#questions">Consulter les questions fréquentes</a></div><p class="small-note">Le service de contact n’est pas encore ouvert. Cette page permet seulement d’essayer le formulaire, sans connexion à la messagerie admin.</p></aside>
+      <aside class="contact-assistance" aria-labelledby="contact-faq-title"><div class="contact-help"><h2 id="contact-faq-title">Questions fréquentes</h2><p>La réponse se trouve peut-être déjà ici.</p>
+        <div class="faq-list">
+          <details><summary>Comment mettre à jour l’application ?</summary><p>Ouvrez le nouvel APK sur votre téléphone Android et installez-le par-dessus la version précédente, sans la désinstaller, pour conserver vos listes et réglages.</p></details>
+          <details><summary>Qu’est-ce qui fonctionne sans Internet ?</summary><p>Vos listes restent utilisables hors ligne. Le partage, la recherche de nouveaux produits et la lecture d’une photo nécessitent une connexion au serveur.</p></details>
+          <details><summary>Un produit n’est pas reconnu : que faire ?</summary><p>Saisissez son nom et choisissez son rayon. Les choix privés d’un produit scanné restent mémorisés sur votre téléphone, même après suppression de l’article de la liste.</p></details>
+          <details><summary>Pourquoi le partage ou la lecture de photo ne fonctionne pas ?</summary><p>Vérifiez votre connexion et l’adresse dans Réglages → Serveur de test. L’adresse temporaire peut changer au redémarrage du tunnel ; le serveur doit rester accessible.</p></details>
+          <details><summary>Faut-il créer un compte ?</summary><p>Non. Les listes sont utilisables sans compte obligatoire ; le partage se fait par invitation.</p></details>
+          <details><summary>Ce formulaire envoie-t-il mon message ?</summary><p>Pas encore : il s’agit d’une démonstration. La prévisualisation reste dans cet onglet, sans transmission au support ni à la messagerie admin. N’y saisissez pas d’informations personnelles.</p></details>
+        </div><a class="text-link" href="index.html#questions">Toutes les réponses sur l’application</a><p class="small-note contact-test-note">Le service de contact n’est pas encore ouvert. Cette page permet seulement d’essayer le formulaire, sans connexion à la messagerie admin.</p></div></aside>
     </div>
     <dialog id="contact-preview" aria-labelledby="preview-title"><p class="eyebrow">APERÇU LOCAL</p><h2 id="preview-title">Relire votre message</h2><dl><dt>Adresse de réponse</dt><dd id="preview-email"></dd><dt>Sujet</dt><dd id="preview-topic"></dd></dl><p id="preview-body" class="message-body"></p><p class="small-note">Ce message n’a pas été envoyé. La messagerie sera raccordée plus tard.</p><button class="button" id="close-preview" type="button">Revenir au formulaire</button></dialog>
   </main>
-  <footer class="footer wrap"><a class="brand" href="index.html"><span data-brand>SmartShopping</span></a><p>Un peu d’ordre. Beaucoup plus simple.</p><a href="index.html#questions">Questions fréquentes</a><p class="footer-note">Nom provisoire · contact en démonstration · informations légales à compléter avant l’ouverture publique.</p></footer>
+  <footer class="footer wrap"><a class="brand" href="index.html"><img class="brand-logo" src="assets/brand/logo.svg" width="172" height="52" alt=""><span class="sr-only" data-brand>Poduna</span></a><p>Un peu d’ordre. Beaucoup plus simple.</p><a href="index.html#questions">Questions fréquentes</a><p class="footer-note">Poduna · contact en démonstration · informations légales à compléter avant l’ouverture publique.</p></footer>
 </body>
 </html>

@@ -12,7 +12,7 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:build-config": "node --test config/build-config.test.cjs",
+    "test:build-config": "node --test config/*.test.cjs",
     "test:integration": "vitest run .integration.test.ts",
     "test:components": "jest --runInBand",
     "e2e:android": "maestro test e2e/android",

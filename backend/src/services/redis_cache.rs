@@ -8,6 +8,16 @@ pub struct RedisCache {
 }
 
 impl RedisCache {
+    pub async fn invalidate_product(&self, barcode: &str) -> Result<(), redis::RedisError> {
+        let mut connection = self.client.get_multiplexed_async_connection().await?;
+        let _: usize = connection.del(product_key(barcode)).await?;
+        Ok(())
+    }
+    pub async fn ping(&self) -> Result<(), redis::RedisError> {
+        let mut connection = self.client.get_multiplexed_async_connection().await?;
+        let _: String = redis::cmd("PING").query_async(&mut connection).await?;
+        Ok(())
+    }
     pub fn new(url: &str) -> Result<Self, redis::RedisError> {
         Ok(Self {
             client: redis::Client::open(url)?,

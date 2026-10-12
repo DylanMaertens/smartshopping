@@ -2,5 +2,11 @@
 @media(max-width:1050px){.contact-layout{gap:40px}.contact-card{padding:24px}}
 @media(max-width:760px){.contact-main{padding-block:12px 48px}.contact-notice{margin-bottom:30px}.contact-layout{grid-template-columns:minmax(0,1fr);gap:32px}.contact-intro h1 br{display:none}.contact-help{margin-top:24px}.contact-card{padding:22px}.contact-intro>p:not(.eyebrow){max-width:none}dialog{padding:22px}}
 .contact-layout{row-gap:32px}.contact-assistance>p{margin-top:26px;color:var(--muted)}.contact-help{margin-top:0}
-@media(min-width:761px){.contact-intro{grid-column:1;grid-row:1}.contact-card{grid-column:2;grid-row:1 / span 2}.contact-assistance{grid-column:1;grid-row:2}}
+.contact-help .faq-list{margin-bottom:24px}.contact-help details{border-bottom:1px solid var(--line);padding:8px 0}.contact-help summary{cursor:pointer;font-weight:600;line-height:1.5;min-height:44px;padding:8px 0}.contact-help summary:focus-visible{outline:3px solid #a37626;outline-offset:4px}.contact-help details p{font-size:.9375rem;margin:12px 0 0}
+/* Shared introduction, then two cards on the same row: no staggered FAQ. */
+.contact-layout{column-gap:48px}.contact-help{padding:32px;border:1px solid var(--line);border-radius:16px;min-width:0}.contact-help>p:first-of-type{margin-top:10px}.contact-help .contact-test-note{margin:26px 0 0;font-size:.875rem}.contact-intro h1 br{display:none}.contact-intro>p:not(.eyebrow){max-width:640px;margin-top:20px}
+.contact-notice h2{font-size:1.125rem;line-height:1.4;letter-spacing:-.02em}#contact-connect{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-top:14px}#contact-connect label{flex:1 1 320px}#contact-connect-status:empty{display:none}#contact-connect-status:not(:empty){margin-top:12px}
+@media(min-width:761px){.contact-layout{align-items:stretch}.contact-intro{grid-column:1 / -1;grid-row:1}.contact-card{grid-column:2;grid-row:2}.contact-assistance{grid-column:1;grid-row:2;display:flex;min-width:0}.contact-help{width:100%}}
+@media(min-width:761px) and (max-width:1050px){.contact-layout{column-gap:32px}.contact-help{padding:24px}}
+@media(max-width:760px){.contact-help{padding:22px}}
 @media(max-width:760px){.contact-layout{gap:28px}}

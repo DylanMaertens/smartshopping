@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+  <title>Poduna · Administration</title>
+  <link rel="icon" href="data:,"><link rel="stylesheet" href="/admin/live.css">
+  <script src="/admin/live.js" type="module"></script>
+</head>
+<body data-backend="false">
+  <a class="skip" href="#contenu">Aller au contenu</a>
+  <header><a class="brand" href="/admin/">Poduna <span>Administration</span></a><span id="connection">Vérification de l’accès…</span><button id="logout" class="secondary" type="button" hidden>Se déconnecter</button></header>
+  <main id="contenu" tabindex="-1">
+    <p id="notice" role="status" aria-live="polite"></p>
+    <section id="login-panel" class="card login" hidden aria-labelledby="login-title">
+      <p class="eyebrow">ESPACE PRIVÉ</p><h1 id="login-title">Connexion administrateur</h1>
+      <p>Supervision, modération communautaire et messages de contact. Aucun accès aux listes personnelles ni aux photos.</p>
+      <form id="login-form">
+        <label for="username">Identifiant<input id="username" name="username" autocomplete="username" maxlength="80" required></label>
+        <label for="password">Mot de passe<input id="password" name="password" type="password" autocomplete="current-password" maxlength="1024" required></label>
+        <button id="login-button" type="submit">Se connecter</button>
+      </form>
+      <p class="muted small">Session limitée à 8 heures et 30 minutes d’inactivité. Mot de passe non conservé par la page ; session dans un cookie protégé.</p>
+    </section>
+    <div id="dashboard" hidden>
+      <nav aria-label="Administration"><a href="#supervision" aria-current="page">Supervision</a><a href="#journaux">Journaux</a><a href="#moderation">Modération</a><a href="#messages">Messages</a></nav>
+      <div class="toolbar"><p id="updated" class="muted">Pas encore actualisé</p><button id="refresh" class="secondary" type="button">Actualiser</button></div>
+      <div class="pending-counts" aria-label="Dossiers à traiter"><a href="#moderation">Signalements en attente <strong id="pending-reports">—</strong></a><a href="#moderation">Propositions en attente de consensus <strong id="pending-proposals">—</strong></a><a href="#messages">Messages nouveaux <strong id="pending-messages">—</strong></a><a href="#messages">Messages en cours <strong id="active-messages">—</strong></a></div><p id="counts-status" class="small muted" role="status"></p>
+      <section id="supervision" aria-labelledby="supervision-title">
+        <p class="eyebrow">VUE D’ENSEMBLE</p><h1 id="supervision-title" tabindex="-1">Supervision</h1>
+        <p>Mesures de ce processus serveur depuis son démarrage, hors consultation de l’administration et sondes de santé.</p>
+        <div class="metrics">
+          <article class="card"><h2>Requêtes applicatives</h2><strong id="requests">—</strong></article>
+          <article class="card"><h2>Réponse moyenne</h2><strong id="latency">—</strong><small>Serveur, pas fluidité de l’app</small></article>
+          <article class="card"><h2>Erreurs serveur · 5xx</h2><strong id="errors">—</strong><a href="#journaux?level=error">Examiner les erreurs</a></article>
+          <article class="card"><h2>Requêtes refusées · 4xx</h2><strong id="rejected">—</strong></article>
+        </div>
+        <div class="overview-grid"><article class="card"><h2>État des services</h2><ul id="services" class="service-list"></ul></article>
+          <article class="card"><h2>Activité et limites</h2><dl id="activity"></dl><p class="muted small">Les catalogues et l’OCR ne sont pas sollicités artificiellement. Leur activation ne prouve pas leur disponibilité ; consulter leurs événements réels dans les journaux.</p></article></div>
+      </section>
+      <section id="journaux" hidden aria-labelledby="logs-title">
+        <p class="eyebrow">DIAGNOSTIC</p><h1 id="logs-title" tabindex="-1">Journaux</h1>
+        <p>Derniers 1 000 événements au maximum, conservés en mémoire pendant 24 h au plus. Effacés au redémarrage ; ce n’est pas un audit durable.</p>
+        <div class="card">
+          <div class="filters">
+            <label for="search">Rechercher<input id="search" type="search" maxlength="200" placeholder="Référence, route ou code"></label>
+            <label for="level">Niveau<select id="level"><option value="">Tous</option><option value="error">Erreur</option><option value="warning">Attention</option><option value="info">Information</option></select></label>
+            <label for="service">Service<select id="service"><option value="">Tous</option><option value="api">API</option><option value="catalogues">Catalogues</option><option value="ocr">OCR</option><option value="sync">Synchronisation</option><option value="community">Communauté</option><option value="admin">Accès administrateur</option></select></label>
+            <button id="clear" type="button" class="secondary">Effacer les filtres</button>
+          </div>
+          <p id="count" role="status"></p>
+          <div id="log-results"></div>
+        </div>
+      </section>
+      <section id="moderation" hidden aria-labelledby="moderation-title">
+        <p class="eyebrow">CATALOGUE COMMUNAUTAIRE</p><h1 id="moderation-title" tabindex="-1">Modération</h1>
+        <p>Examiner les propositions et signalements. Aucun accès aux listes privées. Les votes restent nécessaires à la validation : pas d’approbation forcée ni de sanction automatique des contributeurs.</p>
+        <div class="filters"><label for="moderation-kind">File<select id="moderation-kind"><option value="reports">Signalements</option><option value="proposals">Propositions</option></select></label><label for="moderation-status">État<select id="moderation-status"></select></label></div>
+        <form id="moderation-search-form" class="filters"><label for="moderation-search">Rechercher dans toute la file<input id="moderation-search" type="search" maxlength="120" placeholder="Produit, code-barres ou référence"></label><button type="submit">Rechercher</button><button id="moderation-clear" type="button" class="secondary">Effacer</button></form>
+        <p id="moderation-info" role="status"></p><div id="moderation-results" class="queue"></div>
+        <div class="toolbar"><button id="moderation-previous" class="secondary" type="button">Précédent</button><span id="moderation-page"></span><button id="moderation-next" class="secondary" type="button">Suivant</button></div>
+      </section>
+      <section id="messages" hidden aria-labelledby="messages-title">
+        <p class="eyebrow">CONTACT</p><h1 id="messages-title" tabindex="-1">Messages</h1>
+        <p>Messages réellement reçus et conservés en base. Les états suivent leur traitement ; « Clos » ne signifie pas « Répondu ». L’envoi d’e-mails sera ajouté ultérieurement.</p>
+        <p><a href="/contact.html" target="_blank" rel="noopener">Ouvrir le formulaire de contact sécurisé</a></p>
+        <div class="filters"><label for="messages-status">État<select id="messages-status"></select></label></div>
+        <form id="messages-search-form" class="filters"><label for="messages-search">Rechercher dans toute la file<input id="messages-search" type="search" maxlength="120" placeholder="Adresse, sujet ou référence"></label><button type="submit">Rechercher</button><button id="messages-clear" type="button" class="secondary">Effacer</button></form>
+        <p id="messages-info" role="status"></p><div id="messages-results" class="queue"></div>
+        <div class="toolbar"><button id="messages-previous" class="secondary" type="button">Précédent</button><span id="messages-page"></span><button id="messages-next" class="secondary" type="button">Suivant</button></div>
+      </section>
+      <dialog id="dossier" aria-labelledby="dossier-title"><h2 id="dossier-title">Dossier</h2><div id="dossier-content"></div><p id="dossier-notice" role="status"></p>
+        <form id="decision-form"><label for="decision-action">Décision<select id="decision-action" required></select></label><label for="decision-reason">Motif interne (10 à 1 000 caractères)<textarea id="decision-reason" rows="3" minlength="10" maxlength="1000" required></textarea></label><p class="small muted">Le motif et l’identifiant administrateur seront conservés dans l’historique. Ne pas y copier de données personnelles.</p><button id="decision-submit" type="submit">Confirmer la décision…</button></form>
+        <h3>Historique · 50 dernières décisions</h3><div id="dossier-history"></div><button id="dossier-close" type="button" class="secondary">Fermer</button>
+      </dialog>
+      <p class="footnote">Décisions et messages conservés dans PostgreSQL, contrairement aux journaux techniques en mémoire. CPU, mémoire, disque, sauvegardes et alertes externes restent à instrumenter. La conservation des messages doit être définie avant ouverture publique.</p>
+    </div>
+    <noscript><p class="card">JavaScript est nécessaire pour se connecter et consulter la supervision.</p></noscript>
+  </main>
+</body>
+</html>

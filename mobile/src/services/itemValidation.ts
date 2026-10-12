@@ -1,7 +1,9 @@
+import { singularizeProductName } from './productName';
+
 /** Use sentence case and keep useful word separators for every item entry path. */
 export function normalizeItemName(value: string): string {
   const cleaned = value.normalize('NFC').trim().replace(/\s+/gu, ' ').toLowerCase();
-  return cleaned.replace(/^./u, (first) => first.toUpperCase()).normalize('NFC');
+  return singularizeProductName(cleaned).replace(/^./u, (first) => first.toUpperCase()).normalize('NFC');
 }
 
 export function itemNameKey(value: string): string {

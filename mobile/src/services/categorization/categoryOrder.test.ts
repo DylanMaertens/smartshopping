@@ -44,11 +44,25 @@ it('appends the new non-food categories without rearranging an existing saved or
 });
 
 it('keeps existing category order and list assignments when detailed aisles are introduced', () => {
-  const newIds = ['soins-cheveux', 'soins-visage-corps', 'hygiene-dentaire', 'maquillage-parfums', 'alimentation-animale', 'accessoires-animaux', 'maison-cuisine', 'vetements-linge', 'electricite-electronique', 'jeux-loisirs'];
+  const newIds = ['soins-visage-corps', 'hygiene-dentaire', 'maison-cuisine', 'vetements-linge', 'electricite-electronique', 'jeux-loisirs'];
   const saved = defaultCategoryOrder().filter((id) => !newIds.includes(id)).reverse();
   const order = normalizeCategoryOrder(saved);
   expect(order.slice(0, saved.length)).toEqual(saved);
   expect(order.slice(saved.length)).toEqual(newIds);
   const item: ShoppingItem = { id: 'pet', name: 'Croquettes', category: 'Animaux', listId: 'home', quantity: 1, checked: false, updatedAt: 1 };
   expect(groupItemsByCategory([item], order)[0].categoryName).toBe('Animaux');
+});
+
+it('merges old aisle preferences at their first position, without rewriting shared items', () => {
+  const order = normalizeCategoryOrder(['accessoires-animaux', 'boissons', 'alimentation-animale', 'animaux', 'soins-cheveux', 'soins-visage-corps', 'maquillage-parfums']);
+  expect(order.slice(0, 4)).toEqual(['animaux', 'boissons', 'soins-visage-corps', 'hygiene-beaute']);
+  const items: ShoppingItem[] = ['Alimentation animale', 'Accessoires & hygiène des animaux', 'Animaux'].map((category, index) => ({
+    id: String(index), category, name: 'Article', listId: 'home', quantity: 1, checked: false, updatedAt: 7,
+  }));
+  const before = JSON.stringify(items);
+  const sections = groupItemsByCategory(items, order);
+  expect(sections).toHaveLength(1);
+  expect(sections[0].categoryName).toBe('Animaux');
+  expect(sections[0].items).toHaveLength(3);
+  expect(JSON.stringify(items)).toBe(before);
 });

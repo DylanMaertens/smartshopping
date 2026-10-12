@@ -24,6 +24,9 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AppState {
+    pub admin: Arc<crate::services::admin::AdminState>,
+    pub contact_enabled: bool,
+    pub contact_rate_limiter: Arc<ApiRateLimiter>,
     pub config: Config,
     pub products_cache: Cache<String, ProductResponse>,
     pub redis_cache: Option<RedisCache>,
@@ -129,6 +132,9 @@ impl AppState {
 
         let secret_cipher = SecretCipher::from_env().expect("invalid device secret encryption key");
         Self {
+            admin: Arc::new(crate::services::admin::AdminState::from_env()),
+            contact_enabled: std::env::var("ENABLE_CONTACT_FORM").as_deref() == Ok("true"),
+            contact_rate_limiter: Arc::new(ApiRateLimiter::new(20)),
             config,
             products_cache,
             redis_cache,
@@ -287,6 +293,17 @@ impl ApiRateLimiter {
 }
 
 impl AppMetrics {
+    pub fn admin_summary(&self) -> serde_json::Value {
+        serde_json::json!({
+            "cache_hits": self.product_cache_hits.load(Ordering::Relaxed),
+            "cache_misses": self.product_cache_misses.load(Ordering::Relaxed),
+            "catalogue_successes": self.off_lookup_successes.load(Ordering::Relaxed),
+            "catalogue_failures": self.off_lookup_failures.load(Ordering::Relaxed),
+            "sync_attempts": self.sync_attempts.load(Ordering::Relaxed),
+            "sync_successes": self.sync_successes.load(Ordering::Relaxed),
+            "rate_limit_rejections": self.api_rate_limit_rejections.load(Ordering::Relaxed)
+        })
+    }
     pub fn record(&self, metric: MetricKind) {
         match metric {
             MetricKind::ProductCacheHit => self.product_cache_hits.fetch_add(1, Ordering::Relaxed),

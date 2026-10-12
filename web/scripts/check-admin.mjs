@@ -17,6 +17,17 @@ try {
     page.on('response', response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
     await page.goto('http://127.0.0.1:8057/admin/index.html#supervision');
     await page.getByRole('heading', { name: 'Supervision', exact: true }).waitFor();
+    await page.locator('#admin-server').fill('http://example.org');
+    await page.getByRole('button', { name: 'Préparer le lien', exact: true }).click();
+    assert.equal(await page.locator('#admin-connect-link').isVisible(), false);
+    await page.locator('#admin-server').fill('https://example.org/api/v1');
+    await page.getByRole('button', { name: 'Préparer le lien', exact: true }).click();
+    assert.equal(await page.locator('#admin-connect-link').getAttribute('href'), 'https://example.org/admin/');
+    await page.locator('#admin-server').fill('https://example.org/?token=secret');
+    assert.equal(await page.locator('#admin-connect-link').isVisible(), false);
+    await page.getByRole('button', { name: 'Préparer le lien', exact: true }).click();
+    assert.equal(await page.locator('#admin-connect-link').isVisible(), false);
+    await page.locator('#admin-server').fill('');
     for (const route of ['supervision', 'journaux', 'moderation', 'messages']) {
       await page.locator(`nav a[href="#${route}"]`).click();
       await page.locator(`#view-${route}`).waitFor({ state: 'visible' });

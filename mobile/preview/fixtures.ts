@@ -35,6 +35,7 @@ export const useOfflineSync = () => ({ networkState, syncEngine: engine });
 export class LocalKeyValueStorage {
   static getString(key: string) { return localStorage.getItem('preview.' + key); }
   static setString(key: string, value: string) { localStorage.setItem('preview.' + key, value); }
+  static delete(key: string) { localStorage.removeItem('preview.' + key); }
 }
 export class BackendApiError extends Error {}
 export const getCommunitySuggestions = async (barcode: string) => ({ barcode, suggestions: [], contributions_enabled: false });

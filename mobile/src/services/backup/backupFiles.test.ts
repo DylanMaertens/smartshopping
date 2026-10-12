@@ -59,7 +59,7 @@ it('cleans the cache after invalid JSON and never returns an unvalidated documen
 it('shares a JSON file and keeps it available for the recipient', async () => {
   await exportBackupFile(backup);
   expect(JSON.parse(mocks.write.mock.calls[0][0])).toEqual(backup);
-  expect(mocks.share).toHaveBeenCalledWith(expect.stringMatching(/SmartShopping-.*\.json$/), expect.objectContaining({ mimeType: 'application/json' }));
+  expect(mocks.share).toHaveBeenCalledWith(expect.stringMatching(/Poduna-.*\.json$/), expect.objectContaining({ mimeType: 'application/json' }));
   expect(mocks.remove).not.toHaveBeenCalled();
 });
 it('does not create an export when file sharing is unavailable', async () => {
@@ -69,7 +69,7 @@ it('does not create an export when file sharing is unavailable', async () => {
 });
 it('saves directly to the selected folder and verifies the resulting content', async () => {
   const filename = await saveBackupOnDevice(backup);
-  expect(filename).toMatch(/^SmartShopping-2026-10-03-.*\.json$/);
+  expect(filename).toMatch(/^Poduna-2026-10-03-.*\.json$/);
   expect(mocks.createDocument).toHaveBeenCalledWith(filename, 'application/json');
   expect(JSON.parse(mocks.write.mock.calls[0][0])).toEqual(backup);
   expect(mocks.text).toHaveBeenCalledOnce();

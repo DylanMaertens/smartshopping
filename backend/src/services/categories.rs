@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
 #[derive(Clone, Serialize)]
 pub struct StoreCategory {
@@ -18,14 +18,14 @@ pub struct CategoryMatch {
     pub confidence: f32,
 }
 
-pub const STORE_CATEGORIES: &[StoreCategory] = &[
+const CATEGORY_RULES: &[StoreCategory] = &[
     StoreCategory {
         id: "fruits-legumes",
         name: "Fruits & légumes",
         order_index: 10,
         icon: "carrot",
         keywords: &[
-            "fruit", "legume", "légume", "salade", "tomate", "pomme", "banane",
+            "fruit", "legume", "légume", "salade", "tomate", "pomme", "banane", "orange",
         ],
     },
     StoreCategory {
@@ -66,7 +66,8 @@ pub const STORE_CATEGORIES: &[StoreCategory] = &[
         order_index: 60,
         icon: "wheat",
         keywords: &[
-            "pates", "pâtes", "riz", "huile", "vinaigre", "sel", "conserve", "sauce", "chips",
+            "pates", "pâtes", "nouille", "spaghetti", "coquillette", "macaroni", "tagliatelle",
+            "vermicelle", "penne", "fusilli", "riz", "huile", "vinaigre", "sel", "conserve", "sauce", "chips",
             "farine",
         ],
     },
@@ -570,6 +571,36 @@ pub const STORE_CATEGORIES: &[StoreCategory] = &[
     },
 ];
 
+pub fn canonical_category_id(id: &str) -> &str {
+    match id {
+        "alimentation-animale" | "accessoires-animaux" => "animaux",
+        "soins-cheveux" => "soins-visage-corps",
+        "maquillage-parfums" => "hygiene-beaute",
+        _ => id,
+    }
+}
+
+pub fn canonical_category_name(name: &str) -> &str {
+    match name {
+        "Alimentation animale" | "Accessoires & hygiène des animaux" => "Animaux",
+        "Soins des cheveux" | "Soins du visage & du corps" => "Soins visage, corps & cheveux",
+        "Maquillage & parfums" => "Hygiène & beauté",
+        "Premiers soins" => "Parapharmacie",
+        _ => name,
+    }
+}
+
+// The legacy taxonomy remains intact; expose only the merged, canonical aisles.
+pub static STORE_CATEGORIES: LazyLock<Vec<StoreCategory>> = LazyLock::new(|| {
+    CATEGORY_RULES.iter().filter(|category| canonical_category_id(category.id) == category.id)
+        .map(|category| StoreCategory { name: canonical_category_name(category.name), ..category.clone() }).collect()
+});
+
+fn canonical_match(result: CategoryMatch) -> CategoryMatch {
+    CategoryMatch { category_id: canonical_category_id(&result.category_id).to_string(),
+        category_name: canonical_category_name(&result.category_name).to_string(), ..result }
+}
+
 fn specialized(id: &str) -> bool {
     matches!(
         id,
@@ -604,7 +635,7 @@ fn whole_words(input: &str) -> String {
 }
 
 pub fn classify_product(product_name: &str, tags: &[String]) -> CategoryMatch {
-    classify_with_source(product_name, tags, None)
+    canonical_match(classify_with_source(product_name, tags, None))
 }
 
 fn classify_with_source(
@@ -647,7 +678,7 @@ fn classify_with_source(
             .expect("valid shared category mapping")
     });
     let known_tags: Vec<String> = tags.iter().map(|tag| normalize(tag.trim())).collect();
-    let explicit = STORE_CATEGORIES.iter().find(|category| {
+    let explicit = STORE_CATEGORIES.iter().chain(CATEGORY_RULES.iter()).find(|category| {
         category.id != "non-categorise"
             && known_tags
                 .iter()
@@ -667,7 +698,7 @@ fn classify_with_source(
                     .any(|tag| known_tags.contains(&normalize(tag)))
         })
         .and_then(|rule| {
-            STORE_CATEGORIES
+            CATEGORY_RULES
                 .iter()
                 .find(|category| category.id == rule.category_id)
         });
@@ -686,6 +717,10 @@ fn classify_with_source(
 }
 
 pub fn classify_catalogue_product(name: &str, tags: &[String], source: &str) -> CategoryMatch {
+    canonical_match(classify_catalogue_legacy(name, tags, source))
+}
+
+fn classify_catalogue_legacy(name: &str, tags: &[String], source: &str) -> CategoryMatch {
     let (allowed, fallback): (&[&str], &str) = match source {
         "openbeautyfacts" => (
             &[
@@ -724,7 +759,7 @@ fn classify_words(value: &str) -> CategoryMatch {
     let words = whole_words(&haystack);
     let mut best = None;
     let mut best_score = 0;
-    for category in STORE_CATEGORIES
+    for category in CATEGORY_RULES
         .iter()
         .filter(|category| specialized(category.id))
     {
@@ -763,7 +798,7 @@ fn classify_words(value: &str) -> CategoryMatch {
         };
     }
 
-    if let Some(alcohol) = STORE_CATEGORIES.iter().find(|category| {
+    if let Some(alcohol) = CATEGORY_RULES.iter().find(|category| {
         category.id == "alcools"
             && !words.contains(" vinaigre ")
             && category
@@ -772,7 +807,7 @@ fn classify_words(value: &str) -> CategoryMatch {
                 .any(|keyword| words.contains(&whole_words(keyword)))
     }) {
         let category = if is_alcohol_free(value) {
-            STORE_CATEGORIES
+            CATEGORY_RULES
                 .iter()
                 .find(|category| category.id == "boissons")
                 .unwrap()
@@ -786,7 +821,7 @@ fn classify_words(value: &str) -> CategoryMatch {
         };
     }
 
-    if let Some(category) = STORE_CATEGORIES.iter().find(|category| {
+    if let Some(category) = CATEGORY_RULES.iter().find(|category| {
         category.id == "boissons"
             && category
                 .keywords
@@ -800,7 +835,7 @@ fn classify_words(value: &str) -> CategoryMatch {
         };
     }
 
-    for category in STORE_CATEGORIES.iter().filter(|category| {
+    for category in CATEGORY_RULES.iter().filter(|category| {
         category.id != "non-categorise" && category.id != "alcools" && !specialized(category.id)
     }) {
         if category
@@ -816,7 +851,7 @@ fn classify_words(value: &str) -> CategoryMatch {
         }
     }
 
-    let fallback = STORE_CATEGORIES
+    let fallback = CATEGORY_RULES
         .iter()
         .find(|category| category.id == "non-categorise")
         .expect("fallback category must exist");
@@ -898,6 +933,25 @@ mod tests {
     }
 
     #[test]
+    fn merged_aisles_accept_legacy_labels_and_new_labels() {
+        assert_eq!(STORE_CATEGORIES.len(), 27);
+        for (old, id, name) in [
+            ("Alimentation animale", "animaux", "Animaux"),
+            ("Accessoires & hygiène des animaux", "animaux", "Animaux"),
+            ("Soins des cheveux", "soins-visage-corps", "Soins visage, corps & cheveux"),
+            ("Soins du visage & du corps", "soins-visage-corps", "Soins visage, corps & cheveux"),
+            ("Maquillage & parfums", "hygiene-beaute", "Hygiène & beauté"),
+            ("Premiers soins", "premiers-soins", "Parapharmacie"),
+        ] {
+            for label in [old, name] {
+                let result = classify_product("Produit inconnu", &[label.into()]);
+                assert_eq!(result.category_id, id);
+                assert_eq!(result.category_name, name);
+            }
+        }
+    }
+
+    #[test]
     fn shared_category_examples_match_mobile() {
         let examples: Vec<Example> = serde_json::from_str(include_str!(
             "../../../tests/fixtures/category-examples.json"
@@ -906,7 +960,7 @@ mod tests {
         for example in examples {
             assert_eq!(
                 classify_product(&example.name, &example.tags).category_id,
-                example.category_id,
+                canonical_category_id(&example.category_id),
                 "{}",
                 example.name
             );

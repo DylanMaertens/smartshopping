@@ -5,6 +5,22 @@ const base = require('../app.json').expo;
 const profiles = require('../eas.json').build;
 const apiUrl = 'https://api.example.org/api/v1';
 
+test('Poduna changes presentation, never the installed app or invitation identity', () => {
+  assert.equal(base.name, 'Poduna');
+  assert.equal(base.android.package, 'com.smartshopping.app');
+  assert.equal(base.ios.bundleIdentifier, 'com.smartshopping.app');
+  assert.equal(base.scheme, 'smartshopping');
+  assert.equal(base.slug, 'shopping-list-app');
+  assert.equal(base.version, '0.1.14');
+  assert.equal(base.android.versionCode, 15);
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const image of [base.icon, base.splash.image, base.android.adaptiveIcon.foregroundImage, base.android.adaptiveIcon.monochromeImage]) {
+    assert.ok(fs.statSync(path.resolve(__dirname, '..', image)).size > 0);
+  }
+  assert.equal(base.splash.backgroundColor, '#FAF8F3');
+});
+
 test('Expo Go still starts without a hosted API or Expo account', () => {
   const result = createAppConfig(base, {});
   assert.equal(result.extra.distributionChannel, 'development');

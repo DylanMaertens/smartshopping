@@ -1,6 +1,8 @@
-# SmartShopping
+# Poduna
 
 Monorepo de l’application mobile **Liste de courses intelligente**.
+
+Ancien nom : SmartShopping. Les identifiants techniques historiques sont conservés pour la compatibilité des installations, des invitations et des sauvegardes. Les assets de marque se régénèrent avec `node ops/sync-brand-assets.mjs` depuis le kit validé dans `output/branding/poduna/v1/`.
 
 > **Suivi du projet :** l’état fonctionnel, les validations et les prochaines étapes sont publiés uniquement dans [`COMPTE_RENDU.html`](COMPTE_RENDU.html). Le présent README reste volontairement limité à l’installation et à l’exploitation du dépôt.
 

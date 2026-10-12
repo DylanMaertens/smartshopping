@@ -2,6 +2,7 @@
 name = "shopping-list-backend"
 version = "0.1.0"
 edition = "2021"
+default-run = "shopping-list-backend"
 
 [dependencies]
 axum = "0.7"
@@ -23,6 +24,7 @@ hex = "0.4"
 aes-gcm = "0.10"
 base64 = "0.22"
 unicode-normalization = "0.1"
+argon2 = "0.5"
 
 [dev-dependencies]
 http-body-util = "0.1"

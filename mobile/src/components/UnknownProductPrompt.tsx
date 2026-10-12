@@ -3,7 +3,8 @@ import { View } from 'react-native';
 import { Button, PageModal, Pressable, Text, TextInput } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
 import { normalizeItemName, truncateUtf8 } from '@/services/itemValidation';
-import { classifyProductLocally, STORE_CATEGORIES } from '@/services/categorization/categoryService';
+import { canonicalCategoryName, classifyProductLocally, STORE_CATEGORIES } from '@/services/categorization/categoryService';
+import { getRememberedCategory } from '@/services/storage/productPreferences';
 import type { CommunitySuggestion } from '@/services/api/backend';
 import { CommunityReportForm } from './CommunityReportForm';
 
@@ -53,9 +54,9 @@ export function UnknownProductPrompt({ barcode, suggestions = [], communityAvail
         onPress={() => {
           if (suggestion.field === 'name') {
             setName(suggestion.value); setSelectedNameProposal(suggestion.proposal_id);
-            if (!categoryChosen) setCategory(classifyProductLocally(suggestion.value).categoryName);
+            if (!categoryChosen) setCategory(getRememberedCategory(suggestion.value) ?? classifyProductLocally(suggestion.value).categoryName);
           }
-          else { setCategory(suggestion.value); setCategoryChosen(true); setSelectedCategoryProposal(suggestion.proposal_id); }
+          else { setCategory(canonicalCategoryName(suggestion.value)); setCategoryChosen(true); setSelectedCategoryProposal(suggestion.proposal_id); }
           setError(null);
         }} style={{ padding: 12, borderRadius: theme.radius, backgroundColor: theme.raised }}>
         <Text>{suggestion.field === 'name' ? 'Nom' : 'Rayon'} : {suggestion.value}</Text>
@@ -69,10 +70,10 @@ export function UnknownProductPrompt({ barcode, suggestions = [], communityAvail
     <TextInput autoFocus={suggestions.length === 0} accessibilityLabel="Nom du produit scanné" placeholder="Ex. : Lessive" value={name}
       onChangeText={(value) => {
         setName(value); setSelectedNameProposal(null); setError(null);
-        if (!categoryChosen) setCategory(classifyProductLocally(value).categoryName);
+        if (!categoryChosen) setCategory(getRememberedCategory(value) ?? classifyProductLocally(value).categoryName);
       }} onSubmitEditing={save} returnKeyType="done" />
     <Button variant="secondary" label={`Rayon : ${category}`} accessibilityLabel="Choisir le rayon du produit inconnu" onPress={() => setChoosingCategory(true)} />
-    <Text>Ce nom et ce rayon seront conservés en privé pour les prochains scans sur cet appareil, sans expiration.</Text>
+    <Text>Ce nom sera conservé pour les prochains scans. Le rayon choisi sera aussi réutilisé pour les ajouts du même nom sur cet appareil, sans expiration.</Text>
     {communityAvailable ? <Pressable accessibilityRole="checkbox" accessibilityLabel="Participer au catalogue communautaire"
       accessibilityState={{ checked: publish }} onPress={() => setPublish((value) => !value)}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }}>

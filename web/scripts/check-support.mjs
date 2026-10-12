@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 const { chromium } = await import(process.env.SMARTSHOPPING_PLAYWRIGHT_MODULE || 'playwright');
 const output = fileURLToPath(new URL('../.qa/', import.meta.url));
 await mkdir(output, { recursive: true });
-const base = 'http://127.0.0.1:8057';
+const base = process.env.PODUNA_WEB_URL || 'http://127.0.0.1:8057';
 const browser = await chromium.launch({ headless: true, executablePath: process.env.SMARTSHOPPING_CHROMIUM, args: ['--no-sandbox'] });
 try {
   for (const width of [1440, 768, 390, 320]) {
@@ -18,10 +18,39 @@ try {
     page.on('response', response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
     await page.goto(`${base}/contact.html`);
     assert.equal(await page.locator('#contact-fields').isEnabled(), true);
+    await page.locator('#contact-server').fill('https://contact.example.test/api/v1');
+    await page.getByRole('button', { name: 'Préparer le lien', exact: true }).click();
+    assert.equal(await page.locator('#contact-server-link').getAttribute('href'), 'https://contact.example.test/contact.html');
+    await page.locator('#contact-server').fill('https://user:password@example.test');
+    await page.getByRole('button', { name: 'Préparer le lien', exact: true }).click();
+    assert.equal(await page.locator('#contact-server-link').isVisible(), false);
+    await page.locator('#contact-server').fill('');
+    const faq = page.locator('.contact-assistance');
+    assert.equal(await faq.locator('details').count(), 6);
+    await faq.getByText('Comment mettre à jour l’application ?', { exact: true }).click();
+    assert.equal(await faq.locator('details[open]').count(), 1);
+    await faq.getByText('Comment mettre à jour l’application ?', { exact: true }).click();
+    if (width > 760) {
+      const help = await faq.boundingBox(), form = await page.locator('.contact-card').boundingBox();
+      assert.ok(help.x + help.width <= form.x, 'FAQ should be beside the form on desktop');
+      assert.ok(Math.abs(help.y - form.y) < 1, 'FAQ and form cards should have aligned tops');
+      assert.ok(Math.abs(help.height - form.height) < 1, 'FAQ and form cards should share the row height');
+      const faqTitle = await page.locator('#contact-faq-title').boundingBox(), formTitle = await page.locator('#form-title').boundingBox();
+      assert.ok(Math.abs(faqTitle.y - formTitle.y) < 1, 'Card titles should align');
+      const intro = await page.locator('.contact-intro').boundingBox();
+      assert.ok(intro.y + intro.height < form.y, 'Introduction should sit above both cards');
+    } else {
+      const help = await faq.boundingBox(), form = await page.locator('.contact-card').boundingBox();
+      assert.ok(help.y >= form.y + form.height, 'Mobile FAQ should follow the form');
+    }
     await page.screenshot({ path: `${output}/contact-${width}.png`, fullPage: true });
     for (const fontSize of ['200%', '']) {
       await page.evaluate(value => { document.documentElement.style.fontSize = value; }, fontSize);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `contact overflow ${fontSize} ${width}`);
+      if (width > 760) {
+        const help = await faq.boundingBox(), form = await page.locator('.contact-card').boundingBox();
+        assert.ok(Math.abs(help.y - form.y) < 1, `Aligned cards with text at ${fontSize || '100%'}`);
+      }
     }
     await page.getByRole('button', { name: 'Prévisualiser le message' }).click();
     assert.equal(await page.locator('dialog[open]').count(), 0);
@@ -104,6 +133,8 @@ try {
   await page.goto(`${base}/contact.html`);
   assert.equal(await page.locator('#contact-email').isDisabled(), true);
   assert.equal(await page.getByRole('button', { name: 'Prévisualiser le message' }).isDisabled(), true);
+  await page.locator('.contact-assistance summary').first().click();
+  assert.equal(await page.locator('.contact-assistance details[open]').count(), 1);
   await page.close();
   console.log('OK: Contact safely disabled without JavaScript.');
 } finally { await browser.close(); }

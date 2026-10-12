@@ -116,7 +116,7 @@ async fn ordered_catalogues_stop_at_first_match_then_use_cache() {
             assert_eq!(found.categories, ["Hygiène & beauté"]);
         }
         if source == "petfood" {
-            assert_eq!(found.categories, ["Alimentation animale"]);
+            assert_eq!(found.categories, ["Animaux"]);
         }
         let Json(cached) = get_product(State(f.state.clone()), Path(BARCODE.into()))
             .await
@@ -153,7 +153,7 @@ async fn unnamed_and_wrong_barcode_results_do_not_stop_search() {
         .await
         .unwrap();
     assert_eq!(found.product_name, "Crème visage");
-    assert_eq!(found.categories, ["Soins du visage & du corps"]);
+    assert_eq!(found.categories, ["Soins visage, corps & cheveux"]);
     assert_eq!(*f.mock.calls.lock().await, ["food", "products", "beauty"]);
 }
 
@@ -185,7 +185,7 @@ async fn outage_does_not_prevent_later_match_and_is_never_cached() {
     let Json(found) = get_product(State(f.state.clone()), Path(BARCODE.into()))
         .await
         .unwrap();
-    assert_eq!(found.categories, ["Alimentation animale"]);
+    assert_eq!(found.categories, ["Animaux"]);
     assert_eq!(found.source, "openpetfoodfacts");
     assert_eq!(f.mock.calls.lock().await.len(), 8);
 }
@@ -263,7 +263,7 @@ async fn catalogue_preserves_specific_beauty_and_pet_categories() {
             "beauty",
             "Marque",
             vec!["en:hygiene", "en:shampoos"],
-            "Soins des cheveux",
+            "Soins visage, corps & cheveux",
         ),
         (
             "beauty",
@@ -276,19 +276,19 @@ async fn catalogue_preserves_specific_beauty_and_pet_categories() {
             "petfood",
             "Shampooing pour chien",
             vec![],
-            "Accessoires & hygiène des animaux",
+            "Animaux",
         ),
         (
             "petfood",
             "Produit",
             vec!["en:cat-litter"],
-            "Accessoires & hygiène des animaux",
+            "Animaux",
         ),
         (
             "petfood",
             "Poulet",
             vec!["en:meats"],
-            "Alimentation animale",
+            "Animaux",
         ),
     ] {
         let f = fixture().await;

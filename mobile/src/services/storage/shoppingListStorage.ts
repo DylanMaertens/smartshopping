@@ -4,6 +4,7 @@ import { normalizeCategoryOrder } from '@/services/categorization/categoryOrder'
 import { validateBackup, type ListBackup } from '@/services/backup/listBackup';
 import type { ShoppingItem, ShoppingList } from '@/types';
 import type { SyncListName } from '@/services/api/backend';
+import { getRememberedCategory } from './productPreferences';
 
 const ACTIVE_LIST_KEY = 'active-list-id';
 
@@ -55,7 +56,9 @@ export class ShoppingListStorage {
           listId, source.name, now, now);
         this.saveCategoryOrder(listId, source.categoryOrder);
         for (const entry of source.items) {
-          const item: ShoppingItem = { ...entry, id: newStorageId(), listId, updatedAt: now };
+          const item: ShoppingItem = { ...entry,
+            category: !entry.category || entry.category === 'À classer' ? getRememberedCategory(entry.name) ?? entry.category : entry.category,
+            id: newStorageId(), listId, updatedAt: now };
           writeItem(listId, item);
           db.runSync(`INSERT INTO sync_ops (id, entity_type, entity_id, operation, payload, created_at)
             VALUES (?, 'item', ?, 'upsert', ?, ?)`, `item:${item.id}`, item.id, JSON.stringify(item), now);

@@ -1,4 +1,4 @@
-const brand = window.SITE_CONFIG?.name || 'SmartShopping';
+const brand = window.SITE_CONFIG?.name || 'Poduna';
 document.querySelectorAll('[data-brand]').forEach(node => { node.textContent = brand; });
 document.title = `Contact · ${brand} — maquette`;
 document.querySelector('.header .brand').setAttribute('aria-label', `${brand}, accueil`);
@@ -24,3 +24,14 @@ message.addEventListener('input', () => {
 document.getElementById('close-preview').addEventListener('click', () => preview.close());
 // Enable only after handlers are installed. No form action, network request or storage.
 document.getElementById('contact-fields').disabled = false;
+document.getElementById('contact-connect').addEventListener('submit', event => {
+  event.preventDefault();
+  const link = document.getElementById('contact-server-link'); link.hidden = true; link.removeAttribute('href');
+  const status = document.getElementById('contact-connect-status');
+  try {
+    const url = new URL(document.getElementById('contact-server').value.trim());
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !['/','/api/v1','/api/v1/','/contact.html'].includes(url.pathname)) throw new Error();
+    link.href = `${url.origin}/contact.html`; link.textContent = `Ouvrir le contact sur ${url.host}`; link.hidden = false;
+    status.textContent = 'Vérifiez que cette adresse est bien celle fournie pour le test. Le service doit avoir été ouvert par l’administrateur.';
+  } catch { status.textContent = 'Adresse HTTPS invalide. Indiquez uniquement l’adresse du serveur, sans identifiants ni paramètres.'; }
+});

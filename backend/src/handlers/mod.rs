@@ -1,4 +1,7 @@
 pub mod categories;
+pub mod admin;
+pub mod admin_workflows;
+pub mod contact;
 pub mod community;
 pub mod device_auth;
 pub mod health;

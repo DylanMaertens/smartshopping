@@ -4,14 +4,15 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'self'; base-uri 'none'; form-action 'none'">
-  <title>Supervision · SmartShopping Admin — maquette</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23245c46'/%3E%3Cpath d='m7 11 3 3 5-6m-8 14 3 3 5-6M19 12h6m-6 10h6' fill='none' stroke='%23faf8f3' stroke-width='2.5'/%3E%3C/svg%3E">
+  <title>Supervision · Poduna Admin — maquette</title>
+  <link rel="icon" href="../assets/brand/favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
   <link rel="stylesheet" href="admin.css"><script src="../site-config.js" defer></script><script src="admin.js" type="module"></script>
 </head>
 <body>
   <a class="skip" href="#contenu">Aller au contenu</a>
   <aside class="sidebar">
-    <a href="../index.html" class="brand"><span class="brand-mark" aria-hidden="true">✓</span><span data-brand>SmartShopping</span></a>
+    <a href="../index.html" class="brand" aria-label="Poduna, accueil"><img class="brand-logo" src="../assets/brand/logo.svg" width="172" height="52" alt=""><span class="sr-only" data-brand>Poduna</span></a>
     <p class="side-label">ESPACE ADMINISTRATION</p>
     <nav aria-label="Administration">
       <a href="#supervision" aria-current="page"><span class="nav-symbol" aria-hidden="true">◫</span>Supervision</a>
@@ -23,7 +24,7 @@
   </aside>
   <div class="workspace">
     <header class="topbar"><span>Administration <span class="separator">/</span> <span id="breadcrumb">Supervision</span></span><span class="connection">Non connecté au backend</span></header>
-    <div class="demo-notice"><strong>Mode démonstration</strong><span>Les données et décisions sont fictives. Aucun accès protégé n’est encore en place.</span></div>
+    <div class="demo-notice"><strong>Mode démonstration</strong><span>Les données et décisions de cette page sont fictives. L’espace sécurisé se trouve sur le serveur HTTPS.</span></div>
     <main id="contenu" tabindex="-1">
       <section id="view-supervision" data-page="supervision" aria-labelledby="supervision-title">
         <div class="page-heading"><div><p class="eyebrow">VUE D’ENSEMBLE</p><h1 id="supervision-title">Supervision</h1><p>Repérer les incidents et les dossiers à examiner.</p></div><span class="period">Scénario fictif · 7 octobre, 14 h 30</span></div>
@@ -39,7 +40,7 @@
           </article>
           <article class="card attention"><p class="eyebrow">À EXAMINER</p><h2>Une recherche produit a expiré</h2><p>Le scénario montre un délai dépassé sur un catalogue externe. Le nom peut toujours être saisi dans l’app.</p><code>DEMO-REQ-1042</code><a class="button" href="#journaux?search=DEMO-REQ-1042">Consulter cet événement</a><p class="small muted">Exemple de diagnostic, pas un incident en cours.</p></article>
         </div>
-        <article class="card connection-card"><h2>Connexion et accès : prochaine étape</h2><p>L’adresse du serveur, l’authentification et les droits seront raccordés avec le backend. Ne saisissez aucun mot de passe ou jeton dans cette maquette.</p><p class="muted">Ces écrans ne lisent ni les listes privées, ni les photos OCR, ni les journaux réels.</p></article>
+        <article class="card connection-card"><h2>Ouvrir l’administration sécurisée</h2><p>Indiquez l’adresse HTTPS actuelle du serveur. La connexion administrateur se fera sur ce serveur, pas dans cette maquette. Aucun mot de passe ni jeton n’est demandé ici.</p><form id="admin-connect" class="filters"><label class="search" for="admin-server">Adresse HTTPS du serveur<input id="admin-server" type="url" placeholder="https://votre-tunnel.trycloudflare.com" autocomplete="off" required></label><button type="submit">Préparer le lien</button></form><p id="admin-connect-status" role="status"></p><a id="admin-connect-link" hidden rel="noreferrer">Ouvrir le serveur indiqué</a><p class="muted">Adresse non enregistrée. Seuls Supervision et Journaux sont raccordés dans l’espace sécurisé ; Modération et Messages restent des démonstrations.</p></article>
       </section>
       <section id="view-journaux" data-page="journaux" hidden aria-labelledby="journaux-title">
         <div class="page-heading"><div><p class="eyebrow">DIAGNOSTIC</p><h1 id="journaux-title">Journaux</h1><p>Retrouver un événement sans exposer les données personnelles.</p></div><span class="period">Événements fictifs</span></div>

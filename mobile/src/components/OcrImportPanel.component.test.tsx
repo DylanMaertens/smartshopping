@@ -11,13 +11,71 @@ jest.mock('./BarcodeScannerPanel', () => {
     <Pressable onPress={() => onPhotographed('image-data')}><Text>Photo test</Text></Pressable> };
 });
 beforeEach(() => jest.mocked(recognizeListPhoto).mockReset().mockResolvedValue({ text: 'Pain\n2 x lait' }));
+it('discards the photo, corrected draft and correction choices on explicit cancellation', async () => {
+  jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'Litiéne\nwwhisky' });
+  const onImport = jest.fn(), onCancel = jest.fn();
+  const screen = render(<OcrImportPanel embedded onImport={onImport} onCancel={onCancel} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  fireEvent.press(screen.getByLabelText('Conserver le mot Litiéne'));
+  fireEvent.press(screen.getByLabelText('Remplacer wwhisky par whisky'));
+  fireEvent.press(screen.getByText('Annuler'));
+  expect(onCancel).toHaveBeenCalledTimes(1);
+  screen.rerender(<OcrImportPanel embedded active={false} onImport={onImport} onCancel={onCancel} />);
+  screen.rerender(<OcrImportPanel embedded onImport={onImport} onCancel={onCancel} />);
+  screen.getByText('Photo test');
+  expect(screen.queryByLabelText('Articles reconnus')).toBeNull();
+  expect(screen.queryByLabelText('Photo de la liste à relire')).toBeNull();
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('Litiéne\nwwhisky');
+  screen.getByLabelText('Remplacer Litiéne par Litière');
+  expect(screen.queryByText('Annuler la dernière correction')).toBeNull();
+  expect(onImport).not.toHaveBeenCalled();
+});
+it.each(['success', 'failure'] as const)('ignores a cancelled recognition’s late %s while a new photo is being read', async (outcome) => {
+  let finishOld!: (result: { text: string }) => void;
+  let failOld!: (error: Error) => void;
+  let finishNew!: (result: { text: string }) => void;
+  jest.mocked(recognizeListPhoto)
+    .mockReturnValueOnce(new Promise((resolve, reject) => { finishOld = resolve; failOld = reject; }))
+    .mockReturnValueOnce(new Promise((resolve) => { finishNew = resolve; }));
+  const onImport = jest.fn();
+  const screen = render(<OcrImportPanel embedded onImport={onImport} onCancel={jest.fn()} />);
+  fireEvent.press(screen.getByText('Photo test'));
+  fireEvent.press(screen.getByText('Annuler'));
+  fireEvent.press(screen.getByText('Photo test'));
+  await act(async () => {
+    if (outcome === 'success') finishOld({ text: 'Ancienne photo' });
+    else failOld(new Error('offline'));
+  });
+  screen.getByLabelText('Reconnaissance en cours');
+  expect(screen.queryByLabelText('Articles reconnus')).toBeNull();
+  await act(async () => finishNew({ text: 'Nouvelle photo' }));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('Nouvelle photo');
+  expect(screen.queryByText(/Reconnaissance impossible/)).toBeNull();
+  expect(onImport).not.toHaveBeenCalled();
+});
+it('stops showing the camera in another mode and preserves the corrected review', async () => {
+  const onImport = jest.fn(), onCancel = jest.fn();
+  const screen = render(<OcrImportPanel embedded onImport={onImport} onCancel={onCancel} />);
+  screen.getByText('Photo test');
+  screen.rerender(<OcrImportPanel embedded active={false} onImport={onImport} onCancel={onCancel} />);
+  expect(screen.queryByText('Photo test')).toBeNull();
+  screen.rerender(<OcrImportPanel embedded onImport={onImport} onCancel={onCancel} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  fireEvent.changeText(screen.getByLabelText('Articles reconnus'), '4 x Pain');
+  screen.rerender(<OcrImportPanel embedded active={false} onImport={onImport} onCancel={onCancel} />);
+  expect(screen.queryByLabelText('Articles reconnus')).toBeNull();
+  screen.rerender(<OcrImportPanel embedded onImport={onImport} onCancel={onCancel} />);
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('4 x Pain');
+  expect(onImport).not.toHaveBeenCalled();
+});
 it('cleans decoration and applies spelling suggestions only on explicit acceptance', async () => {
   jest.mocked(recognizeListPhoto).mockResolvedValue({ text: '☑ 2 x lalt ★\n→ Tomtaes' });
   const onImport = jest.fn();
   const screen = render(<OcrImportPanel onCancel={jest.fn()} onImport={onImport} />);
   await act(async () => fireEvent.press(screen.getByText('Photo test')));
   expect(screen.getByLabelText('Articles reconnus').props.value).toBe('2 x lalt\nTomtaes');
-  fireEvent.press(screen.getByText('Vérifier l’orthographe'));
+  screen.getByText('Masquer les suggestions');
   expect(onImport).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Articles reconnus').props.value).toBe('2 x lalt\nTomtaes');
   fireEvent.press(screen.getByLabelText('Remplacer lalt par lait'));
@@ -84,4 +142,46 @@ it('ignores recognition completing after the screen closes', async () => {
   screen.unmount();
   await act(async () => finish({ text: 'Pain' }));
   expect(onImport).not.toHaveBeenCalled();
+});
+
+it('offers corrections immediately, batches only probable ones and can undo the whole batch', async () => {
+  const original = "2 x Litiéne\nwwhisky\nYacan'ts\nResd\nSanex";
+  jest.mocked(recognizeListPhoto).mockResolvedValue({ text: original });
+  const onImport = jest.fn();
+  const screen = render(<OcrImportPanel onCancel={jest.fn()} onImport={onImport} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  screen.getByLabelText('Remplacer Yacan\'ts par Yaourts');
+  fireEvent.press(screen.getByText('Appliquer les 2 corrections probables'));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe("2 x Litière\nwhisky\nYacan'ts\nResd\nSanex");
+  expect(onImport).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText('Annuler la dernière correction'));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe(original);
+  fireEvent.press(screen.getByLabelText('Remplacer Resd par Rosé'));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toContain('\nRosé\n');
+  fireEvent.press(screen.getByText('Annuler la dernière correction'));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe(original);
+});
+
+it('never undoes manual edits and respects names already on the shopping list', async () => {
+  jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'Lumix\nwwhisky' });
+  const screen = render(<OcrImportPanel knownNames={['Lumix']} onCancel={jest.fn()} onImport={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  expect(screen.queryByLabelText('Conserver le mot Lumix')).toBeNull();
+  fireEvent.press(screen.getByLabelText('Remplacer wwhisky par whisky'));
+  fireEvent.changeText(screen.getByLabelText('Articles reconnus'), '3 x whisky');
+  expect(screen.queryByText('Annuler la dernière correction')).toBeNull();
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('3 x whisky');
+});
+
+it('can keep an unfamiliar name and resets choices and undo on a new photo', async () => {
+  jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'Litiéne\nwwhisky' });
+  const screen = render(<OcrImportPanel onCancel={jest.fn()} onImport={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  fireEvent.press(screen.getByLabelText('Conserver le mot Litiéne'));
+  fireEvent.press(screen.getByLabelText('Remplacer wwhisky par whisky'));
+  expect(screen.queryByLabelText('Remplacer Litiéne par Litière')).toBeNull();
+  fireEvent.press(screen.getByText('Reprendre une photo'));
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  screen.getByLabelText('Remplacer Litiéne par Litière');
+  expect(screen.queryByText('Annuler la dernière correction')).toBeNull();
 });

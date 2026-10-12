@@ -31,15 +31,15 @@ export function Button({ label, variant = 'primary', ...props }: Omit<PressableP
   label: string; variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
 }) {
   const { theme } = useTheme();
-  return <Pressable {...props} style={[{ borderRadius: theme.radius, paddingHorizontal: 16, paddingVertical: 12,
+  return <Pressable {...props} style={[{ borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 9,
     backgroundColor: variant === 'primary' ? theme.primary : variant === 'secondary' ? theme.raised : 'transparent',
     borderWidth: variant === 'secondary' ? theme.stroke : 0, borderColor: theme.border,
-    alignItems: 'center', minHeight: theme.tap + 4 }, props.style as object]}>
+    alignItems: 'center', minHeight: theme.tap }, props.style as object]}>
     <Text style={{ color: variant === 'primary' ? theme.onPrimary : variant === 'danger' ? theme.danger : theme.text,
       fontWeight: '700', textAlign: 'center' }}>{label}</Text>
   </Pressable>;
 }
-export function PageModal({ title, onClose, children, testID, showBackButton = true }: React.PropsWithChildren<{ title: string; onClose: () => void; testID?: string; showBackButton?: boolean }>) {
+export function PageModal({ title, onClose, children, testID, showBackButton = true, scrollable = true }: React.PropsWithChildren<{ title: string; onClose: () => void; testID?: string; showBackButton?: boolean; scrollable?: boolean }>) {
   const { theme } = useTheme();
   return <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose} testID={testID}>
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -49,9 +49,9 @@ export function PageModal({ title, onClose, children, testID, showBackButton = t
             <Text style={{ color: theme.muted }}>← Retour</Text>
           </Pressable> : null}<Heading>{title}</Heading>
         </View>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 8, gap: 20 }}>
+        {scrollable ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 8, gap: 20 }}>
           {children}
-        </ScrollView>
+        </ScrollView> : children}
       </KeyboardAvoidingView>
     </SafeAreaView>
   </Modal>;

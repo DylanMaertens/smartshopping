@@ -57,8 +57,8 @@ cd android
   '-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=768m' \
   -PreactNativeArchitectures=arm64-v8a,armeabi-v7a :app:assembleRelease
 app_version=$("$node_binary" -p 'require("../app.json").expo.version')
-output="$repo_dir/artifacts/android/smartshopping-$app_version-preview.apk"
+output="$repo_dir/artifacts/android/poduna-$app_version-preview.apk"
 cp app/build/outputs/apk/release/app-release.apk "$output"
 "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$output"
-sha256sum "$output" > "$output.sha256"
+(cd "$repo_dir/artifacts/android" && sha256sum "poduna-$app_version-preview.apk") > "$output.sha256"
 printf '\nAPK prêt : %s\n' "$output"

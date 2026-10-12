@@ -1,6 +1,6 @@
 # Site web, administration et VPS — cadrage du 6 octobre 2026
 
-Statut actuel : interfaces locales réalisées dans la DA Origine ; backend admin, contact réel et déploiement non réalisés. Aucun serveur acheté, domaine réservé, service déployé ou adresse e-mail configurée. Le catalogue public reste désactivé. Budget accepté, nom et domaine reportés.
+Statut actuel (9 octobre) : interfaces locales réalisées dans la DA Origine ; administration backend mono-opérateur avec accès protégé, supervision, journaux, modération motivée et audit transactionnel. Réception réelle du contact dans la messagerie privée, avec états Nouveau/En cours/Clos et quotas, sans envoi d’e-mail. Activation volontaire et création du compte encore nécessaires, aucun tunnel réel redémarré. [Configuration, protections et limites](ADMINISTRATION.md). MFA, conservation/purge des messages, réponses e-mail et déploiement restent à faire. Aucun serveur acheté, domaine réservé, service déployé ou adresse e-mail configurée. Le catalogue public reste désactivé. Nom Poduna retenu, domaine reporté. Les paragraphes datés ci-dessous décrivent les étapes précédentes et le cadrage cible, pas tous des fonctions déjà livrées.
 
 Mise à jour du 7 octobre : le budget est accepté par l’utilisateur ; le nom et le domaine sont reportés. Une première page d’accueil locale est maintenant réalisée dans `web/dist/`, selon la direction proposée. Voir [le mode d’emploi](../web/README.md). Administration, contact et publication restent à faire. Aucun hébergement n’a été commandé.
 

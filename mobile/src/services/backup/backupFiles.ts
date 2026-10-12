@@ -29,7 +29,7 @@ export async function saveBackupOnDevice(backup: ListBackup): Promise<string | n
 }
 
 function backupFilename(backup: ListBackup): string {
-  return `SmartShopping-${backup.createdAt.slice(0, 10)}-${backup.backupId}.json`;
+  return `Poduna-${backup.createdAt.slice(0, 10)}-${backup.backupId}.json`;
 }
 
 export async function exportBackupFile(backup: ListBackup): Promise<void> {

@@ -11,3 +11,4 @@ body{overflow-wrap:anywhere}.header{flex-wrap:wrap}.header nav{flex-wrap:wrap}.b
 @media(max-width:1050px){.features-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.hero,.features-grid,.theme-layout,.download,.faq{grid-template-columns:minmax(0,1fr)}}
 .swatch-origine{background:#245c46}
+.brand-logo{width:172px;height:52px;object-fit:contain;flex:none}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}

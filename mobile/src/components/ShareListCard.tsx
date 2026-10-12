@@ -103,7 +103,7 @@ function ListShareControls({ session, listId, onDeleted, onBeforeInvite }: Props
         <Pressable disabled={busy} onPress={() => void run(async () => {
           if (!invitation || invitation.expires_at <= Date.now()) { refreshExpiry((value) => value + 1); return; }
           await Share.share({
-          message: `Rejoins ma liste SmartShopping : smartshopping://invite/${createdCode}\nCode : ${createdCode}`,
+          message: `Rejoins ma liste Poduna : smartshopping://invite/${createdCode}\nCode : ${createdCode}`,
           url: `smartshopping://invite/${createdCode}`,
         }); })}><Text style={{ color: theme.primary, fontWeight: '700' }}>Partager avec une application</Text></Pressable>
         <Pressable disabled={busy} onPress={() => void run(async () => {

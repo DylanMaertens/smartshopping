@@ -1,5 +1,6 @@
 import type { ShoppingItem } from '@/types';
 import { itemNameKey, normalizeItemName } from './itemValidation';
+import { canonicalCategoryName } from './categorization/categoryService';
 
 const byId = (a: ShoppingItem, b: ShoppingItem) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 const timestamp = (item: ShoppingItem) => Math.max(Date.now(), item.updatedAt + 1);
@@ -20,7 +21,8 @@ export function groupEquivalentItems(items: ShoppingItem[]): ShoppingItem[] {
     return {
       ...group[0], name: normalizeItemName(group[0].name),
       barcode: group.find((item) => item.barcode)?.barcode,
-      category: group.find((item) => item.category)?.category,
+      category: canonicalCategoryName(group.find((item) => item.category && item.category !== 'À classer')?.category
+        ?? group.find((item) => item.category)?.category ?? 'À classer'),
       quantity: group.reduce((total, item) => total + item.quantity, 0),
       checked: group.every((item) => item.checked),
       updatedAt: Math.max(...group.map((item) => item.updatedAt)),

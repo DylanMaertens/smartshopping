@@ -17,6 +17,44 @@ jest.mock('expo-camera', () => {
   };
 });
 beforeEach(() => mockTakePhoto.mockReset().mockResolvedValue({ base64: 'photo' }));
+it('keeps the lamp on for the exposure, then commits it off before delivering the photo', async () => {
+  let finish!: (photo: { base64: string }) => void;
+  mockTakePhoto.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  const onPhoto = jest.fn(() => {
+    expect(screen.getByTestId('barcode-camera-view').props.enableTorch).toBe(false);
+  });
+  const screen = render(<BarcodeScannerPanel mode="text" onCancel={jest.fn()} onScanned={jest.fn()} onPhotographed={onPhoto} />);
+  await act(async () => fireEvent(screen.getByTestId('barcode-camera-view'), 'cameraReady'));
+  fireEvent.press(screen.getByText('Allumer la lampe'));
+  fireEvent.press(screen.getByText('Photographier et reconnaître'));
+  expect(screen.getByTestId('barcode-camera-view').props.enableTorch).toBe(true);
+  expect(onPhoto).not.toHaveBeenCalled();
+  await act(async () => finish({ base64: 'photo' }));
+  expect(onPhoto).toHaveBeenCalledTimes(1);
+  screen.getByText('Allumer la lampe');
+});
+it.each(['failure', 'oversized'] as const)('also turns off the lamp after a %s capture', async (outcome) => {
+  if (outcome === 'failure') mockTakePhoto.mockRejectedValue(new Error('Capture impossible'));
+  else mockTakePhoto.mockResolvedValue({ base64: 'x'.repeat(4 * 1024 * 1024) });
+  const onPhoto = jest.fn();
+  const screen = render(<BarcodeScannerPanel mode="text" onCancel={jest.fn()} onScanned={jest.fn()} onPhotographed={onPhoto} />);
+  await act(async () => fireEvent(screen.getByTestId('barcode-camera-view'), 'cameraReady'));
+  fireEvent.press(screen.getByText('Allumer la lampe'));
+  await act(async () => fireEvent.press(screen.getByText('Photographier et reconnaître')));
+  expect(screen.getByTestId('barcode-camera-view').props.enableTorch).toBe(false);
+  expect(onPhoto).not.toHaveBeenCalled();
+});
+it('does not submit a photo that finishes after switching away from the camera', async () => {
+  let finish!: (photo: { base64: string }) => void;
+  mockTakePhoto.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  const onPhoto = jest.fn();
+  const screen = render(<BarcodeScannerPanel mode="text" embedded onCancel={jest.fn()} onScanned={jest.fn()} onPhotographed={onPhoto} />);
+  await act(async () => fireEvent(screen.getByTestId('barcode-camera-view'), 'cameraReady'));
+  fireEvent.press(screen.getByText('Photographier et reconnaître'));
+  screen.unmount();
+  await act(async () => finish({ base64: 'photo' }));
+  expect(onPhoto).not.toHaveBeenCalled();
+});
 it('captures a bounded photo only when ready and ignores duplicate taps', async () => {
   const onPhoto = jest.fn();
   const screen = render(<BarcodeScannerPanel mode="text" onCancel={jest.fn()} onScanned={jest.fn()} onPhotographed={onPhoto} />);

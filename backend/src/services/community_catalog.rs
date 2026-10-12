@@ -3,7 +3,7 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 use uuid::Uuid;
 
-use crate::{config::Config, services::categories::STORE_CATEGORIES};
+use crate::{config::Config, services::categories::{canonical_category_name, STORE_CATEGORIES}};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct CommunityFieldSuggestion {
@@ -97,7 +97,7 @@ pub fn validate_public_name(value: &str, config: &Config) -> Result<String, &'st
 }
 
 pub fn validate_category(value: &str) -> Result<String, &'static str> {
-    let trimmed = value.trim();
+    let trimmed = canonical_category_name(value.trim());
     STORE_CATEGORIES
         .iter()
         .find(|category| category.name == trimmed)
@@ -432,7 +432,7 @@ async fn refresh_consensus(
     Ok(())
 }
 
-async fn refresh_product(
+pub(crate) async fn refresh_product(
     tx: &mut Transaction<'_, Postgres>,
     barcode: &str,
     config: &Config,

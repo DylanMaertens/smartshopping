@@ -1,9 +1,15 @@
 {
   "expo": {
-    "name": "SmartShopping",
+    "name": "Poduna",
     "slug": "shopping-list-app",
     "scheme": "smartshopping",
-    "version": "0.1.8",
+    "version": "0.1.14",
+    "icon": "./assets/brand/icon.png",
+    "splash": {
+      "image": "./assets/brand/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF8F3"
+    },
     "orientation": "portrait",
     "platforms": [
       "android",
@@ -13,28 +19,32 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Autoriser SmartShopping à scanner des produits, des invitations et des listes écrites.",
+          "cameraPermission": "Autoriser Poduna à scanner des produits, des invitations et des listes écrites.",
           "microphonePermission": false,
-          "recordAudioAndroid": false
+          "recordAudioAndroid": true
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withLocalSpeech.cjs"
     ],
     "android": {
-      "versionCode": 9,
+      "versionCode": 15,
       "package": "com.smartshopping.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/brand/adaptive-foreground.png",
+        "monochromeImage": "./assets/brand/adaptive-foreground.png",
+        "backgroundColor": "#245C46"
+      },
       "permissions": [
-        "CAMERA"
-      ],
-      "blockedPermissions": [
-        "android.permission.RECORD_AUDIO"
+        "CAMERA",
+        "RECORD_AUDIO"
       ],
       "softwareKeyboardLayoutMode": "resize"
     },
     "ios": {
       "bundleIdentifier": "com.smartshopping.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Autoriser SmartShopping à scanner des produits, des invitations et des listes écrites."
+        "NSCameraUsageDescription": "Autoriser Poduna à scanner des produits, des invitations et des listes écrites."
       }
     }
   }

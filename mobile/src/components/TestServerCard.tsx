@@ -29,7 +29,7 @@ export function TestServerCard() {
     <Text style={{ color: theme.muted }}>Colle l’adresse HTTPS affichée sur ton PC pour activer le partage, la synchronisation et la lecture des listes écrites. Sans serveur, tes listes restent utilisables sur cet appareil.</Text>
     <TextInput accessibilityLabel="Adresse HTTPS du serveur" placeholder="https://…trycloudflare.com" value={url}
       onChangeText={setUrl} editable={!busy} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
-    <Text style={{ color: theme.muted, fontSize: 13 }}>Utilise uniquement l’adresse de ton serveur SmartShopping. Change-la ici lorsque le tunnel redémarre.</Text>
+    <Text style={{ color: theme.muted, fontSize: 13 }}>Utilise uniquement l’adresse de ton serveur Poduna. Change-la ici lorsque le tunnel redémarre.</Text>
     <Button label={busy ? 'Vérification…' : 'Connecter et redémarrer'} disabled={busy || !url.trim()} onPress={() => void save()} />
     {message ? <Text accessibilityLiveRegion="polite">{message}</Text> : null}
   </View>;

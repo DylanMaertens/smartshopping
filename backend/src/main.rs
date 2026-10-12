@@ -35,5 +35,5 @@ async fn main() {
         .expect("failed to bind");
 
     tracing::info!("backend listening on {}", addr);
-    axum::serve(listener, app).await.expect("server error");
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.expect("server error");
 }

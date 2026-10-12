@@ -10,7 +10,7 @@ it('removes decorative OCR symbols while preserving quantities, accents and pack
 });
 it('cleans bullets, whitespace and explicit quantities without mistaking list numbering for quantity', () => {
   expect(parseOcrItems('• PAIN\n2 x lait\nPOMMES x 3\n1. Crème   fraîche\n7up')).toEqual([
-    { name: 'Pain', quantity: 1 }, { name: 'Lait', quantity: 2 }, { name: 'Pommes', quantity: 3 },
+    { name: 'Pain', quantity: 1 }, { name: 'Lait', quantity: 2 }, { name: 'Pomme', quantity: 3 },
     { name: 'Crème fraîche', quantity: 1 }, { name: '7up', quantity: 1 },
   ]);
 });

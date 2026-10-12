@@ -6,9 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Heading, PageModal, Pressable, Text, TextInput } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
 import { BasketIllustration } from '@/components/BasketIllustration';
+import { PodunaMark } from '@/components/PodunaMark';
 import { AppearancePicker } from '@/components/AppearancePicker';
 import { parseInvitationCode } from '@/services/api/invitationCode';
 import { OcrImportPanel } from '@/components/OcrImportPanel';
+import { VoiceImportPanel } from '@/components/VoiceImportPanel';
 import { mergeOcrItems, type OcrItem } from '@/services/ocrItems';
 import { BarcodeScannerPanel } from '@/components/BarcodeScannerPanel';
 import { UnknownProductPrompt } from '@/components/UnknownProductPrompt';
@@ -30,12 +32,14 @@ import { DebouncedListSync } from '@/services/sync/debouncedListSync';
 import { startRemoteRefresh } from '@/services/sync/remoteRefresh';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useExpiringMessage } from '@/hooks/useExpiringMessage';
-import { getProductPreference, saveProductPreference } from '@/services/storage/productPreferences';
+import { getProductPreference, getRememberedCategory, rememberProductCategory, saveProductPreference } from '@/services/storage/productPreferences';
 import { itemNameKey, normalizeItemName, truncateUtf8 } from '@/services/itemValidation';
 import { groupItemsByCategory } from '@/services/categorization/categoryOrder';
 import { groupEquivalentItems, getEquivalentItems, incrementGroup, decrementGroup } from '@/services/itemGroups';
 import { sortItemsForDisplay } from '@/services/itemOrder';
 import type { ShoppingItem, ShoppingList } from '@/types';
+
+const ALPHABETICAL_CATEGORIES = [...STORE_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
 export function HomeScreen() {
   const { theme } = useTheme();
@@ -54,9 +58,14 @@ export function HomeScreen() {
   const previousOnlineRef = useRef<boolean | null>(null);
   const syncInFlightRef = useRef<{ listId: string; promise: Promise<boolean> } | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [inputCategory, setInputCategory] = useState<string | null>(null);
+  const [choosingInputCategory, setChoosingInputCategory] = useState(false);
   const [inputError, setInputError] = useState<string | null>(null);
   const [ocrListId, setOcrListId] = useState<string | null>(null);
-  const [scannerVisible, setScannerVisible] = useState(false);
+  const [voiceListId, setVoiceListId] = useState<string | null>(null);
+  const [addMode, setAddMode] = useState<'product' | 'barcode' | 'text' | 'voice'>('product');
+  const [scanMode, setScanMode] = useState<'barcode' | 'text'>('barcode');
+  const scannerVisible = panel === 'add' && addMode === 'barcode';
   const pendingProductLookups = useRef(new Set<string>());
   const [unknownProducts, setUnknownProducts] = useState<{ id: string; barcode: string; listId: string; suggestions: CommunitySuggestion[]; communityAvailable: boolean }[]>([]);
   const [scanStatus, setScanStatus] = useExpiringMessage();
@@ -80,6 +89,7 @@ export function HomeScreen() {
   useEffect(() => { setUnknownProducts([]); }, [activeListId]);
 
   const visibleItems = useMemo(() => groupEquivalentItems(items), [items]);
+  const ocrKnownNames = useMemo(() => items.filter((item) => !item.deletedAt).map((item) => item.name), [items]);
   const sections = useMemo(() => groupItemsByCategory(visibleItems.filter((item) => !item.checked), categoryOrder), [visibleItems, categoryOrder]);
   const remainingCount = visibleItems.filter((item) => !item.checked).length;
   const pendingChangesCount = ShoppingListStorage.getPendingChangesCount(activeListId);
@@ -90,7 +100,7 @@ export function HomeScreen() {
     const receive = (url: string | null) => {
       const code = url ? parseInvitationCode(url) : null;
       if (mounted && code) {
-        setInvitationCode(code); setScannerVisible(false); setOcrListId(null); setOrderingListId(null); setPanel('join');
+        setInvitationCode(code); setAddMode('product'); setOcrListId(null); setVoiceListId(null); setOrderingListId(null); setPanel('join');
       }
     };
     void Linking.getInitialURL().then(receive).catch(() => {});
@@ -146,24 +156,55 @@ export function HomeScreen() {
       return;
     }
     setInputError(null);
-    if (existing) incrementExistingItem(existing.id, amount);
-    else updateItems((current) => [{ ...createShoppingItem(name), quantity: amount }, ...current]);
-    setAddedMessage(`${name} · ${amount} ajouté${amount > 1 ? 's' : ''}`);
+    const chosenCategory = inferredInputCategory === 'À classer' ? inputCategory : null;
+    try {
+      updateItems((current) => {
+        if (!existing) return [{ ...createShoppingItem(name, { category: chosenCategory ?? undefined }), quantity: amount }, ...current];
+        const incremented = applyRememberedAisles(incrementGroup(current, existing.id, amount, true), new Set([itemNameKey(name)]));
+        // Fill unclassified occurrences without overwriting another participant's choice.
+        return chosenCategory ? incremented.map((item) => !item.deletedAt && itemNameKey(item.name) === itemNameKey(name)
+          && (!item.category || item.category === 'À classer')
+          ? { ...item, category: chosenCategory, updatedAt: nextItemTimestamp(item) } : item) : incremented;
+      });
+    } catch {
+      setInputError('Impossible d’enregistrer cet article. Réessaie.'); return;
+    }
+    let warning = '';
+    if (chosenCategory) {
+      try { rememberProductCategory(name, chosenCategory); }
+      catch { warning = ' · Rayon conservé dans la liste, mais non mémorisé pour les prochains ajouts.'; }
+    }
+    setAddedMessage(`${name} · ${amount} ajouté${amount > 1 ? 's' : ''}${warning}`);
     setQuantity('1');
     setInputValue('');
+    setInputCategory(null);
+    setChoosingInputCategory(false);
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   function importRecognizedItems(drafts: OcrItem[]) {
     if (activeListIdRef.current !== ocrListId) throw new Error('La liste a changé. Ferme cet écran et réessaie.');
-    const merged = mergeOcrItems(itemsRef.current, drafts, createShoppingItem);
+    const merged = applyRememberedAisles(mergeOcrItems(itemsRef.current, drafts, createShoppingItem),
+      new Set(drafts.map((draft) => itemNameKey(draft.name))));
     updateItems(() => merged);
     setOcrListId(null);
+    setPanel(null); setAddMode('product'); setVoiceListId(null);
     setScanStatus(`${drafts.length} ligne(s) ajoutée(s) depuis la photo.`);
   }
 
+  function importVoiceItems(drafts: OcrItem[]) {
+    if (activeListIdRef.current !== voiceListId) throw new Error('La liste a changé. Ferme cet écran et réessaie.');
+    updateItems(() => applyRememberedAisles(mergeOcrItems(itemsRef.current, drafts, createShoppingItem),
+      new Set(drafts.map((draft) => itemNameKey(draft.name)))));
+    setVoiceListId(null);
+    setPanel(null); setAddMode('product'); setOcrListId(null);
+    setScanStatus(`${drafts.length} ligne(s) ajoutée(s) depuis la dictée.`);
+  }
+
   function incrementExistingItem(id: string, amount = 1) {
-    updateItems((current) => incrementGroup(current, id, amount, true));
+    const target = itemsRef.current.find((item) => item.id === id);
+    if (!target) return;
+    updateItems((current) => applyRememberedAisles(incrementGroup(current, id, amount, true), new Set([itemNameKey(target.name)])));
   }
 
   async function addItemFromBarcode(barcode: string) {
@@ -181,7 +222,7 @@ export function HomeScreen() {
     const preference = getProductPreference(barcode);
     if (preference) {
       updateItems((current) => [createShoppingItem(preference.name, {
-        barcode, category: preference.category ?? classifyProductLocally(preference.name).categoryName,
+        barcode, category: getRememberedCategory(preference.name) ?? preference.category ?? classifyProductLocally(preference.name).categoryName,
       }), ...current]);
       setScanStatus(`Ajouté : ${preference.name}`);
       return;
@@ -195,6 +236,8 @@ export function HomeScreen() {
     try {
       const product = await getProduct(barcode);
       if (activeListIdRef.current !== scannedListId) return;
+      const waitingItem = itemsRef.current.find((item) => item.id === pendingItem.id && !item.deletedAt);
+      const categoryChosenWhileWaiting = waitingItem && waitingItem.category !== pendingItem.category;
       updateItems((current) =>
         current.map((item) =>
           item.id === pendingItem.id && !item.deletedAt && item.name === pendingItem.name
@@ -203,14 +246,23 @@ export function HomeScreen() {
                 name: normalizeItemName(truncateUtf8(normalizeItemName(product.product_name), 200)) || item.name,
                 barcode,
                 category: item.category === pendingItem.category
-                  ? classifyProductLocally(product.product_name, product.categories, product.source).categoryName : item.category,
+                  ? getRememberedCategory(product.product_name) ?? classifyProductLocally(product.product_name, product.categories, product.source).categoryName : item.category,
                 updatedAt: nextItemTimestamp(item),
               }
             : item,
         ),
       );
       const added = itemsRef.current.find((item) => item.id === pendingItem.id && !item.deletedAt);
-      if (added) setScanStatus(`Ajouté : ${added.name}`);
+      if (added) {
+        let warning = '';
+        if (categoryChosenWhileWaiting && added.category && added.name !== pendingItem.name) {
+          try {
+            rememberProductCategory(added.name, added.category);
+            saveProductPreference(barcode, { name: added.name, category: added.category });
+          } catch { warning = ' · Rayon conservé dans la liste, mais non mémorisé pour les prochains ajouts.'; }
+        }
+        setScanStatus(`Ajouté : ${added.name}${warning}`);
+      }
     } catch (error) {
       if (activeListIdRef.current !== scannedListId) return;
       const added = itemsRef.current.find((item) => item.id === pendingItem.id && !item.deletedAt && item.name === pendingItem.name);
@@ -278,14 +330,22 @@ export function HomeScreen() {
     const ids = new Set(getEquivalentItems(itemsRef.current, id).map((item) => item.id));
     updateItems((current) => current.map((item) =>
       ids.has(item.id) && !item.deletedAt && (item.name !== name || (selectedCategory !== undefined && item.category !== selectedCategory))
-        ? { ...item, name, category: selectedCategory ?? classifyProductLocally(name).categoryName, updatedAt: nextItemTimestamp(item) }
+        ? { ...item, name, category: selectedCategory ?? getRememberedCategory(name) ?? classifyProductLocally(name).categoryName, updatedAt: nextItemTimestamp(item) }
         : item,
     ));
-    // Save only after the list write succeeds, for every barcode represented by the row.
-    for (const item of itemsRef.current) {
-      if (ids.has(item.id) && !item.deletedAt && item.barcode && item.name !== `Produit ${item.barcode}`) {
-        saveProductPreference(item.barcode, { name: item.name, category: item.category });
+    // Save only deliberate choices, after the list write succeeds. Sync/import must
+    // never teach the cache another participant's automatic category assignment.
+    try {
+      if (ids.size && selectedCategory !== undefined && !/^Produit \d{8,14}$/u.test(name)) {
+        rememberProductCategory(name, selectedCategory);
       }
+      for (const item of itemsRef.current) {
+        if (ids.has(item.id) && !item.deletedAt && item.barcode && item.name !== `Produit ${item.barcode}`) {
+          saveProductPreference(item.barcode, { name: item.name, category: item.category });
+        }
+      }
+    } catch {
+      setScanStatus('Article modifié, mais le rayon n’a pas pu être mémorisé pour les prochains ajouts.');
     }
   }
 
@@ -522,6 +582,8 @@ export function HomeScreen() {
   }
 
   function selectList(listId: string) {
+    setVoiceListId(null);
+    setOcrListId(null);
     setListOpen(true);
     setPanel(null); setInvitationCode(undefined); setInputValue(''); setQuantity('1'); setAddedMessage(null); setCheckedExpanded(false);
     ShoppingListStorage.setActiveList(listId);
@@ -535,7 +597,7 @@ export function HomeScreen() {
     setSyncStatus(null);
     setScanStatus(null);
     setInputError(null);
-    setScannerVisible(false);
+    setAddMode('product');
   }
 
   function createList(name: string) {
@@ -596,6 +658,8 @@ export function HomeScreen() {
   }
 
   const activeName = lists.find((list) => list.id === activeListId)?.name ?? 'Ma liste';
+  const inferredInputCategory = getRememberedCategory(inputValue) ?? classifyProductLocally(inputValue).categoryName;
+  const needsInputCategory = !!inputValue.trim() && inferredInputCategory === 'À classer';
   const checkedItems = sortItemsForDisplay(visibleItems.filter((item) => item.checked));
   const offline = networkState.isConnected === false || networkState.isInternetReachable === false;
   const syncDisabled = ShoppingListStorage.isSyncDisabled(activeListId);
@@ -611,8 +675,18 @@ export function HomeScreen() {
     getItemBarcodes: (id: string) => [...new Set(getEquivalentItems(itemsRef.current, id)
       .map((item) => item.barcode).filter((barcode): barcode is string => !!barcode && /^[0-9]{8,14}$/.test(barcode)))],
     onRenameItem: renameItem, onRemoveItem: removeItem, onToggleItem: toggleItem };
-  const closePanel = () => { Keyboard.dismiss(); setPanel(null); };
-  const openAdd = () => { setAddedMessage(null); setInputError(null); setPanel('add'); };
+  const closePanel = () => {
+    Keyboard.dismiss(); setChoosingInputCategory(false); setPanel(null);
+    setAddMode('product'); setVoiceListId(null); setOcrListId(null);
+  };
+  const chooseAddMode = (mode: typeof addMode) => {
+    Keyboard.dismiss(); setChoosingInputCategory(false); setAddMode(mode);
+    if (mode === 'barcode' || mode === 'text') setScanMode(mode);
+    if (mode === 'text') setOcrListId(activeListIdRef.current);
+    if (mode === 'voice') setVoiceListId(activeListIdRef.current);
+  };
+  const returnToProduct = () => chooseAddMode('product');
+  const openAdd = () => { setAddedMessage(null); setInputError(null); setAddMode('product'); setPanel('add'); };
   const surface = { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: theme.stroke, borderRadius: theme.radius, padding: 16, gap: 12 };
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -620,7 +694,10 @@ export function HomeScreen() {
         contentContainerStyle={{ flexGrow: 1, padding: 20, paddingTop: 8, gap: 20 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={{ color: theme.muted, fontSize: 14 }}>SmartShopping</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <PodunaMark size={40} />
+              <Text style={{ color: theme.primary, fontSize: 23, fontWeight: '700' }}>Poduna</Text>
+            </View>
             <Heading accessibilityRole="header">Mes listes</Heading>
           </View>
           <Pressable accessibilityLabel="Réglages" onPress={() => setPanel('settings')} style={{ alignItems: 'center' }}>
@@ -675,35 +752,65 @@ export function HomeScreen() {
       </View>
 
       </>}
-      {panel === 'add' ? <PageModal title="Ajouter un article" onClose={closePanel}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          <Button variant="secondary" label="Saisir" accessibilityState={{ selected: true }} onPress={() => inputRef.current?.focus()} style={{ flexGrow: 1 }} />
-          <Button variant="ghost" label="Code-barres" accessibilityLabel="Scanner un code-barres" onPress={() => { closePanel(); setScannerVisible(true); }} style={{ flexGrow: 1 }} />
-          <Button variant="ghost" label="Liste écrite" accessibilityLabel="Scanner une liste écrite" onPress={() => { closePanel(); setOcrListId(activeListIdRef.current); }} style={{ flexGrow: 1 }} />
+      {panel === 'add' ? <PageModal title="Ajouter un article" testID="add-modal" scrollable={false} onClose={addMode === 'product' ? closePanel : returnToProduct}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 12 }}>
+          <Button variant={addMode === 'product' ? 'secondary' : 'ghost'} label="Produit" accessibilityState={{ selected: addMode === 'product' }} onPress={() => { returnToProduct(); inputRef.current?.focus(); }} style={{ flexGrow: 1 }} />
+          <Button variant={addMode === 'barcode' || addMode === 'text' ? 'secondary' : 'ghost'} label="Scanner" accessibilityLabel="Scanner un produit ou une liste" accessibilityState={{ selected: addMode === 'barcode' || addMode === 'text' }} onPress={() => chooseAddMode(scanMode)} style={{ flexGrow: 1 }} />
+          <Button variant={addMode === 'voice' ? 'secondary' : 'ghost'} label="Dicter" accessibilityLabel="Dicter des articles" accessibilityState={{ selected: addMode === 'voice' }} onPress={() => chooseAddMode('voice')} style={{ flexGrow: 1 }} />
         </View>
+        {addMode === 'barcode' || addMode === 'text' ? <View accessibilityRole="radiogroup" accessibilityLabel="Mode de scan"
+          style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: 20, marginBottom: 8, padding: 4, gap: 4, backgroundColor: theme.raised, borderRadius: theme.radius }}>
+          <Button label="Code-barres" accessibilityRole="radio" accessibilityLabel="Scanner un code-barres" accessibilityState={{ checked: addMode === 'barcode' }}
+            variant={addMode === 'barcode' ? 'primary' : 'ghost'} onPress={() => chooseAddMode('barcode')} style={{ flexGrow: 1 }} />
+          <Button label="Liste écrite" accessibilityRole="radio" accessibilityLabel="Scanner une liste écrite" accessibilityState={{ checked: addMode === 'text' }}
+            variant={addMode === 'text' ? 'primary' : 'ghost'} onPress={() => chooseAddMode('text')} style={{ flexGrow: 1 }} />
+        </View> : null}
+        {addMode === 'product' ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 8, gap: 20 }}>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: theme.muted, fontWeight: '700' }}>SAISIR</Text>
+          <Text style={{ color: theme.muted, fontWeight: '700' }}>PRODUIT</Text>
           <TextInput ref={inputRef} autoFocus accessibilityLabel="Nom du produit" blurOnSubmit={false}
-            onChangeText={(value) => { setInputValue(value); setInputError(null); setAddedMessage(null); }}
+            onChangeText={(value) => {
+              if (itemNameKey(value) !== itemNameKey(inputValue)) { setInputCategory(null); setChoosingInputCategory(false); }
+              setInputValue(value); setInputError(null); setAddedMessage(null);
+            }}
             onSubmitEditing={addItem} placeholder="Ex. pain, pommes, café…" returnKeyType="done" testID="add-item-input" value={inputValue} />
         </View>
-        <View style={{ gap: 8 }}><Text style={{ fontWeight: '600' }}>Quantité</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Button variant="secondary" label="−" accessibilityLabel="Diminuer la quantité à ajouter" disabled={Number(quantity) <= 1}
-              onPress={() => setQuantity(String(Math.max(1, (Number(quantity) || 1) - 1)))} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Text style={{ color: theme.muted }}>Quantité</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {Number(quantity) > 1 ? <Button variant="secondary" label="−" accessibilityLabel="Diminuer la quantité à ajouter"
+              onPress={() => setQuantity(String(Math.max(1, (Number(quantity) || 1) - 1)))} /> : null}
             <TextInput accessibilityLabel="Quantité à ajouter" value={quantity} onChangeText={setQuantity} keyboardType="number-pad" maxLength={3}
-              selectTextOnFocus style={{ flex: 1, textAlign: 'center' }} />
+              selectTextOnFocus style={{ width: 64, paddingHorizontal: 8, textAlign: 'center' }} />
             <Button variant="secondary" label="+" accessibilityLabel="Augmenter la quantité à ajouter" disabled={Number(quantity) >= 999}
               onPress={() => setQuantity(String(Math.min(999, (Number(quantity) || 0) + 1)))} />
           </View>
         </View>
-        {inputValue.trim() ? <View style={surface}><Text style={{ color: theme.muted, fontSize: 14 }}>Rayon détecté</Text>
-          <Text style={{ fontWeight: '600' }}>{classifyProductLocally(inputValue).categoryName}</Text></View> : null}
+        {needsInputCategory ? <View style={{ gap: 8 }}>
+          <Button variant="secondary" label={`Rayon : ${inputCategory ?? 'À classer'}`} accessibilityLabel="Choisir le rayon du produit à ajouter"
+            onPress={() => { Keyboard.dismiss(); setChoosingInputCategory(true); }} />
+          <Text style={{ color: theme.muted, fontSize: 14 }}>Facultatif : le rayon choisi sera mémorisé sur cet appareil après l’ajout.</Text>
+        </View> : null}
         {inputError ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{inputError}</Text> : null}
         {addedMessage ? <Text accessibilityLiveRegion="polite" style={{ color: theme.success }}>✓ {addedMessage}</Text> : null}
         <Button label="Ajouter à la liste" testID="add-item-button" disabled={!inputValue.trim()} onPress={addItem} />
         <Button variant="ghost" label="Terminer" onPress={closePanel} />
-
+        {needsInputCategory && choosingInputCategory ? <PageModal title="Choisir un rayon" onClose={() => setChoosingInputCategory(false)}>
+          {ALPHABETICAL_CATEGORIES.map((entry) => <Pressable key={entry.id} accessibilityRole="radio"
+            accessibilityLabel={entry.name} accessibilityState={{ checked: (inputCategory ?? 'À classer') === entry.name }}
+            onPress={() => { setInputCategory(entry.name === 'À classer' ? null : entry.name); setChoosingInputCategory(false); }}
+            style={{ padding: 12, borderRadius: theme.radius, backgroundColor: (inputCategory ?? 'À classer') === entry.name ? theme.raised : theme.surface }}>
+            <Text>{(inputCategory ?? 'À classer') === entry.name ? '✓ ' : ''}{entry.name}</Text>
+          </Pressable>)}
+        </PageModal> : null}
+        </ScrollView> : null}
+        {scannerVisible ? <View testID="scanner-panel" style={{ flex: 1 }}><BarcodeScannerPanel embedded paused={!!unknownProduct}
+          onCancel={returnToProduct} onScanned={addItemFromBarcode} statusMessage={scanStatus} /></View> : null}
+        {ocrListId ? <View testID={addMode === 'text' ? 'ocr-panel' : undefined} style={{ flex: addMode === 'text' ? 1 : 0 }}>
+          <OcrImportPanel embedded active={addMode === 'text'} knownNames={ocrKnownNames} onCancel={returnToProduct} onImport={importRecognizedItems} />
+        </View> : null}
+        {voiceListId ? <VoiceImportPanel embedded active={addMode === 'voice'} onCancel={returnToProduct} onImport={importVoiceItems} /> : null}
+        {productNamePrompt}
       </PageModal> : null}
       {panel === 'share' && sharingListId ? <PageModal title="Partager une liste" onClose={closePanel}>
         <Text style={{ color: theme.muted }}>{lists.find((list) => list.id === sharingListId)?.name}</Text>
@@ -719,7 +826,9 @@ export function HomeScreen() {
         <Button variant="secondary" label="Sauvegarde et restauration" onPress={() => setPanel('backup')} />
         {showSync ? <Button variant="secondary" label="Synchronisation" onPress={() => setPanel('sync')} /> : null}
         <DeviceDiagnosticsCard />
-        <Text style={{ color: theme.muted, textAlign: 'center', fontSize: 13 }}>SmartShopping · Tes courses, à ton rythme.</Text>
+        <View style={{ alignItems: 'center', gap: 10 }}><PodunaMark size={56} />
+          <Text style={{ color: theme.muted, textAlign: 'center', fontSize: 13 }}>Poduna · Tes courses, à ton rythme.</Text>
+        </View>
       </PageModal> : null}
       {panel === 'sync' && showSync ? <PageModal title="Synchronisation" onClose={closePanel}>
         {serverMissing ? <TestServerCard /> : <SyncStatusCard lastSyncAt={lastSyncAt} message={syncStatus} networkState={networkState}
@@ -748,13 +857,7 @@ export function HomeScreen() {
           }} />
         </SafeAreaView>
       </Modal> : null}
-      {ocrListId ? <Modal visible animationType="none" presentationStyle="fullScreen" testID="ocr-modal" onRequestClose={() => setOcrListId(null)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}><OcrImportPanel onCancel={() => setOcrListId(null)} onImport={importRecognizedItems} /></SafeAreaView>
-      </Modal> : null}
-      {scannerVisible ? <Modal visible animationType="none" presentationStyle="fullScreen" testID="scanner-modal" onRequestClose={() => setScannerVisible(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}><BarcodeScannerPanel paused={!!unknownProduct} onCancel={() => setScannerVisible(false)} onScanned={addItemFromBarcode} statusMessage={scanStatus} />{productNamePrompt}</SafeAreaView>
-      </Modal> : null}
-      {!scannerVisible ? productNamePrompt : null}
+      {panel !== 'add' ? productNamePrompt : null}
     </View>
   );
 }
@@ -763,10 +866,21 @@ function nextItemTimestamp(item: ShoppingItem): number {
   return Math.max(Date.now(), item.updatedAt + 1);
 }
 
+/** Re-adding a known name can fill an old unclassified row, but must not override
+ * an explicit aisle already selected for that occurrence or another participant. */
+function applyRememberedAisles(items: ShoppingItem[], names: ReadonlySet<string>): ShoppingItem[] {
+  return items.map((item) => {
+    if (item.deletedAt || (item.category && item.category !== 'À classer') || !names.has(itemNameKey(item.name))) return item;
+    const category = getRememberedCategory(item.name);
+    return category ? { ...item, category, updatedAt: nextItemTimestamp(item) } : item;
+  });
+}
+
 function createShoppingItem(
   name: string,
   overrides: Pick<Partial<ShoppingItem>, 'id' | 'barcode' | 'category'> = {},
 ): ShoppingItem {
+  name = normalizeItemName(name);
   const category = classifyProductLocally(name);
   const now = Date.now();
 
@@ -775,7 +889,7 @@ function createShoppingItem(
     listId: ShoppingListStorage.getActiveListId(),
     name,
     barcode: overrides.barcode,
-    category: overrides.category ?? category.categoryName,
+    category: overrides.category ?? getRememberedCategory(name) ?? category.categoryName,
     quantity: 1,
     checked: false,
     updatedAt: now,

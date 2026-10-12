@@ -4,6 +4,8 @@ Le backend Rust, PostgreSQL, les listes, les identités et l’OCR restent sur l
 
 ## Utilisation sur cette machine
 
+Pour activer l’administration privée (Supervision, Journaux, Modération et Messages), préparer le compte puis utiliser `python3 ops/local-https.py --admin`. Ajouter `--contact` pour ouvrir explicitement le formulaire HTTPS de test, avec réception en base mais sans e-mail. Voir [création du compte, protections et limites](ADMINISTRATION.md). Ces options exigent un backend recompilé et refusent d’arrêter ou de reconfigurer automatiquement une session déjà active. Sauvegarder la base avant ce premier démarrage : la migration additive des décisions et messages sera appliquée.
+
 Depuis le dossier du projet :
 
 ```bash

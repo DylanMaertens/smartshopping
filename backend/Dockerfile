@@ -4,6 +4,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY migrations ./migrations
 COPY ocr ./ocr
+COPY admin ./admin
+COPY public ./public
 RUN cargo build --release --locked
 
 FROM python:3.12-slim-bookworm

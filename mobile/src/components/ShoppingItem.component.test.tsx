@@ -5,6 +5,34 @@ import { getValidatedCommunityFields } from '@/services/api/backend';
 jest.mock('@/services/api/backend', () => ({ getValidatedCommunityFields: jest.fn() }));
 const item = { id: 'milk', listId: 'home', name: 'Lait', quantity: 1, checked: false, updatedAt: 1 };
 const callbacks = () => ({ onRename: jest.fn(), onToggle: jest.fn(), onRemove: jest.fn(), onIncreaseQuantity: jest.fn(), onDecreaseQuantity: jest.fn() });
+it('shows only plus at one, reveals the quantity above one and keeps purchase checking independent', () => {
+  const props = callbacks();
+  const screen = render(<ShoppingItem item={item} {...props} />);
+  expect(screen.queryByLabelText('Quantité : 1')).toBeNull();
+  expect(screen.queryByLabelText('Diminuer la quantité de Lait')).toBeNull();
+  fireEvent.press(screen.getByLabelText('Augmenter la quantité de Lait'));
+  expect(props.onIncreaseQuantity).toHaveBeenCalledWith('milk');
+  expect(props.onToggle).not.toHaveBeenCalled();
+  screen.rerender(<ShoppingItem item={{ ...item, quantity: 2 }} {...props} />);
+  screen.getByText('×2');
+  screen.getByLabelText('Quantité : 2');
+  fireEvent.press(screen.getByLabelText('Diminuer la quantité de Lait'));
+  expect(props.onDecreaseQuantity).toHaveBeenCalledWith('milk');
+  screen.rerender(<ShoppingItem item={item} {...props} />);
+  expect(screen.queryByText('×2')).toBeNull();
+  expect(screen.queryByLabelText('Diminuer la quantité de Lait')).toBeNull();
+  fireEvent.press(screen.getByRole('checkbox'));
+  expect(props.onToggle).toHaveBeenCalledWith('milk');
+});
+it('disables increasing at the quantity limit but still allows decreasing', () => {
+  const props = callbacks();
+  const screen = render(<ShoppingItem item={{ ...item, quantity: 999 }} {...props} />);
+  screen.getByText('×999');
+  fireEvent.press(screen.getByLabelText('Augmenter la quantité de Lait'));
+  expect(props.onIncreaseQuantity).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByLabelText('Diminuer la quantité de Lait'));
+  expect(props.onDecreaseQuantity).toHaveBeenCalledWith('milk');
+});
 it('consults a public field without losing the private name draft or saving it', async () => {
   jest.mocked(getValidatedCommunityFields).mockResolvedValue({ barcode: '3017620422003', fields: [], contributions_enabled: true });
   const props = callbacks();
@@ -29,7 +57,7 @@ it('presents all manual aisle choices in French alphabetical order', () => {
   fireEvent.press(screen.getByLabelText('Modifier Lait'));
   fireEvent.press(screen.getByLabelText('Choisir le rayon'));
   const names = screen.getAllByRole('radio').map((radio) => radio.props.accessibilityLabel);
-  expect(names).toHaveLength(31);
+  expect(names).toHaveLength(27);
   expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })));
 });
 it('edits a trimmed name and closes the editor', () => {

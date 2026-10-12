@@ -58,13 +58,15 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
-        (
+        let mut response = (
             self.status,
             Json(ErrorBody {
                 code: self.code,
                 message: self.message,
             }),
         )
-            .into_response()
+            .into_response();
+        response.extensions_mut().insert(crate::middleware::DiagnosticCode(self.code));
+        response
     }
 }

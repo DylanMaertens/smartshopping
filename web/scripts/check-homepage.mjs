@@ -6,19 +6,23 @@ const output = fileURLToPath(new URL('../.qa/', import.meta.url));
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true, executablePath: process.env.SMARTSHOPPING_CHROMIUM, args: ['--no-sandbox'] });
 const errors = [];
+const base = process.env.PODUNA_WEB_URL || 'http://127.0.0.1:8057';
 try {
   for (const width of [1440, 768, 390, 320]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('response', (response) => { if (response.status() >= 400) errors.push(`${response.status()}: ${response.url()}`); });
-    await page.goto('http://127.0.0.1:8057/', { waitUntil: 'networkidle' });
+    await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     await page.locator('#personnalisation').scrollIntoViewIfNeeded();
     await page.locator('#theme-screen').evaluate((image) => image.decode());
     assert.equal(await page.locator('h1').count(), 1);
+    assert.match(await page.title(), /^Poduna/);
+    assert.equal(await page.locator('.header .brand-logo').getAttribute('src'), 'assets/brand/logo.svg');
+    assert.equal(await page.locator('link[rel="icon"]').getAttribute('href'), 'assets/brand/favicon.ico');
     assert.equal(await page.locator('.hero-visual img').getAttribute('src'), 'assets/app-origine.png');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `overflow at ${width}`);
-    assert.equal(await page.locator('[data-version]').textContent(), '0.1.8');
-    assert.equal(await page.locator('#download-link').getAttribute('href'), 'downloads/smartshopping-0.1.8-preview.apk');
+    assert.equal(await page.locator('[data-version]').textContent(), '0.1.11');
+    assert.equal(await page.locator('#download-link').getAttribute('href'), 'downloads/poduna-0.1.11-preview.apk');
     for (const theme of ['Minimal', 'Nuit', 'Papier', 'Origine']) {
       await page.getByRole('button', { name: theme, exact: true }).click();
       assert.equal(await page.getByRole('button', { name: theme, exact: true }).getAttribute('aria-pressed'), 'true');
@@ -41,8 +45,8 @@ try {
     await page.close();
   }
   const page = await browser.newPage();
-  for (const file of ['downloads/smartshopping-0.1.8-preview.apk', 'downloads/smartshopping-0.1.8-preview.apk.sha256']) {
-    const response = await page.request.head(`http://127.0.0.1:8057/${file}`);
+  for (const file of ['downloads/poduna-0.1.11-preview.apk', 'downloads/poduna-0.1.11-preview.apk.sha256']) {
+    const response = await page.request.head(`${base}/${file}`);
     assert.equal(response.status(), 200);
   }
   assert.deepEqual(errors, []);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppState } from 'react-native';
+import { AppState, Share } from 'react-native';
 import { InvitationSession } from '@/services/api/invitationSession';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { ShareListCard } from './ShareListCard';
@@ -10,6 +10,17 @@ jest.mock('@/services/api/backend', () => ({
   BackendApiError: class extends Error {}, createListInvitation: jest.fn(), getListMembers: jest.fn(), removeListMember: jest.fn(), joinListInvitation: jest.fn(), revokeListInvitation: jest.fn(),
 }));
 const invitation = 'a'.repeat(32);
+it('shares the Poduna name with the backwards-compatible invitation scheme', async () => {
+  const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} onDeleted={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
+  await act(async () => fireEvent.press(screen.getByText('Partager avec une application')));
+  expect(share).toHaveBeenCalledWith({
+    message: `Rejoins ma liste Poduna : smartshopping://invite/${invitation}\nCode : ${invitation}`,
+    url: `smartshopping://invite/${invitation}`,
+  });
+  share.mockRestore();
+});
 beforeEach(() => {
   jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }));
   jest.mocked(revokeListInvitation).mockResolvedValue({ revoked: true });

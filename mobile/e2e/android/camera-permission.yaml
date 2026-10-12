@@ -2,10 +2,15 @@ appId: com.smartshopping.app
 ---
 - launchApp:
     clearState: true
+- tapOn: "Ma liste"
+- tapOn: "Ajouter un article"
+- tapOn: "Scanner un produit ou une liste"
 - tapOn: "Scanner un code-barres"
 - tapOn:
     id: request-camera-permission
 - tapOn: "While using the app"
 - assertVisible:
     id: barcode-camera-view
-- tapOn: "Fermer"
+- tapOn: "Fermer Ajouter un article"
+- assertVisible:
+    id: add-item-input

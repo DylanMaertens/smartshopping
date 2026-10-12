@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Keyboard, View } from 'react-native';
 import { Button, PageModal, Pressable, Text, TextInput } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
-import { STORE_CATEGORIES } from '@/services/categorization/categoryService';
+import { canonicalCategoryName, STORE_CATEGORIES } from '@/services/categorization/categoryService';
 import { normalizeItemName, truncateUtf8 } from '@/services/itemValidation';
 import type { ShoppingItem as ShoppingItemType } from '@/types';
 import { CommunityProductPanel } from './CommunityProductPanel';
@@ -13,7 +13,7 @@ type Props = { item: ShoppingItemType; communityBarcodes?: string[]; onDecreaseQ
   onRename: (id: string, name: string, category?: string) => void; onRemove: (id: string) => void; onToggle: (id: string) => void };
 export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.barcode] : [], onDecreaseQuantity, onIncreaseQuantity, onRemove, onRename, onToggle }: Props) {
   const { theme } = useTheme();
-  const currentCategory = STORE_CATEGORIES.find((entry) => entry.name === item.category)?.name ?? 'À classer';
+  const currentCategory = STORE_CATEGORIES.find((entry) => entry.name === canonicalCategoryName(item.category ?? ''))?.name ?? 'À classer';
   const displayName = normalizeItemName(item.name);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(displayName);
@@ -42,9 +42,11 @@ export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.ba
       <Text style={{ fontWeight: '600', textDecorationLine: item.checked ? 'line-through' : 'none', color: item.checked ? theme.muted : theme.text }}>{displayName}</Text>
     </Pressable>
     <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 'auto' }}>
-      <Pressable accessibilityLabel={`Diminuer la quantité de ${displayName}`} disabled={item.quantity <= 1}
+      {item.quantity > 1 ? <>
+      <Pressable accessibilityLabel={`Diminuer la quantité de ${displayName}`}
         onPress={() => onDecreaseQuantity(item.id)} style={{ alignItems: 'center' }}><Text style={{ fontSize: 22 }}>−</Text></Pressable>
-      <Text accessibilityLabel={`Quantité : ${item.quantity}`} style={{ minWidth: 24, textAlign: 'center', fontWeight: '600' }}>{item.quantity}</Text>
+      <Text accessibilityLabel={`Quantité : ${item.quantity}`} style={{ minWidth: 24, textAlign: 'center', fontWeight: '600' }}>×{item.quantity}</Text>
+      </> : null}
       <Pressable accessibilityLabel={`Augmenter la quantité de ${displayName}`} disabled={item.quantity >= 999}
         onPress={() => onIncreaseQuantity(item.id)} style={{ alignItems: 'center' }}><Text style={{ fontSize: 22 }}>+</Text></Pressable>
     </View>

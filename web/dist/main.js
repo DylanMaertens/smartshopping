@@ -12,6 +12,6 @@ document.querySelectorAll('[data-theme]').forEach((button) => {
     const screen = document.getElementById('theme-screen');
     screen.src = `assets/app-${theme}.png`;
     screen.alt = `La liste de courses avec le thème ${themeNames[theme]} de l’application.`;
-    document.getElementById('theme-status').textContent = `Aperçu du thème ${themeNames[theme]}${theme === 'origine' ? ' en développement' : ''}. Aussi disponibles dans l’app : Pastel, Pixel et Contraste.`;
+    document.getElementById('theme-status').textContent = `Aperçu du thème ${themeNames[theme]}. Aussi disponibles dans l’app : Pastel, Pixel et Contraste.`;
   });
 });

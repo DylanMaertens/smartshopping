@@ -13,6 +13,15 @@ jest.mock('expo-camera', () => ({
 }));
 beforeEach(() => { mockPermission.granted = true; mockPermission.canAskAgain = true; jest.clearAllMocks(); });
 afterEach(() => jest.restoreAllMocks());
+it('does not listen for barcodes in the photo mode and omits the standalone header when embedded', async () => {
+  const onScanned = jest.fn();
+  const screen = render(<BarcodeScannerPanel embedded mode="text" onCancel={jest.fn()} onScanned={onScanned} />);
+  await act(async () => fireEvent(screen.getByTestId('barcode-camera-view'), 'cameraReady'));
+  expect(screen.getByTestId('barcode-camera-view').props.onBarcodeScanned).toBeUndefined();
+  expect(screen.queryByText('Fermer')).toBeNull();
+  screen.getByText('Photographier et reconnaître');
+  expect(onScanned).not.toHaveBeenCalled();
+});
 it('pauses reading while the naming prompt is displayed and resumes without closing', () => {
   jest.useFakeTimers();
   try {
@@ -141,7 +150,7 @@ it('scans invitation QR codes and rejects other links without locking the camera
   const camera = screen.getByTestId('barcode-camera-view');
   expect(camera.props.barcodeScannerSettings.barcodeTypes).toEqual(['qr']);
   fireEvent(camera, 'barcodeScanned', { data: 'https://example.com' });
-  screen.getByText('Ce QR code n’est pas une invitation SmartShopping.');
+  screen.getByText('Ce QR code n’est pas une invitation Poduna.');
   expect(onScanned).not.toHaveBeenCalled();
   const scan = camera.props.onBarcodeScanned;
   act(() => {

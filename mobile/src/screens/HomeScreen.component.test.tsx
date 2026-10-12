@@ -4,7 +4,8 @@ import { act, fireEvent, render as renderNative } from '@testing-library/react-n
 import { HomeScreen } from './HomeScreen';
 import { BackendApiError, confirmCommunityProposal, getCommunitySuggestions, getProduct, submitCommunityProposal } from '@/services/api/backend';
 import { ShoppingListStorage as Storage } from '@/services/storage/shoppingListStorage';
-import { getProductPreference } from '@/services/storage/productPreferences';
+import { getProductPreference, getRememberedCategory, rememberProductCategory } from '@/services/storage/productPreferences';
+import { LocalKeyValueStorage } from '@/services/storage/localKeyValueStorage';
 import type { ShoppingItem } from '@/types';
 
 let mockActiveList = 'home';
@@ -13,6 +14,7 @@ let mockDisabledLists = new Set<string>();
 let mockLocalLists = new Set<string>();
 let mockCategoryOrders = new Map<string, string[]>();
 let mockItems = new Map<string, ShoppingItem[]>();
+let mockOcrDrafts = [{ name: 'lait', quantity: 2 }, { name: 'Pain', quantity: 1 }];
 const mockPreferencesDisk = new Map<string, string>();
 jest.mock('@/services/storage/localKeyValueStorage', () => ({ LocalKeyValueStorage: {
   getString: (key: string) => mockPreferencesDisk.get(key) ?? null,
@@ -65,10 +67,18 @@ jest.mock('@/components/BarcodeScannerPanel', () => {
 jest.mock('@/components/OcrImportPanel', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
-  return { OcrImportPanel: ({ onImport }: { onImport: (items: unknown[]) => void }) =>
-    <Pressable onPress={() => onImport([{ name: 'lait', quantity: 2 }, { name: 'Pain', quantity: 1 }])}>
+  return { OcrImportPanel: ({ onImport, active = true }: { onImport: (items: unknown[]) => void; active?: boolean }) => active ?
+    <Pressable onPress={() => onImport(mockOcrDrafts)}>
       <Text>Valider OCR test</Text>
-    </Pressable> };
+    </Pressable> : null };
+});
+jest.mock('@/components/VoiceImportPanel', () => {
+  const React = require('react');
+  const { Pressable, Text } = require('react-native');
+  return { VoiceImportPanel: ({ onImport, onCancel, active = true }: { onImport: (items: unknown[]) => void; onCancel: () => void; active?: boolean }) => active ? <>
+    <Pressable onPress={() => onImport([{ name: 'Oranges', quantity: 2 }, { name: 'Zorblax', quantity: 1 }])}><Text>Valider dictée test</Text></Pressable>
+    <Pressable onPress={onCancel}><Text>Annuler dictée test</Text></Pressable>
+  </> : null };
 });
 jest.mock('@/components/DeviceDiagnosticsCard', () => ({ DeviceDiagnosticsCard: () => null }));
 jest.mock('@/services/backup/backupFiles', () => ({ exportBackupFile: jest.fn(), importBackupFile: jest.fn(), saveBackupOnDevice: jest.fn() }));
@@ -126,6 +136,11 @@ function render(ui: React.ReactElement) {
   return screen;
 }
 
+function openScanner(screen: ReturnType<typeof render>, mode: 'barcode' | 'text') {
+  fireEvent.press(screen.getByLabelText('Scanner un produit ou une liste'));
+  fireEvent.press(screen.getByLabelText(mode === 'barcode' ? 'Scanner un code-barres' : 'Scanner une liste écrite'));
+}
+
 const milk = (listId = 'home'): ShoppingItem => ({ id: listId, listId, name: 'Lait', quantity: 1, checked: false, updatedAt: 1 });
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -140,6 +155,7 @@ beforeEach(() => {
   jest.mocked(submitCommunityProposal).mockReset().mockResolvedValue({ proposal_ids: [], publication_status: 'received' });
   jest.mocked(confirmCommunityProposal).mockReset().mockResolvedValue();
   mockPreferencesDisk.clear();
+  mockOcrDrafts = [{ name: 'lait', quantity: 2 }, { name: 'Pain', quantity: 1 }];
   mockTestServerEnabled = false;
   jest.spyOn(BackHandler, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }));
   jest.spyOn(Linking, 'getInitialURL').mockResolvedValue(null);
@@ -151,6 +167,16 @@ beforeEach(() => {
   mockLocalLists = new Set();
   mockCategoryOrders = new Map();
   mockItems = new Map([['home', [milk()]], ['other', [milk('other')]]]);
+});
+
+it('shows Poduna on the lists home without renaming existing lists', async () => {
+  mockLocalLists = new Set(['home', 'other']);
+  const screen = renderNative(<HomeScreen />);
+  await act(async () => {});
+  screen.getByText('Poduna');
+  expect(screen.queryByText('SmartShopping')).toBeNull();
+  expect(Storage.renameList).not.toHaveBeenCalled();
+  screen.unmount();
 });
 
 describe('HomeScreen during synchronization', () => {
@@ -286,7 +312,7 @@ describe('basic shopping journeys', () => {
     jest.mocked(getProduct).mockReturnValue(request.promise);
     const screen = render(<HomeScreen />);
     fireEvent.press(screen.getByLabelText('Ajouter un article'));
-    fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+    openScanner(screen, 'barcode');
     fireEvent.press(screen.getByText('Simuler scan'));
     expect(mockItems.get('home')).toEqual(expect.arrayContaining([expect.objectContaining({ barcode: '3017620422003', name: 'Produit 3017620422003' })]));
     await act(async () => request.reject(new Error('offline')));
@@ -304,7 +330,7 @@ describe('basic shopping journeys', () => {
     });
     const screen = render(<HomeScreen />);
     fireEvent.press(screen.getByLabelText('Ajouter un article'));
-    fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+    openScanner(screen, 'barcode');
     await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
     expect(mockItems.get('home')?.find((item) => item.barcode)).toMatchObject({ name, category: 'Boissons' });
   });
@@ -315,17 +341,17 @@ describe('basic shopping journeys', () => {
     });
     const screen = render(<HomeScreen />);
     fireEvent.press(screen.getByLabelText('Ajouter un article'));
-    fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+    openScanner(screen, 'barcode');
     await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
     const scanned = mockItems.get('home')?.find((item) => item.barcode);
     expect(scanned?.name).toBe('Lait ' + 'é'.repeat(97));
     expect(scanned?.category).toBe('Crémerie & produits laitiers');
-    expect(screen.getByTestId('scanner-modal').props.visible).toBe(true);
+    expect(screen.getByTestId('scanner-panel')).toBeTruthy();
     await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
     expect(mockItems.get('home')?.find((item) => item.barcode)?.quantity).toBe(2);
     expect(getProduct).toHaveBeenCalledTimes(1);
-    fireEvent(screen.getByTestId('scanner-modal'), 'requestClose');
-    expect(screen.queryByTestId('scanner-modal')).toBeNull();
+    fireEvent(screen.getByTestId('add-modal'), 'requestClose');
+    expect(screen.queryByTestId('scanner-panel')).toBeNull();
   });
 });
 
@@ -354,7 +380,7 @@ it('does not overwrite a user rename when product enrichment finishes later', as
   jest.mocked(getProduct).mockReturnValue(pending.promise);
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-    fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+    openScanner(screen, 'barcode');
   fireEvent.press(screen.getByText('Simuler scan'));
   const scanned = mockItems.get('home')!.find((item) => item.barcode)!;
   fireEvent.press(screen.getByTestId(`rename-${scanned.id}`));
@@ -362,15 +388,42 @@ it('does not overwrite a user rename when product enrichment finishes later', as
   expect(mockItems.get('home')!.find((item) => item.id === scanned.id)?.name).toBe('Pain');
 });
 
-it('opens the scanner in a visible modal and closes it with Android back', () => {
+it('keeps the same add modal across modes and Android back, preserving the manual draft', () => {
   const screen = render(<HomeScreen />);
-  expect(screen.queryByTestId('scanner-modal')).toBeNull();
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-    fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
-  expect(screen.getByTestId('scanner-modal').props.visible).toBe(true);
+  const modal = screen.getByTestId('add-modal');
+  fireEvent.changeText(screen.getByTestId('add-item-input'), 'Zorblax');
+  fireEvent.changeText(screen.getByLabelText('Quantité à ajouter'), '3');
+  fireEvent.press(screen.getByLabelText('Choisir le rayon du produit à ajouter'));
+  fireEvent.press(screen.getByRole('radio', { name: 'Animaux' }));
+  openScanner(screen, 'barcode');
+  expect(screen.getByTestId('add-modal')).toBe(modal);
+  screen.getByTestId('scanner-panel');
+  fireEvent.press(screen.getByRole('radio', { name: 'Scanner une liste écrite' }));
+  expect(screen.getByTestId('add-modal')).toBe(modal);
+  expect(screen.queryByTestId('scanner-panel')).toBeNull();
+  screen.getByTestId('ocr-panel');
+  fireEvent.press(screen.getByLabelText('Dicter des articles'));
+  expect(screen.queryByTestId('ocr-panel')).toBeNull();
+  fireEvent(screen.getByTestId('add-modal'), 'requestClose');
+  expect(screen.getByTestId('add-modal')).toBe(modal);
+  expect(screen.getByTestId('add-item-input').props.value).toBe('Zorblax');
+  expect(screen.getByLabelText('Quantité à ajouter').props.value).toBe('3');
+  screen.getByText('Rayon : Animaux');
+  expect(mockItems.get('home')).toHaveLength(1);
+  fireEvent(screen.getByTestId('add-modal'), 'requestClose');
+  expect(screen.queryByTestId('add-modal')).toBeNull();
+});
+
+it('opens the scanner inside the add modal and returns to the form with Android back', () => {
+  const screen = render(<HomeScreen />);
+  expect(screen.queryByTestId('scanner-panel')).toBeNull();
+  fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    openScanner(screen, 'barcode');
+  expect(screen.getByTestId('scanner-panel')).toBeTruthy();
   screen.getByText('Simuler scan');
-  fireEvent(screen.getByTestId('scanner-modal'), 'requestClose');
-  expect(screen.queryByTestId('scanner-modal')).toBeNull();
+  fireEvent(screen.getByTestId('add-modal'), 'requestClose');
+  expect(screen.queryByTestId('scanner-panel')).toBeNull();
   expect(screen.queryByText('Simuler scan')).toBeNull();
 });
 
@@ -629,7 +682,7 @@ describe('adding an existing article', () => {
     const screen = render(<HomeScreen />);
     for (let i = 0; i < 2; i++) {
       fireEvent.press(screen.getByLabelText('Ajouter un article'));
-    fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+    openScanner(screen, 'barcode');
       fireEvent.press(screen.getByText('Simuler scan'));
     }
     expect(getProduct).toHaveBeenCalledTimes(1);
@@ -642,7 +695,7 @@ describe('adding an existing article', () => {
     mockItems.set('home', [{ ...milk(), barcode: '3017620422003', quantity: 999 }]);
     const screen = render(<HomeScreen />);
     fireEvent.press(screen.getByLabelText('Ajouter un article'));
-    fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+    openScanner(screen, 'barcode');
     fireEvent.press(screen.getByText('Simuler scan'));
     expect(mockItems.get('home')).toHaveLength(1);
     expect(getProduct).not.toHaveBeenCalled();
@@ -744,21 +797,21 @@ describe('synchronization on opening and returning to the app', () => {
 it('imports reviewed OCR items into the active list and closes the photo flow', () => {
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner une liste écrite'));
+  openScanner(screen, 'text');
   fireEvent.press(screen.getByText('Valider OCR test'));
   expect(mockItems.get('home')).toHaveLength(2);
   expect(mockItems.get('home')!.find((item) => item.id === 'home')?.quantity).toBe(3);
   expect(mockItems.get('home')!.find((item) => item.name === 'Pain')?.quantity).toBe(1);
   expect(mockItems.get('other')).toHaveLength(1);
-  expect(screen.queryByTestId('ocr-modal')).toBeNull();
+  expect(screen.queryByTestId('ocr-panel')).toBeNull();
 });
 it('closes the OCR modal with Android back without adding anything', () => {
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner une liste écrite'));
-  fireEvent(screen.getByTestId('ocr-modal'), 'requestClose');
+  openScanner(screen, 'text');
+  fireEvent(screen.getByTestId('add-modal'), 'requestClose');
   expect(mockItems.get('home')).toHaveLength(1);
-  expect(screen.queryByTestId('ocr-modal')).toBeNull();
+  expect(screen.queryByTestId('ocr-panel')).toBeNull();
 });
 
 
@@ -795,6 +848,26 @@ it('discards a draft order when Android Back closes the editor', async () => {
   expect(screen.queryByTestId('category-order-modal')).toBeNull();
 });
 
+it('reveals decrement only above one, supports direct input and resets controls after adding', () => {
+  const screen = render(<HomeScreen />);
+  fireEvent.press(screen.getByLabelText('Ajouter un article'));
+  expect(screen.getByLabelText('Quantité à ajouter').props.value).toBe('1');
+  expect(screen.queryByLabelText('Diminuer la quantité à ajouter')).toBeNull();
+  fireEvent.press(screen.getByLabelText('Augmenter la quantité à ajouter'));
+  expect(screen.getByLabelText('Quantité à ajouter').props.value).toBe('2');
+  fireEvent.press(screen.getByLabelText('Diminuer la quantité à ajouter'));
+  expect(screen.getByLabelText('Quantité à ajouter').props.value).toBe('1');
+  expect(screen.queryByLabelText('Diminuer la quantité à ajouter')).toBeNull();
+  fireEvent.changeText(screen.getByLabelText('Quantité à ajouter'), '999');
+  fireEvent.press(screen.getByLabelText('Augmenter la quantité à ajouter'));
+  expect(screen.getByLabelText('Quantité à ajouter').props.value).toBe('999');
+  fireEvent.changeText(screen.getByLabelText('Quantité à ajouter'), '3');
+  fireEvent.changeText(screen.getByTestId('add-item-input'), 'Pain');
+  fireEvent.press(screen.getByTestId('add-item-button'));
+  expect(mockItems.get('home')).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Pain', quantity: 3 })]));
+  expect(screen.getByLabelText('Quantité à ajouter').props.value).toBe('1');
+  expect(screen.queryByLabelText('Diminuer la quantité à ajouter')).toBeNull();
+});
 it('adds the chosen quantity, merges duplicates, and rejects a total over 999 atomically', () => {
   mockItems.set('home', [{ ...milk(), quantity: 995, checked: true }]);
   const screen = render(<HomeScreen />);
@@ -942,6 +1015,130 @@ it('creates and opens a list with the name chosen by the user', async () => {
   expect(screen.queryByText('Mes listes')).toBeNull();
 });
 
+it('imports voice items only on confirmation, reuses categories and stays local', async () => {
+  mockLocalLists = new Set(['home', 'other']);
+  rememberProductCategory('Zorblax', 'Animaux');
+  const screen = render(<HomeScreen />);
+  fireEvent.press(screen.getByLabelText('Ajouter un article'));
+  fireEvent.press(screen.getByLabelText('Dicter des articles'));
+  expect(mockItems.get('home')).toHaveLength(1);
+  fireEvent.press(screen.getByText('Annuler dictée test'));
+  screen.getByTestId('add-item-input');
+  fireEvent.press(screen.getByLabelText('Dicter des articles'));
+  fireEvent.press(screen.getByText('Valider dictée test'));
+  expect(mockItems.get('home')).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name: 'Orange', quantity: 2 }),
+    expect.objectContaining({ name: 'Zorblax', quantity: 1, category: 'Animaux' }),
+  ]));
+  await act(async () => {});
+  expect(mockSync).not.toHaveBeenCalled();
+  screen.getByText('2 ligne(s) ajoutée(s) depuis la dictée.');
+});
+
+describe('manual product aisle selection', () => {
+  beforeEach(() => { mockLocalLists = new Set(['home', 'other']); });
+
+  function openUnknown(screen: ReturnType<typeof render>, name = 'Zorblax') {
+    fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    fireEvent.changeText(screen.getByTestId('add-item-input'), name);
+    fireEvent.press(screen.getByLabelText('Choisir le rayon du produit à ajouter'));
+    fireEvent.press(screen.getByRole('radio', { name: 'Épicerie salée' }));
+  }
+
+  it('uses Produit and hides aisles for empty, recognized and remembered names', () => {
+    rememberProductCategory('Zorblax', 'Épicerie salée');
+    const screen = render(<HomeScreen />);
+    fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    screen.getByRole('button', { name: 'Produit' });
+    expect(screen.queryByText('SAISIR')).toBeNull();
+    for (const name of ['', 'Oranges', 'Zorblax']) {
+      fireEvent.changeText(screen.getByTestId('add-item-input'), name);
+      expect(screen.queryByLabelText('Choisir le rayon du produit à ajouter')).toBeNull();
+      expect(screen.queryByText(/Rayon (détecté|mémorisé)/)).toBeNull();
+    }
+  });
+
+  it.each(['typing', 'ocr', 'barcode'] as const)('remembers a manual choice after adding, deletion and restart for %s', async (route) => {
+    const first = render(<HomeScreen />);
+    openUnknown(first);
+    first.getByText('Rayon : Épicerie salée');
+    expect(getRememberedCategory('Zorblax')).toBeNull();
+    fireEvent.press(first.getByTestId('add-item-button'));
+    expect(getRememberedCategory('ZORBLAX')).toBe('Épicerie salée');
+    const added = mockItems.get('home')!.find((item) => item.name === 'Zorblax')!;
+    expect(added.category).toBe('Épicerie salée');
+    fireEvent.press(first.getByText('Terminer'));
+    fireEvent.press(first.getByTestId(`remove-${added.id}`));
+    first.unmount();
+    mockActiveList = 'other'; mockItems.set('other', []);
+    const screen = render(<HomeScreen />);
+    fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    if (route === 'typing') {
+      fireEvent.changeText(screen.getByTestId('add-item-input'), '  ZORBLAX ');
+      expect(screen.queryByLabelText('Choisir le rayon du produit à ajouter')).toBeNull();
+      fireEvent.press(screen.getByTestId('add-item-button'));
+    } else if (route === 'ocr') {
+      mockOcrDrafts = [{ name: 'Zorblax', quantity: 1 }];
+      openScanner(screen, 'text');
+      fireEvent.press(screen.getByText('Valider OCR test'));
+    } else {
+      jest.mocked(getProduct).mockResolvedValue({ barcode: '3017620422003', product_name: 'Zorblax', categories: [], source: 'fixture', cached: false, stale: false, ttl_seconds: 10 });
+      openScanner(screen, 'barcode');
+      await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+    }
+    expect(mockItems.get('other')).toEqual([expect.objectContaining({ name: 'Zorblax', category: 'Épicerie salée' })]);
+  });
+
+  it('does not memorize a cancelled draft and resets the choice when the name changes', () => {
+    const screen = render(<HomeScreen />);
+    openUnknown(screen);
+    fireEvent.press(screen.getByText('Terminer'));
+    expect(getRememberedCategory('Zorblax')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    fireEvent.changeText(screen.getByTestId('add-item-input'), 'Autre invention');
+    screen.getByText('Rayon : À classer');
+    fireEvent.press(screen.getByTestId('add-item-button'));
+    expect(mockItems.get('home')![0]).toMatchObject({ name: 'Autre invention', category: 'À classer' });
+    expect(getRememberedCategory('Autre invention')).toBeNull();
+  });
+
+  it('fills existing unclassified occurrences without overriding classified ones', () => {
+    mockItems.set('home', [{ ...milk(), name: 'Zorblax', category: 'À classer' },
+      { ...milk(), id: 'classified', name: 'Zorblax', category: 'Animaux' }]);
+    const screen = render(<HomeScreen />);
+    openUnknown(screen);
+    fireEvent.press(screen.getByTestId('add-item-button'));
+    expect(mockItems.get('home')!.find((item) => item.id === 'home')?.category).toBe('Épicerie salée');
+    expect(mockItems.get('home')!.find((item) => item.id === 'classified')?.category).toBe('Animaux');
+    expect(mockItems.get('home')!.reduce((sum, item) => sum + item.quantity, 0)).toBe(3);
+  });
+
+  it('keeps the draft without teaching a choice if saving the item fails', () => {
+    const screen = render(<HomeScreen />);
+    openUnknown(screen);
+    jest.mocked(Storage.saveCurrentList).mockImplementationOnce(() => { throw new Error('full'); });
+    fireEvent.press(screen.getByTestId('add-item-button'));
+    screen.getByText('Impossible d’enregistrer cet article. Réessaie.');
+    expect(getRememberedCategory('Zorblax')).toBeNull();
+    expect(screen.getByTestId('add-item-input').props.value).toBe('Zorblax');
+    fireEvent.press(screen.getByTestId('add-item-button'));
+    expect(getRememberedCategory('Zorblax')).toBe('Épicerie salée');
+  });
+
+  it('keeps the added item and warns if only memorization fails', () => {
+    const screen = render(<HomeScreen />);
+    openUnknown(screen);
+    const save = jest.spyOn(LocalKeyValueStorage, 'setString').mockImplementationOnce(() => { throw new Error('full'); });
+    try {
+      fireEvent.press(screen.getByTestId('add-item-button'));
+      screen.getByText(/Rayon conservé dans la liste, mais non mémorisé/);
+      expect(mockItems.get('home')![0]).toMatchObject({ name: 'Zorblax', category: 'Épicerie salée' });
+      expect(getRememberedCategory('Zorblax')).toBeNull();
+      expect(screen.getByTestId('add-item-input').props.value).toBe('');
+    } finally { save.mockRestore(); }
+  });
+});
+
 it('saves a category-only change and includes it in the next sync', async () => {
   jest.useFakeTimers();
   try {
@@ -958,13 +1155,81 @@ it('saves a category-only change and includes it in the next sync', async () => 
   } finally { jest.useRealTimers(); }
 });
 
+it.each(['typing', 'ocr', 'barcode'] as const)('reuses a manually assigned unclassified product aisle via %s after deletion and restart', async (route) => {
+  mockLocalLists = new Set(['home', 'other']);
+  mockItems.set('home', [{ ...milk(), name: 'Quinoa', category: 'À classer' }]);
+  const first = render(<HomeScreen />);
+  await act(async () => {});
+  fireEvent.press(first.getByTestId('category-home'));
+  expect(getRememberedCategory('QUINOA')).toBe('Épicerie salée');
+  fireEvent.press(first.getByTestId('remove-home'));
+  first.unmount();
+  mockActiveList = 'other'; mockItems.set('other', []);
+  mockOcrDrafts = [{ name: 'Quinoa', quantity: 2 }];
+  jest.mocked(getProduct).mockResolvedValue({ barcode: '3017620422003', product_name: 'Quinoa', categories: [], source: 'fixture', cached: false, stale: false, ttl_seconds: 10 });
+  const screen = render(<HomeScreen />);
+  await act(async () => {});
+  fireEvent.press(screen.getByLabelText('Ajouter un article'));
+  if (route === 'typing') {
+    fireEvent.changeText(screen.getByTestId('add-item-input'), '  QUINOA ');
+    fireEvent.press(screen.getByTestId('add-item-button'));
+  } else if (route === 'ocr') {
+    openScanner(screen, 'text');
+    fireEvent.press(screen.getByText('Valider OCR test'));
+  } else {
+    openScanner(screen, 'barcode');
+    await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+  }
+  expect(mockItems.get('other')?.filter((item) => !item.deletedAt)).toEqual([
+    expect.objectContaining({ name: 'Quinoa', category: 'Épicerie salée', quantity: route === 'ocr' ? 2 : 1 }),
+  ]);
+  expect(mockSync).not.toHaveBeenCalled();
+  screen.unmount();
+});
+
+it('normalizes plural additions from typing, OCR and lookup without losing quantities', async () => {
+  mockLocalLists = new Set(['home', 'other']); mockItems.set('home', []);
+  const screen = render(<HomeScreen />);
+  await act(async () => {});
+  fireEvent.press(screen.getByLabelText('Ajouter un article'));
+  for (const name of ['Oranges', 'Orange']) {
+    fireEvent.changeText(screen.getByTestId('add-item-input'), name);
+    fireEvent.press(screen.getByTestId('add-item-button'));
+  }
+  expect(mockItems.get('home')?.[0]).toMatchObject({ name: 'Orange', quantity: 2 });
+  mockOcrDrafts = [{ name: 'Oranges', quantity: 3 }];
+  openScanner(screen, 'text');
+  fireEvent.press(screen.getByText('Valider OCR test'));
+  expect(mockItems.get('home')?.[0]).toMatchObject({ name: 'Orange', quantity: 5 });
+  jest.mocked(getProduct).mockResolvedValue({ barcode: '3017620422003', product_name: 'Oranges', categories: [], source: 'fixture', cached: false, stale: false, ttl_seconds: 10 });
+  fireEvent.press(screen.getByLabelText('Ajouter un article'));
+  openScanner(screen, 'barcode');
+  await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+  expect(mockItems.get('home')?.find((item) => item.barcode)?.name).toBe('Orange');
+  fireEvent(screen.getByTestId('add-modal'), 'requestClose');
+  expect(screen.getAllByTestId(/^quantity-/)).toHaveLength(1);
+  expect(screen.getAllByTestId(/^quantity-/)[0].props.children).toBe('6');
+  screen.unmount();
+});
+
+it('never teaches a category if the list write fails', async () => {
+  mockLocalLists = new Set(['home', 'other']);
+  mockItems.set('home', [{ ...milk(), name: 'Quinoa', category: 'À classer' }]);
+  const screen = render(<HomeScreen />);
+  await act(async () => {});
+  jest.mocked(Storage.saveCurrentList).mockImplementationOnce(() => { throw new Error('full'); });
+  expect(() => fireEvent.press(screen.getByTestId('category-home'))).toThrow('full');
+  expect(getRememberedCategory('Quinoa')).toBeNull();
+  screen.unmount();
+});
+
 it('preserves a chosen category when a barcode lookup finishes later', async () => {
   const request = deferred<Awaited<ReturnType<typeof getProduct>>>();
   jest.mocked(getProduct).mockReturnValue(request.promise);
   const screen = render(<HomeScreen />);
   await act(async () => {});
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+  openScanner(screen, 'barcode');
   fireEvent.press(screen.getByText('Simuler scan'));
   const scanned = mockItems.get('home')!.find((entry) => entry.barcode)!;
   fireEvent.press(screen.getByTestId(`category-${scanned.id}`));
@@ -973,6 +1238,8 @@ it('preserves a chosen category when a barcode lookup finishes later', async () 
     cached: false, stale: false, source: 'fixture', ttl_seconds: 10,
   }));
   expect(mockItems.get('home')!.find((entry) => entry.id === scanned.id)).toMatchObject({ name: 'Lait', category: 'Épicerie salée' });
+  expect(getRememberedCategory('Lait')).toBe('Épicerie salée');
+  expect(getProductPreference(scanned.barcode!)).toMatchObject({ name: 'Lait', category: 'Épicerie salée' });
 });
 
 
@@ -1305,7 +1572,7 @@ describe('local-only lists', () => {
     const screen = render(<HomeScreen />);
     try {
       fireEvent.press(screen.getByLabelText('Ajouter un article'));
-      fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+      openScanner(screen, 'barcode');
       await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
       expect(getProduct).toHaveBeenCalledWith('3017620422003');
       await act(async () => jest.advanceTimersByTimeAsync(30_000));
@@ -1318,9 +1585,9 @@ it('reuses a renamed barcode after removal and in another list, even offline', a
   jest.mocked(getProduct).mockResolvedValue({ barcode: '3017620422003', product_name: 'Nom commercial', categories: [], source: 'test', cached: false, stale: false, ttl_seconds: 60 });
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+  openScanner(screen, 'barcode');
   await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
-  fireEvent(screen.getByTestId('scanner-modal'), 'requestClose');
+  fireEvent(screen.getByTestId('add-modal'), 'requestClose');
   const scanned = mockItems.get('home')!.find((item) => item.barcode)!;
   fireEvent.press(screen.getByTestId(`rename-${scanned.id}`));
   fireEvent.press(screen.getByTestId(`remove-${scanned.id}`));
@@ -1330,7 +1597,7 @@ it('reuses a renamed barcode after removal and in another list, even offline', a
   jest.mocked(getProduct).mockClear().mockRejectedValue(new Error('offline'));
   const restarted = render(<HomeScreen />);
   fireEvent.press(restarted.getByLabelText('Ajouter un article'));
-  fireEvent.press(restarted.getByLabelText('Scanner un code-barres'));
+  openScanner(restarted, 'barcode');
   await act(async () => fireEvent.press(restarted.getByText('Simuler scan')));
   expect(getProduct).not.toHaveBeenCalled();
   expect(mockItems.get('other')!.find((item) => item.barcode)).toMatchObject({ name: 'Pain', barcode: scanned.barcode });
@@ -1340,7 +1607,7 @@ it('offers naming after a catalogue miss, remembers the choice and keeps the sca
   jest.mocked(getProduct).mockRejectedValue(new BackendApiError('Not found', 404, 'test'));
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+  openScanner(screen, 'barcode');
   await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
   screen.getByText('Nommer le produit');
   fireEvent.changeText(screen.getByLabelText('Nom du produit scanné'), '  VIN ROUGE ');
@@ -1348,7 +1615,7 @@ it('offers naming after a catalogue miss, remembers the choice and keeps the sca
   expect(mockItems.get('home')!.find((item) => item.barcode)).toMatchObject({ name: 'Vin rouge', category: 'Alcools', quantity: 1 });
   expect(getProductPreference('3017620422003')).toEqual({ name: 'Vin rouge', category: 'Alcools' });
   expect(screen.queryByLabelText('Nom du produit scanné')).toBeNull();
-  expect(screen.getByTestId('scanner-modal').props.visible).toBe(true);
+  expect(screen.getByTestId('scanner-panel')).toBeTruthy();
 });
 
 it('keeps a community choice private by default and publishes only after explicit opt-in', async () => {
@@ -1364,7 +1631,7 @@ it('keeps a community choice private by default and publishes only after explici
   jest.mocked(confirmCommunityProposal).mockResolvedValue();
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+  openScanner(screen, 'barcode');
   await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
   fireEvent.press(screen.getByLabelText('Proposition de nom : Pâte à tartiner'));
   fireEvent.press(screen.getByLabelText('Proposition de rayon : Épicerie sucrée'));
@@ -1378,7 +1645,7 @@ it('keeps a community choice private by default and publishes only after explici
   screen.unmount();
   const optedIn = render(<HomeScreen />);
   fireEvent.press(optedIn.getByLabelText('Ajouter un article'));
-  fireEvent.press(optedIn.getByLabelText('Scanner un code-barres'));
+  openScanner(optedIn, 'barcode');
   await act(async () => fireEvent.press(optedIn.getByText('Simuler scan')));
   fireEvent.press(optedIn.getByLabelText('Proposition de nom : Pâte à tartiner'));
   fireEvent.press(optedIn.getByLabelText('Proposition de rayon : Épicerie sucrée'));
@@ -1394,7 +1661,7 @@ it('preserves a private name when its public contribution is rejected', async ()
   jest.mocked(submitCommunityProposal).mockRejectedValue(new BackendApiError('Public filter', 400, 'test'));
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+  openScanner(screen, 'barcode');
   await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
   fireEvent.changeText(screen.getByLabelText('Nom du produit scanné'), 'Mon nom privé');
   fireEvent.press(screen.getByLabelText('Participer au catalogue communautaire'));
@@ -1410,9 +1677,9 @@ it('ignores late community suggestions after a local rename', async () => {
   jest.mocked(getCommunitySuggestions).mockReturnValue(pending.promise);
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+  openScanner(screen, 'barcode');
   await act(async () => { fireEvent.press(screen.getByText('Simuler scan')); });
-  fireEvent(screen.getByTestId('scanner-modal'), 'requestClose');
+  fireEvent(screen.getByTestId('add-modal'), 'requestClose');
   const scanned = mockItems.get('home')!.find((item) => item.barcode)!;
   fireEvent.press(screen.getByTestId(`rename-${scanned.id}`));
   await act(async () => pending.resolve({ barcode: scanned.barcode!, suggestions: [] }));
@@ -1424,7 +1691,7 @@ it('can defer naming without deleting the product and prompts again on a deliber
   jest.mocked(getProduct).mockRejectedValue(new BackendApiError('Not found', 404, 'test'));
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+  openScanner(screen, 'barcode');
   await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
   fireEvent.press(screen.getByText('Plus tard'));
   expect(mockItems.get('home')!.find((item) => item.barcode)?.name).toBe('Produit 3017620422003');
@@ -1439,7 +1706,7 @@ it('waits for an in-flight lookup before proposing a name on a repeated scan', a
   jest.mocked(getProduct).mockReturnValue(request.promise);
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByLabelText('Ajouter un article'));
-  fireEvent.press(screen.getByLabelText('Scanner un code-barres'));
+  openScanner(screen, 'barcode');
   fireEvent.press(screen.getByText('Simuler scan'));
   fireEvent.press(screen.getByText('Simuler scan'));
   expect(screen.queryByLabelText('Nom du produit scanné')).toBeNull();

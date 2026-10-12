@@ -6,6 +6,8 @@ import { groupEquivalentItems, incrementGroup, decrementGroup } from '@/services
 import { groupItemsByCategory } from '@/services/categorization/categoryOrder';
 import { ShoppingListStorage as Storage } from './shoppingListStorage';
 import type { ShoppingItem } from '@/types';
+import { rememberProductCategory } from './productPreferences';
+import { LocalKeyValueStorage } from './localKeyValueStorage';
 
 let database: Database;
 let createDatabase: (data?: Uint8Array) => Database;
@@ -117,6 +119,18 @@ describe('local lists and explicit sharing', () => {
 });
 
 describe('portable list backups', () => {
+  it('normalizes restored plurals and reuses remembered aisles only when the backup item was unclassified', () => {
+    rememberProductCategory('Orange', 'Fruits & légumes');
+    try {
+      Storage.saveCurrentList('home', [milk({ name: 'Oranges', category: 'À classer' }),
+        milk({ id: 'chosen', name: 'Oranges', category: 'Boissons' })]);
+      const ids = Storage.restoreBackup(Storage.createBackup());
+      const restored = ids.flatMap((id) => Storage.getCurrentList(id));
+      expect(restored.map((item) => [item.name, item.category])).toEqual([
+        ['Orange', 'Fruits & légumes'], ['Orange', 'Boissons'],
+      ]);
+    } finally { LocalKeyValueStorage.delete('product-category:v1:orange'); }
+  });
   it('exports only visible list content, without credentials, IDs or tombstones', () => {
     Storage.saveCurrentList('home', [milk({ checked: true, barcode: '12345678' }), milk({ id: 'removed', deletedAt: 20 })]);
     Storage.archiveList('other');

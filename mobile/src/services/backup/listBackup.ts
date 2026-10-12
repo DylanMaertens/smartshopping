@@ -34,7 +34,7 @@ export function parseBackup(text: string): ListBackup {
   }
   let value: unknown;
   try { value = JSON.parse(text); }
-  catch { throw new Error('Ce fichier n’est pas une sauvegarde SmartShopping valide.'); }
+  catch { throw new Error('Ce fichier n’est pas une sauvegarde Poduna valide.'); }
   return validateBackup(value);
 }
 export function serializeBackup(backup: ListBackup): string {

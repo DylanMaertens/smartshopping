@@ -1,5 +1,6 @@
 import productCategoryTags from './productCategoryTags.json';
 import catalogueTaxonomies from './catalogueTaxonomies.json';
+import { singularizeProductName } from '../productName';
 
 const taxonomySources: Record<string, Record<string, string | null>> = catalogueTaxonomies.sources;
 
@@ -17,13 +18,14 @@ export type CategoryResult = {
   confidence: number;
 };
 
-export const STORE_CATEGORIES: StoreCategory[] = [
-  { id: 'fruits-legumes', name: 'Fruits & légumes', orderIndex: 10, icon: 'carrot', keywords: ['fruit', 'legume', 'légume', 'salade', 'tomate', 'pomme', 'banane'] },
+// Keep legacy rules/taxonomy IDs for compatibility with older servers and backups.
+const CATEGORY_RULES: StoreCategory[] = [
+  { id: 'fruits-legumes', name: 'Fruits & légumes', orderIndex: 10, icon: 'carrot', keywords: ['fruit', 'legume', 'légume', 'salade', 'tomate', 'pomme', 'banane', 'orange'] },
   { id: 'boulangerie', name: 'Boulangerie', orderIndex: 20, icon: 'bread', keywords: ['pain', 'baguette', 'brioche', 'croissant', 'viennoiserie'] },
   { id: 'cremerie', name: 'Crémerie & produits laitiers', orderIndex: 30, icon: 'milk', keywords: ['lait', 'yaourt', 'fromage', 'beurre', 'creme', 'crème', 'laitier'] },
   { id: 'boucherie-poissonnerie', name: 'Boucherie & poissonnerie', orderIndex: 40, icon: 'drumstick', keywords: ['viande', 'poulet', 'boeuf', 'bœuf', 'porc', 'jambon', 'poisson', 'saumon', 'thon'] },
   { id: 'surgeles', name: 'Surgelés', orderIndex: 50, icon: 'snowflake', keywords: ['surgelé', 'surgele', 'glace', 'pizza surgel', 'frozen'] },
-  { id: 'epicerie-salee', name: 'Épicerie salée', orderIndex: 60, icon: 'wheat', keywords: ['pates', 'pâtes', 'riz', 'huile', 'vinaigre', 'sel', 'conserve', 'sauce', 'chips', 'farine'] },
+  { id: 'epicerie-salee', name: 'Épicerie salée', orderIndex: 60, icon: 'wheat', keywords: ['pates', 'pâtes', 'nouille', 'spaghetti', 'coquillette', 'macaroni', 'tagliatelle', 'vermicelle', 'penne', 'fusilli', 'riz', 'huile', 'vinaigre', 'sel', 'conserve', 'sauce', 'chips', 'farine'] },
   { id: 'epicerie-sucree', name: 'Épicerie sucrée', orderIndex: 70, icon: 'cookie', keywords: ['sucre', 'chocolat', 'biscuit', 'cereale', 'céréale', 'confiture', 'miel', 'dessert'] },
   { id: 'alcools', name: 'Alcools', orderIndex: 85, icon: 'wine', keywords: ['vin', 'vins', 'bière', 'bières', 'cidre', 'champagne', 'prosecco', 'rhum', 'whisky', 'whiskey', 'vodka', 'gin', 'tequila', 'cognac', 'liqueur', 'pastis', 'porto', 'apéritif', 'boisson alcoolisée'] },
   { id: 'boissons', name: 'Boissons', orderIndex: 80, icon: 'bottle', keywords: ['eau', 'jus', 'soda', 'cafe', 'café', 'the', 'thé', 'boisson', 'biere', 'bière'] },
@@ -51,6 +53,24 @@ export const STORE_CATEGORIES: StoreCategory[] = [
   { id: 'non-categorise', name: 'À classer', orderIndex: 999, icon: 'circle-help', keywords: [] },
 ];
 
+const MERGED_IDS: Record<string, string> = {
+  'alimentation-animale': 'animaux', 'accessoires-animaux': 'animaux',
+  'soins-cheveux': 'soins-visage-corps', 'maquillage-parfums': 'hygiene-beaute',
+};
+const CATEGORY_LABELS: Record<string, string> = {
+  'premiers-soins': 'Parapharmacie', 'soins-visage-corps': 'Soins visage, corps & cheveux',
+};
+export function canonicalCategoryId(id: string): string { return MERGED_IDS[id] ?? id; }
+export const STORE_CATEGORIES: StoreCategory[] = CATEGORY_RULES.filter((category) => !MERGED_IDS[category.id])
+  .map((category) => ({ ...category, name: CATEGORY_LABELS[category.id] ?? category.name,
+    keywords: CATEGORY_RULES.filter((entry) => canonicalCategoryId(entry.id) === category.id).flatMap((entry) => entry.keywords) }));
+
+/** Display aliases only: do not rewrite synced rows or change their timestamps on read. */
+export function canonicalCategoryName(name: string): string {
+  const legacy = CATEGORY_RULES.find((category) => category.name === name || category.id === name);
+  return (legacy && STORE_CATEGORIES.find((category) => category.id === canonicalCategoryId(legacy.id))?.name) ?? name;
+}
+
 // Specific non-food terms take priority over generic words such as huile or glace.
 const specializedIds = new Set(['papeterie-bureau', 'bricolage-quincaillerie', 'jardin-exterieur', 'auto-moto', 'soins-cheveux', 'soins-visage-corps', 'hygiene-dentaire', 'maquillage-parfums', 'alimentation-animale', 'accessoires-animaux', 'maison-cuisine', 'vetements-linge', 'electricite-electronique', 'jeux-loisirs']);
 specializedIds.add('complements-alimentaires');
@@ -58,20 +78,26 @@ specializedIds.add('premiers-soins');
 // A nutrient in a food/cosmetic name is not evidence that it is a supplement.
 const standaloneSupplements = new Set(['magnesium', 'multivitamines', 'vitamine c', 'vitamine d', 'vitamine d3', 'vitamine b12', 'omega 3', 'probiotiques']);
 function wholeWords(input: string): string {
-  return ` ${normalize(input).split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(' ')} `;
+  return ` ${normalize(singularizeProductName(input.toLowerCase())).split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(' ')} `;
 }
 
 export function classifyProductLocally(productName: string, tags: string[] = [], source?: string): CategoryResult {
+  const result = classifyWithLegacyRules(productName, tags, source);
+  const categoryId = canonicalCategoryId(result.categoryId);
+  return { ...result, categoryId, categoryName: canonicalCategoryName(result.categoryName) };
+}
+
+function classifyWithLegacyRules(productName: string, tags: string[], source?: string): CategoryResult {
   // An already mapped API aisle must not be reinterpreted from the product name.
   const knownTags = tags.map((tag) => normalize(tag.trim()));
-  const explicit = STORE_CATEGORIES.find((category) => category.id !== 'non-categorise'
+  const explicit = [...STORE_CATEGORIES, ...CATEGORY_RULES].find((category) => category.id !== 'non-categorise'
     && knownTags.some((tag) => tag === normalize(category.id) || tag === normalize(category.name)));
   // Rules use exact taxonomy tags, in priority order (e.g. frozen before vegetables).
   const sources = source && taxonomySources[source] ? [taxonomySources[source]] : Object.values(taxonomySources);
   const inherited = new Set(tags.flatMap((tag) => sources.map((taxonomy) => taxonomy[tag.trim().toLowerCase()])).filter(Boolean));
   const rule = tags.length ? productCategoryTags.find((entry) => !(entry.categoryId === 'alcools' && isAlcoholFree([productName, ...tags].join(' ')))
     && (inherited.has(entry.categoryId) || entry.tags.some((tag) => knownTags.includes(normalize(tag))))) : undefined;
-  const mapped = explicit ?? STORE_CATEGORIES.find((category) => category.id === rule?.categoryId);
+  const mapped = explicit ?? CATEGORY_RULES.find((category) => category.id === rule?.categoryId);
   if (mapped) return { categoryId: mapped.id, categoryName: mapped.name, confidence: 0.95 };
   // Keep category evidence separate: a word in the name cannot outrank a known tag.
   const tagged = classifyWords(tags.join(' '));
@@ -83,23 +109,23 @@ function classifyWords(value: string): CategoryResult {
 
   const words = wholeWords(haystack);
   // Prefer the most specific phrase: "shampooing pour chien" beats "shampooing".
-  const specialized = STORE_CATEGORIES.filter((candidate) => specializedIds.has(candidate.id))
+  const specialized = CATEGORY_RULES.filter((candidate) => specializedIds.has(candidate.id))
     .map((category) => ({ category, score: Math.max(0, ...category.keywords
       .filter((keyword) => words.includes(wholeWords(keyword)) && (category.id !== 'complements-alimentaires'
         || !standaloneSupplements.has(normalize(keyword)) || words === wholeWords(keyword)))
       .map((keyword) => wholeWords(keyword).length)) }))
     .filter(({ score }) => score > 0).sort((a, b) => b.score - a.score)[0]?.category;
-  const alcohol = STORE_CATEGORIES.find((candidate) => candidate.id === 'alcools' && !words.includes(' vinaigre ')
+  const alcohol = CATEGORY_RULES.find((candidate) => candidate.id === 'alcools' && !words.includes(' vinaigre ')
     && candidate.keywords.some((keyword) => words.includes(wholeWords(keyword))));
-  const beverage = STORE_CATEGORIES.find((candidate) => candidate.id === 'boissons'
+  const beverage = CATEGORY_RULES.find((candidate) => candidate.id === 'boissons'
     && candidate.keywords.some((keyword) => words.includes(wholeWords(keyword))));
-  const category = specialized ?? (alcohol ? (isAlcoholFree(value) ? STORE_CATEGORIES.find((c) => c.id === 'boissons') : alcohol) : undefined) ?? beverage ?? STORE_CATEGORIES.find((candidate) => {
+  const category = specialized ?? (alcohol ? (isAlcoholFree(value) ? CATEGORY_RULES.find((c) => c.id === 'boissons') : alcohol) : undefined) ?? beverage ?? CATEGORY_RULES.find((candidate) => {
     if (specializedIds.has(candidate.id)) return false;
     if (candidate.id === 'non-categorise' || candidate.id === 'alcools') return false;
     return candidate.keywords.some((keyword) => haystack.includes(normalize(keyword)));
   });
 
-  const selected = category ?? STORE_CATEGORIES[STORE_CATEGORIES.length - 1];
+  const selected = category ?? CATEGORY_RULES[CATEGORY_RULES.length - 1];
 
   return {
     categoryId: selected.id,

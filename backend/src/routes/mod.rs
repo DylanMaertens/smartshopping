@@ -7,7 +7,6 @@ use axum::{
 };
 use tower_http::{
     compression::CompressionLayer, cors::CorsLayer, set_header::SetResponseHeaderLayer,
-    trace::TraceLayer,
 };
 
 use crate::{handlers, middleware, state::AppState};
@@ -18,6 +17,8 @@ const DEVICE_SIGNATURE_HEADER: &str = "x-device-signature";
 const DEVICE_TIMESTAMP_HEADER: &str = "x-device-timestamp";
 
 pub fn create_router(state: AppState) -> Router {
+    let admin_router = handlers::admin::router(state.clone());
+    let contact_router = handlers::contact::router(state.clone());
     let metrics_state = state.clone();
     let rate_limit_state = state.clone();
     let signature_state = state.clone();
@@ -123,7 +124,7 @@ pub fn create_router(state: AppState) -> Router {
         }
     }
 
-    router
+    let api_router = router
         .with_state(state)
         .layer(DefaultBodyLimit::max(64 * 1024))
         .layer(cors)
@@ -136,11 +137,6 @@ pub fn create_router(state: AppState) -> Router {
             HeaderValue::from_static("no-referrer"),
         ))
         .layer(CompressionLayer::new())
-        .layer(TraceLayer::new_for_http())
-        .layer(from_fn_with_state(
-            metrics_state,
-            middleware::request_metrics,
-        ))
         .layer(from_fn_with_state(
             signature_state,
             middleware::device_signature,
@@ -148,6 +144,12 @@ pub fn create_router(state: AppState) -> Router {
         .layer(from_fn_with_state(
             rate_limit_state,
             middleware::api_rate_limit,
-        ))
+        ));
+    // Admin has its own cookie/CSRF protections, never device signatures or app CORS.
+    // Merge API last to preserve its signature/body limits on unmatched API routes.
+    admin_router.merge(contact_router).merge(api_router)
+        // Outermost diagnostics also observe signature and rate-limit rejections.
+        // No raw URI/header tracing: invitation codes and query strings stay private.
+        .layer(from_fn_with_state(metrics_state, middleware::request_metrics))
         .layer(from_fn(middleware::request_id))
 }

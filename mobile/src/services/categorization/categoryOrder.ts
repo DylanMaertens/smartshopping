@@ -1,4 +1,4 @@
-import { STORE_CATEGORIES } from './categoryService';
+import { canonicalCategoryId, canonicalCategoryName, STORE_CATEGORIES } from './categoryService';
 import { sortItemsForDisplay } from '../itemOrder';
 import type { CategorySection, ShoppingItem } from '@/types';
 
@@ -10,7 +10,8 @@ export function defaultCategoryOrder(): string[] {
 export function normalizeCategoryOrder(value: unknown): string[] {
   const defaults = defaultCategoryOrder();
   const known = new Set(defaults);
-  const saved = Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string' && known.has(id)) : [];
+  const saved = Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string')
+    .map(canonicalCategoryId).filter((id) => known.has(id)) : [];
   return [...new Set([...saved, ...defaults])];
 }
 
@@ -31,7 +32,7 @@ export function groupItemsByCategory(items: ShoppingItem[], order: string[]): Ca
   const grouped = new Map<string, ShoppingItem[]>();
   for (const item of items) {
     if (item.deletedAt) continue;
-    const name = item.category ?? 'À classer';
+    const name = canonicalCategoryName(item.category ?? 'À classer');
     const group = grouped.get(name) ?? [];
     group.push(item);
     grouped.set(name, group);

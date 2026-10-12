@@ -4,6 +4,7 @@ import { mkdir, copyFile, writeFile, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
+import assert from 'node:assert/strict';
 const mobile = fileURLToPath(new URL('../../mobile/', import.meta.url));
 const web = fileURLToPath(new URL('../', import.meta.url));
 const captureThemes = process.argv.length > 2 ? process.argv.slice(2) : ['origine', 'minimal', 'papier', 'nuit'];
@@ -39,12 +40,16 @@ try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.SMARTSHOPPING_CHROMIUM, args: ['--no-sandbox'] });
   for (const theme of captureThemes) {
     const page = await browser.newPage({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 2 });
-    page.on('pageerror', (error) => console.error(error.message));
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
     await page.addInitScript((theme) => localStorage.setItem('preview.appearance.theme.v1', theme), theme);
     await page.goto('http://127.0.0.1:8058/');
+    await page.getByText('Poduna', { exact: true }).waitFor();
+    await page.screenshot({ path: resolve(output, `poduna-home-${theme}.png`) });
     await page.getByRole('button', { name: 'Courses de la semaine', exact: true }).click();
     await page.getByText('Fruits & légumes', { exact: true }).waitFor();
     await page.screenshot({ path: resolve(web, `dist/assets/app-${theme}.png`) });
+    assert.deepEqual(errors, [], `Preview error in theme ${theme}`);
     await page.close();
   }
 } finally { await browser?.close(); server.close(); }

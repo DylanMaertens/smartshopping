@@ -1,9 +1,22 @@
 import { logs, createCases } from './demo-data.js';
 import { initMessages } from './messages.js';
 const titles = { supervision: 'Supervision', journaux: 'Journaux', moderation: 'Modération', messages: 'Messages' };
-const brand = window.SITE_CONFIG?.name || 'SmartShopping';
+const brand = window.SITE_CONFIG?.name || 'Poduna';
 document.querySelectorAll('[data-brand]').forEach(el => { el.textContent = brand; });
 const $ = id => document.getElementById(id);
+$('admin-connect').addEventListener('submit', event => {
+  event.preventDefault(); $('admin-connect-link').hidden = true;
+  try {
+    const url = new URL($('admin-server').value.trim());
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+      || !['/', '/api/v1', '/api/v1/', '/admin', '/admin/'].includes(url.pathname)) throw new Error();
+    $('admin-connect-link').href = `${url.origin}/admin/`;
+    $('admin-connect-link').textContent = `Ouvrir ${url.origin}/admin/`;
+    $('admin-connect-link').hidden = false;
+    $('admin-connect-status').textContent = 'Vérifiez cette adresse avant de l’ouvrir et d’y saisir vos identifiants. Le backend doit avoir été mis à jour et configuré.';
+  } catch { $('admin-connect-status').textContent = 'Indiquez une adresse HTTPS sans identifiant, paramètre ni fragment.'; }
+});
+$('admin-server').addEventListener('input', () => { $('admin-connect-link').hidden = true; $('admin-connect-status').textContent = ''; });
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const levelNames = { info: 'Information', warning: 'Attention', error: 'Erreur' };

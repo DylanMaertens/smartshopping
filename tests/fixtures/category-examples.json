@@ -1,4 +1,17 @@
 [
+  { "name": "Pâtes complètes", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Nouilles", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Nouille", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Nouilles de riz", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Spaghettis", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Coquillettes", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Macaronis", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Tagliatelles", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Vermicelles", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Penne", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Fusilli", "tags": [], "categoryId": "epicerie-salee" },
+  { "name": "Nouilles surgelées", "tags": [], "categoryId": "surgeles" },
+  { "name": "Tagliatelles", "tags": ["en:frozen-foods"], "categoryId": "surgeles" },
   {
     "name": "Complément alimentaire au chocolat",
     "tags": [],

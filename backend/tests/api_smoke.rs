@@ -320,7 +320,9 @@ async fn health_response_replaces_invalid_request_id() {
 
 #[tokio::test]
 async fn metrics_endpoint_returns_counters() {
-    let state = AppState::new(test_config());
+    let mut config = test_config();
+    config.metrics_token = Some("test-metrics-token".into());
+    let state = AppState::new(config);
     let app = create_router(state);
 
     let _ = app
@@ -338,6 +340,7 @@ async fn metrics_endpoint_returns_counters() {
         .oneshot(
             Request::builder()
                 .uri("/metrics")
+                .header("authorization", "Bearer test-metrics-token")
                 .body(Body::empty())
                 .unwrap(),
         )
