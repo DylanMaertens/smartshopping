@@ -41,9 +41,12 @@ export function Button({ label, variant = 'primary', ...props }: Omit<PressableP
 }
 export function PageModal({ title, onClose, children, testID, showBackButton = true, scrollable = true }: React.PropsWithChildren<{ title: string; onClose: () => void; testID?: string; showBackButton?: boolean; scrollable?: boolean }>) {
   const { theme } = useTheme();
+  // Android's native Modal already uses adjustResize. A second height-based
+  // keyboard adjustment retains stale measurements when switching add modes.
+  const Body = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
   return <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose} testID={testID}>
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <Body style={{ flex: 1 }} {...(Platform.OS === 'ios' ? { behavior: 'padding' as const } : {})}>
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, gap: 4 }}>
           {showBackButton ? <Pressable onPress={onClose} accessibilityLabel={`Fermer ${title}`} style={{ alignSelf: 'flex-start' }}>
             <Text style={{ color: theme.muted }}>← Retour</Text>
@@ -52,7 +55,7 @@ export function PageModal({ title, onClose, children, testID, showBackButton = t
         {scrollable ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 8, gap: 20 }}>
           {children}
         </ScrollView> : children}
-      </KeyboardAvoidingView>
+      </Body>
     </SafeAreaView>
   </Modal>;
 }

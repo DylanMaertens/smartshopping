@@ -14,12 +14,13 @@ it('shows only plus at one, reveals the quantity above one and keeps purchase ch
   expect(props.onIncreaseQuantity).toHaveBeenCalledWith('milk');
   expect(props.onToggle).not.toHaveBeenCalled();
   screen.rerender(<ShoppingItem item={{ ...item, quantity: 2 }} {...props} />);
-  screen.getByText('×2');
+  screen.getByText('2');
+  expect(screen.queryByText('×2')).toBeNull();
   screen.getByLabelText('Quantité : 2');
   fireEvent.press(screen.getByLabelText('Diminuer la quantité de Lait'));
   expect(props.onDecreaseQuantity).toHaveBeenCalledWith('milk');
   screen.rerender(<ShoppingItem item={item} {...props} />);
-  expect(screen.queryByText('×2')).toBeNull();
+  expect(screen.queryByText('2')).toBeNull();
   expect(screen.queryByLabelText('Diminuer la quantité de Lait')).toBeNull();
   fireEvent.press(screen.getByRole('checkbox'));
   expect(props.onToggle).toHaveBeenCalledWith('milk');
@@ -27,7 +28,7 @@ it('shows only plus at one, reveals the quantity above one and keeps purchase ch
 it('disables increasing at the quantity limit but still allows decreasing', () => {
   const props = callbacks();
   const screen = render(<ShoppingItem item={{ ...item, quantity: 999 }} {...props} />);
-  screen.getByText('×999');
+  screen.getByText('999');
   fireEvent.press(screen.getByLabelText('Augmenter la quantité de Lait'));
   expect(props.onIncreaseQuantity).not.toHaveBeenCalled();
   fireEvent.press(screen.getByLabelText('Diminuer la quantité de Lait'));

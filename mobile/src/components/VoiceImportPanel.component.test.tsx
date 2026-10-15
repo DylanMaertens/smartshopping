@@ -1,6 +1,6 @@
 import React from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { AppState, ScrollView, StyleSheet, type AppStateStatus } from 'react-native';
+import { act, fireEvent, render, within } from '@testing-library/react-native';
 import { VoiceImportPanel } from './VoiceImportPanel';
 import { localSpeech } from '@/services/localSpeech';
 
@@ -32,6 +32,26 @@ async function open() {
   return { screen, onImport, onCancel };
 }
 
+it.each([true, false])('keeps the return button outside a single bounded scroll view (embedded=%s)', async (embedded) => {
+  const onCancel = jest.fn();
+  const screen = render(<VoiceImportPanel embedded={embedded} onImport={jest.fn()} onCancel={onCancel} />);
+  await act(async () => {});
+  const footer = screen.getByTestId('voice-footer');
+  expect(StyleSheet.flatten(footer.props.style)).toMatchObject({ flexGrow: 0, flexShrink: 0 });
+  expect(screen.UNSAFE_getAllByType(ScrollView)).toHaveLength(1);
+  expect(StyleSheet.flatten(screen.getByTestId('voice-panel').props.style).flex).toBe(1);
+  expect(StyleSheet.flatten(screen.getByTestId('voice-scroll').props.style).flex).toBe(1);
+  expect(within(screen.getByTestId('voice-scroll')).queryByText('Retour à l’ajout manuel')).toBeNull();
+  await act(async () => fireEvent.press(screen.getByText('Commencer la dictée')));
+  expect(screen.getByTestId('voice-footer')).toBe(footer);
+  fireEvent.changeText(screen.getByLabelText('Articles dictés à vérifier'), 'Wwhisky\n'.repeat(30));
+  fireEvent.press(screen.getByText('Masquer les suggestions'));
+  expect(screen.getByTestId('voice-footer')).toBe(footer);
+  fireEvent.press(within(footer).getByText('Retour à l’ajout manuel'));
+  expect(onCancel).toHaveBeenCalledTimes(1);
+  expect(speech.cancel).toHaveBeenCalled();
+});
+
 it('never opens the microphone on entry and imports only edited, validated text', async () => {
   const { screen, onImport } = await open();
   expect(speech.requestPermission).not.toHaveBeenCalled();
@@ -41,6 +61,72 @@ it('never opens the microphone on entry and imports only edited, validated text'
   fireEvent.changeText(screen.getByLabelText('Articles dictés à vérifier'), '3 x Orange\nPain');
   fireEvent.press(screen.getByText('Ajouter les articles à la liste'));
   expect(onImport).toHaveBeenCalledWith([{ name: 'Orange', quantity: 3 }, { name: 'Pain', quantity: 1 }]);
+});
+
+it('offers spelling suggestions, supports undo, and imports only accepted corrections', async () => {
+  speech.recognize.mockResolvedValue('wwhisky puis un lait');
+  const { screen, onImport } = await open();
+  await act(async () => fireEvent.press(screen.getByText('Commencer la dictée')));
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('Wwhisky\n1 x Lait');
+  fireEvent.press(screen.getByLabelText('Remplacer Wwhisky par Whisky'));
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('Whisky\n1 x Lait');
+  expect(onImport).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText('Annuler la dernière correction'));
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('Wwhisky\n1 x Lait');
+  fireEvent.press(screen.getByLabelText('Remplacer Wwhisky par Whisky'));
+  fireEvent.press(screen.getByText('Ajouter les articles à la liste'));
+  expect(onImport).toHaveBeenCalledWith([{ name: 'Whisky', quantity: 1 }, { name: 'Lait', quantity: 1 }]);
+});
+
+it('lets users keep a suggestion, hide suggestions and resets those choices on a successful new dictation', async () => {
+  speech.recognize.mockResolvedValue('wwhisky puis Tomtaes');
+  const { screen } = await open();
+  await act(async () => fireEvent.press(screen.getByText('Commencer la dictée')));
+  fireEvent.press(screen.getByLabelText('Conserver le texte Wwhisky'));
+  expect(screen.queryByLabelText('Remplacer Wwhisky par Whisky')).toBeNull();
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('Wwhisky\nTomtaes');
+  fireEvent.press(screen.getByText('Masquer les suggestions'));
+  screen.getByText('Vérifier l’orthographe');
+  await act(async () => fireEvent.press(screen.getByText('Recommencer la dictée')));
+  screen.getByLabelText('Remplacer Wwhisky par Whisky');
+  screen.getByText('Masquer les suggestions');
+});
+
+it('does not undo a manual edit or change the draft during a new recording', async () => {
+  speech.recognize.mockResolvedValue('wwhisky');
+  const { screen } = await open();
+  await act(async () => fireEvent.press(screen.getByText('Commencer la dictée')));
+  fireEvent.press(screen.getByLabelText('Remplacer Wwhisky par Whisky'));
+  fireEvent.changeText(screen.getByLabelText('Articles dictés à vérifier'), '2 x Pain complet');
+  expect(screen.queryByText('Annuler la dernière correction')).toBeNull();
+  fireEvent.changeText(screen.getByLabelText('Articles dictés à vérifier'), 'Wwhisky');
+  const request = deferred<string>(); speech.recognize.mockReturnValue(request.promise);
+  await act(async () => fireEvent.press(screen.getByText('Recommencer la dictée')));
+  fireEvent.press(screen.getByLabelText('Remplacer Wwhisky par Whisky'));
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('Wwhisky');
+  await act(async () => request.resolve('Pain'));
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('Pain');
+  expect(screen.queryByLabelText('Remplacer Wwhisky par Whisky')).toBeNull();
+  expect(screen.queryByText('Annuler la dernière correction')).toBeNull();
+});
+
+it('preserves known names and offers spelling suggestions for other dictated words', async () => {
+  speech.recognize.mockResolvedValue('Lumix puis wwhisky');
+  const screen = render(<VoiceImportPanel knownNames={['Lumix']} onImport={jest.fn()} onCancel={jest.fn()} />);
+  await act(async () => {});
+  await act(async () => fireEvent.press(screen.getByText('Commencer la dictée')));
+  expect(screen.queryByLabelText('Conserver le texte Lumix')).toBeNull();
+  fireEvent.press(screen.getByLabelText('Remplacer Wwhisky par Whisky'));
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('Lumix\nWhisky');
+});
+
+it('leaves an isolated 1 for manual review without a special bread suggestion', async () => {
+  speech.recognize.mockResolvedValue('1 puis du pain puis un lait');
+  const { screen, onImport } = await open();
+  await act(async () => fireEvent.press(screen.getByText('Commencer la dictée')));
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('1\nPain\n1 x Lait');
+  expect(screen.queryByLabelText('Remplacer 1 par Pain')).toBeNull();
+  expect(onImport).not.toHaveBeenCalled();
 });
 
 it('offers manual entry when unavailable and never requests permission', async () => {

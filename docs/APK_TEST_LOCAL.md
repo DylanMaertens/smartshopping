@@ -4,7 +4,7 @@ L’APK se construit sur le PC, sans compte Expo, sans EAS et sans publication e
 
 ## Installer et essayer
 
-Le fichier produit par le lanceur est `artifacts/android/poduna-0.1.14-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle prend en charge les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent. La dictée locale nécessite Android 12 minimum et un moteur vocal local compatible avec le français.
+Le fichier produit par le lanceur est `artifacts/android/poduna-0.1.15-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle prend en charge les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent. La dictée locale nécessite Android 12 minimum et un moteur vocal local compatible avec le français.
 
 1. Copier l’APK sur le téléphone et l’ouvrir pour l’installer. Android peut demander d’autoriser cette source d’installation.
 2. Ouvrir Poduna : les listes sont utilisables hors ligne immédiatement.
@@ -18,7 +18,43 @@ Utiliser l’adresse du **même backend SmartShopping** : changer d’adresse de
 
 **Les données d’Expo Go ne sont pas transférées automatiquement.** Conserver Expo Go et sa sauvegarde. Restaurer une sauvegarde dans l’APK crée des copies indépendantes ; pour conserver une liste partagée, la rejoindre avec une invitation valide. Les deux applications ont des identités d’appareil différentes.
 
-## Mise à jour 0.1.14 — Quantités simplifiées et correctifs photo
+## Mise à jour 0.1.15 — Relecture vocale et retour fixe
+
+[APK Poduna 0.1.15](../artifacts/android/poduna-0.1.15-preview.apk) · [SHA-256](../artifacts/android/poduna-0.1.15-preview.apk.sha256)
+
+Installer par-dessus la version actuelle, sans désinstaller. Code Android **16**,
+56 266 508 octets, paquet inchangé et certificat identique à la 0.1.14.
+Signature v2, intégrité, version et architectures ARM 32/64 bits vérifiées.
+Le bundle correspond à la nouvelle compilation et contient le pied fixe de dictée.
+Canal preview avec configuration du serveur de test, sans URL embarquée.
+
+SHA-256 : `d4d94e5c3d2148ba0cd133c0ca0c64398f4e840313d5d928eecd4a9fd4fc3cdf`.
+
+TypeScript, 337 tests Vitest, 261 tests Jest et 24 tests de configuration réussis.
+Aperçu navigateur contrôlé à 320/390 px, y compris les défilements répétés.
+Aucun téléphone utilisé. Le téléchargement du site n’a pas été modifié.
+
+### Recette téléphone prioritaire
+
+1. **Clignotement** : ouvrir Dicter, descendre en bas, attendre une vingtaine de
+   secondes puis faire plusieurs allers-retours de défilement. Refaire après une
+   dictée, puis avec le clavier ouvert et fermé. Le bouton Retour doit rester fixe,
+   lisible et cliquable, sans clignoter.
+2. **Navigation et micro** : Retour ramène à Produit sans flash de la liste. Revenir
+   à Dicter conserve le brouillon. Quitter pendant l’écoute coupe le micro et ignore
+   toute réponse tardive.
+3. **Corrections** : dicter une courte liste, tester une suggestion, « Annuler la
+   dernière correction » et « Conserver ce texte », puis valider l’import. Si tout
+   est correctement reconnu, saisir volontairement `Tomtaes` dans la relecture pour
+   tester l’interface de suggestion. Rien n’est corrigé ou ajouté automatiquement.
+   Le cas `1` reste manuel : aucune exception `1 → Pain`.
+4. **Quantités** : passer de 1 à 2, puis revenir à 1 dans la liste : affichage `− 2 +`
+   sans ×, nombre et − masqués à 1. Vérifier aussi une dictée « deux oranges puis du lait ».
+
+Ces tests de dictée et de quantités ne nécessitent pas le serveur ; la reconnaissance
+vocale reste locale Android. Les correctifs photo validés dans la 0.1.14 sont conservés.
+
+## Historique 0.1.14 — Quantités simplifiées et correctifs photo
 
 [APK Poduna 0.1.14](../artifacts/android/poduna-0.1.14-preview.apk) · [SHA-256](../artifacts/android/poduna-0.1.14-preview.apk.sha256)
 

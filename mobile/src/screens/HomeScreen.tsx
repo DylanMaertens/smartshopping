@@ -809,7 +809,7 @@ export function HomeScreen() {
         {ocrListId ? <View testID={addMode === 'text' ? 'ocr-panel' : undefined} style={{ flex: addMode === 'text' ? 1 : 0 }}>
           <OcrImportPanel embedded active={addMode === 'text'} knownNames={ocrKnownNames} onCancel={returnToProduct} onImport={importRecognizedItems} />
         </View> : null}
-        {voiceListId ? <VoiceImportPanel embedded active={addMode === 'voice'} onCancel={returnToProduct} onImport={importVoiceItems} /> : null}
+        {voiceListId ? <VoiceImportPanel embedded active={addMode === 'voice'} knownNames={ocrKnownNames} onCancel={returnToProduct} onImport={importVoiceItems} /> : null}
         {productNamePrompt}
       </PageModal> : null}
       {panel === 'share' && sharingListId ? <PageModal title="Partager une liste" onClose={closePanel}>

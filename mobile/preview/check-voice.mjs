@@ -19,7 +19,7 @@ const result = await build({ absWorkingDir: mobile, entryPoints: ['preview/index
     builder.onLoad({ filter: /.*/, namespace: 'voice-fixture' }, () => ({ contents: `
       export const localSpeech = {
         isAvailable: async () => !location.search.includes('unavailable'), requestPermission: async () => true,
-        recognize: async () => 'deux oranges, puis du lait, puis trois yaourts', stop: async () => {}, cancel: async () => {}
+        recognize: async () => location.search.includes('corrections') ? '1 puis un lait puis wwhisky' : 'deux oranges, puis du lait, puis trois yaourts', stop: async () => {}, cancel: async () => {}
       };
       export const speechErrorMessage = () => 'Erreur simulée';
     ` }));
@@ -47,9 +47,57 @@ try {
       assert.ok(await page.evaluate(() => { window.addModalNode = document.querySelector('[data-testid="add-modal"]'); return !!window.addModalNode; }));
       await page.getByRole('button', { name: 'Dicter des articles', exact: true }).click();
     };
+    const checkFixedReturn = async () => {
+      const result = await page.evaluate(async () => {
+        const scroll = document.querySelector('[data-testid="voice-scroll"]');
+        const footer = document.querySelector('[data-testid="voice-footer"]');
+        const button = footer?.querySelector('[role="button"]');
+        if (!scroll || !footer || !button) return { valid: false };
+        const samples = [];
+        for (let frame = 0; frame < 90; frame++) {
+          // Repeated end-of-content scrolling must never move or hide navigation.
+          scroll.scrollTop = frame % 3 === 0 ? 0 : scroll.scrollHeight;
+          await new Promise(requestAnimationFrame);
+          const box = button.getBoundingClientRect(), style = getComputedStyle(button);
+          samples.push({ y: box.y, height: box.height, opacity: style.opacity,
+            visible: style.visibility === 'visible' && box.bottom <= innerHeight && box.y >= 0 });
+        }
+        return { valid: !scroll.contains(footer), samples };
+      });
+      assert.ok(result.valid, 'Return navigation must be outside the scroll area');
+      assert.ok(result.samples.every((sample) => sample.visible && sample.height >= 48 && sample.opacity === '1'));
+      assert.ok(result.samples.every((sample) => Math.abs(sample.y - result.samples[0].y) < 1), 'Return navigation moved while scrolling');
+    };
     await open();
+    await checkFixedReturn();
     await page.getByRole('button', { name: 'Commencer la dictée', exact: true }).click();
     assert.equal(await page.getByRole('textbox', { name: 'Articles dictés à vérifier' }).inputValue(), '2 x Orange\nLait\n3 x Yaourt');
+    await checkFixedReturn();
+    const originalFooter = await page.getByTestId('voice-footer').boundingBox();
+    for (let repeat = 0; repeat < 3; repeat++) {
+      for (const route of ['scanner', 'product', 'product-scanner']) {
+        if (route.startsWith('product')) {
+          await page.getByRole('button', { name: 'Produit', exact: true }).click();
+          assert.equal(await page.getByTestId('add-item-input').inputValue(), 'Zorblax');
+          // Exercise reduced/restored available height. This is not a native IME.
+          await page.setViewportSize({ width, height: 550 });
+        }
+        if (route.includes('scanner')) await page.getByRole('button', { name: 'Scanner un produit ou une liste', exact: true }).click();
+        await page.getByRole('button', { name: 'Dicter des articles', exact: true }).click();
+        if (route.startsWith('product')) {
+          const reduced = await page.getByTestId('voice-footer').boundingBox();
+          assert.ok(Math.abs(reduced.height - originalFooter.height) < 1, 'Return footer changed height in reduced viewport');
+          await page.setViewportSize({ width, height: 850 });
+        }
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const footer = await page.getByTestId('voice-footer').boundingBox();
+        assert.ok(Math.abs(footer.height - originalFooter.height) < 1 && Math.abs(footer.y - originalFooter.y) < 1,
+          `Return footer grew or moved after ${route}, iteration ${repeat}`);
+        assert.equal(await page.getByRole('textbox', { name: 'Articles dictés à vérifier' }).inputValue(), '2 x Orange\nLait\n3 x Yaourt');
+        assert.ok(await page.evaluate(() => window.addModalNode === document.querySelector('[data-testid="add-modal"]')));
+      }
+    }
+    await page.screenshot({ path: `${output}/fixed-return-${width}.png` });
     await page.getByRole('button', { name: 'Scanner un produit ou une liste', exact: true }).click();
     await page.getByRole('radio', { name: 'Scanner un code-barres', exact: true }).waitFor();
     assert.equal(await page.getByText('Caméra · à vérifier sur Android', { exact: true }).count(), 1);
@@ -76,6 +124,24 @@ try {
     await page.getByRole('button', { name: 'Ajouter les articles à la liste', exact: true }).click();
     await page.getByRole('button', { name: 'Modifier Orange', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Modifier Yaourt', exact: true }).waitFor();
+    await open('?corrections');
+    await page.getByRole('button', { name: 'Commencer la dictée', exact: true }).click();
+    assert.equal(await page.getByRole('textbox', { name: 'Articles dictés à vérifier' }).inputValue(), '1\n1 x Lait\nWwhisky');
+    assert.equal(await page.getByRole('button', { name: 'Remplacer 1 par Pain', exact: true }).count(), 0);
+    const correction = page.getByRole('button', { name: 'Remplacer Wwhisky par Whisky', exact: true });
+    await correction.scrollIntoViewIfNeeded();
+    await checkFixedReturn();
+    await page.screenshot({ path: `${output}/corrections-${width}.png` });
+    const bounds = await correction.boundingBox();
+    assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.height >= 48);
+    await correction.click();
+    assert.equal(await page.getByRole('textbox', { name: 'Articles dictés à vérifier' }).inputValue(), '1\n1 x Lait\nWhisky');
+    await page.getByRole('button', { name: 'Annuler la dernière correction', exact: true }).click();
+    await correction.click();
+    await page.getByRole('textbox', { name: 'Articles dictés à vérifier' }).fill('Pain\n1 x Lait\nWhisky');
+    await page.getByRole('button', { name: 'Ajouter les articles à la liste', exact: true }).click();
+    await page.getByRole('button', { name: 'Modifier Pain', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Modifier Whisky', exact: true }).waitFor();
     await open('?unavailable');
     await page.getByText(/La dictée locale n’est pas disponible/).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Commencer la dictée', exact: true }).count(), 0);
@@ -85,5 +151,5 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log('Add-flow UI fixtures OK: 320/390px, same modal across modes/back, exclusive barcode/photo switch, preserved manual/OCR/voice drafts, explicit import and unavailable/manual fallback. No microphone used.');
+  console.log('Add-flow UI fixtures OK: 320/390px, fixed footer stable across scrolling and repeated voice/product/scanner routes with reduced/restored viewport, same modal, preserved drafts, opt-in corrections, explicit import and unavailable/manual fallback. No microphone or native keyboard used.');
 } finally { await browser?.close(); await new Promise(done => server.close(done)); }

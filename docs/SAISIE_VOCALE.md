@@ -44,7 +44,50 @@ La séparation naturelle reste imparfaite : noms composés, nombres complexes,
 marques et unités doivent être relus. Aucune correction silencieuse par un service IA.
 Une nouvelle dictée réussie remplace le brouillon ; en cas d'erreur, il est conservé.
 
-## Vérifications sur téléphone avec l’APK 0.1.13
+## Corrections de dictée — incluses dans l’APK 0.1.15
+
+Le bouton « Retour à l’ajout manuel » est désormais dans un pied fixe, séparé du
+contenu défilant et de ses changements de hauteur. La dictée utilise une seule zone
+de défilement à hauteur bornée, y compris hors du panneau d’ajout intégré.
+Cette modification cible le clignotement signalé en bas de page sur Android ;
+le mécanisme natif exact n’a pas été reproduit et la disparition sur téléphone reste
+à confirmer dans cet APK, notamment après dictée, corrections et clavier.
+
+Après transcription, des suggestions locales sont affichées dans la relecture.
+Elles réutilisent le vocabulaire de correction des photos, mais toutes restent
+incertaines : les scores de ressemblance de caractères ne mesurent pas la confiance
+du moteur vocal. Chaque remplacement demande une action explicite ; il est possible
+de conserver le texte, masquer les suggestions et annuler la dernière correction.
+Les noms déjà présents dans la liste sont protégés comme pour l’OCR.
+
+Pas de règle spéciale `1 → Pain` : cette confusion occasionnelle n’est pas suffisante
+pour déduire le produit voulu. Les chiffres restent à relire et modifier manuellement.
+Le correcteur rapproche l’orthographe des mots, mais ne peut pas résoudre toutes les
+confusions phonétiques, notamment un mot remplacé par un chiffre ou un autre mot valide.
+Une saisie manuelle efface l’annulation précédente ; une nouvelle dictée réussie
+réinitialise les choix de correction, tandis qu’un échec conserve le brouillon.
+Les corrections sont bloquées pendant l’écoute. Aucun service ni audio envoyé en ligne.
+
+À essayer sur téléphone avec la 0.1.15 : accepter/refuser une suggestion,
+annuler une correction, conserver une vraie quantité et recommencer après correction.
+
+## Retour via Produit — correctif après 0.1.15, non encore compilé
+
+Produit ouvre automatiquement le clavier. Les fenêtres Android natives sont déjà
+en `adjustResize` ; `PageModal` ajoutait un `KeyboardAvoidingView` en mode `height`,
+avec une hauteur initiale mémorisée. Ce double ajustement est supprimé sur Android :
+une vue flexible suit désormais la taille de la fenêtre native. L’évitement clavier
+par padding reste actif sur iOS. Le pied de dictée ne grandit ni ne rétrécit avec le
+contenu ; il conserve toutefois sa hauteur naturelle pour l’accessibilité du texte.
+
+Vérifier sur téléphone, plusieurs fois : Dictée → Produit → Dictée, puis Dictée →
+Produit → Scanner → Dictée. Comparer avec Dictée → Scanner → Dictée. Le bouton du bas
+doit garder la même hauteur et les deux brouillons doivent rester conservés.
+Tester aussi l’éditeur vocal et l’ajout manuel avec le clavier affiché.
+Les tests navigateur réduisent puis restaurent la hauteur disponible ; ils ne
+reproduisent pas le clavier natif. Confirmation Android encore nécessaire.
+
+## Vérifications initiales sur téléphone avec l’APK 0.1.13
 
 1. Moteur et français installés : tester en mode avion « deux oranges puis du lait ».
 2. Refuser le microphone : aucune écoute, retour manuel disponible.

@@ -45,7 +45,7 @@ export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.ba
       {item.quantity > 1 ? <>
       <Pressable accessibilityLabel={`Diminuer la quantité de ${displayName}`}
         onPress={() => onDecreaseQuantity(item.id)} style={{ alignItems: 'center' }}><Text style={{ fontSize: 22 }}>−</Text></Pressable>
-      <Text accessibilityLabel={`Quantité : ${item.quantity}`} style={{ minWidth: 24, textAlign: 'center', fontWeight: '600' }}>×{item.quantity}</Text>
+      <Text accessibilityLabel={`Quantité : ${item.quantity}`} style={{ minWidth: 24, textAlign: 'center', fontWeight: '600' }}>{item.quantity}</Text>
       </> : null}
       <Pressable accessibilityLabel={`Augmenter la quantité de ${displayName}`} disabled={item.quantity >= 999}
         onPress={() => onIncreaseQuantity(item.id)} style={{ alignItems: 'center' }}><Text style={{ fontSize: 22 }}>+</Text></Pressable>
