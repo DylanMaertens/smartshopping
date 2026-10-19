@@ -33,10 +33,13 @@ const engine = { syncListIfOnline: async () => ({ synced: true, response: { serv
 const networkState = { isConnected: true, isInternetReachable: true };
 export const useOfflineSync = () => ({ networkState, syncEngine: engine });
 export class LocalKeyValueStorage {
+  static getAllKeys() { return Object.keys(localStorage).filter(key => key.startsWith('preview.')).map(key => key.slice(8)); }
   static getString(key: string) { return localStorage.getItem('preview.' + key); }
   static setString(key: string, value: string) { localStorage.setItem('preview.' + key, value); }
   static delete(key: string) { localStorage.removeItem('preview.' + key); }
 }
+export const PersonalSettings = LocalKeyValueStorage;
+export const THEME_STORAGE_KEY = 'appearance.theme.v1';
 export class BackendApiError extends Error {}
 export const getCommunitySuggestions = async (barcode: string) => ({ barcode, suggestions: [], contributions_enabled: false });
 export const getValidatedCommunityFields = async (barcode: string) => ({ barcode, fields: [], contributions_enabled: false });

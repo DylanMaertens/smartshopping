@@ -51,7 +51,7 @@ node preview/check-ocr.mjs
 
 Le contrôle visuel accepte `SMARTSHOPPING_PLAYWRIGHT_MODULE` et `PLAYWRIGHT_BROWSERS_PATH` pour utiliser une installation locale existante ; ses captures vont dans `mobile/.preview/ocr-review/` (ignoré par Git).
 
-**Activation :** le correcteur mobile est inclus dans l’[APK 0.1.10](../artifacts/android/poduna-0.1.10-preview.apk), utilisable avec le serveur actuel. L’APK 0.1.9 ne le contient pas. Il reste à recompiler/redémarrer le backend pour embarquer le nouveau worker Python et activer la gestion des colonnes. Aucun serveur ni tunnel n’a été relancé. La recompilation Rust n’a pas pu être vérifiée dans cette session, `cargo` étant absent ; le worker Python a été exécuté directement avec les modèles locaux.
+**Activation historique :** le correcteur mobile a été inclus à partir de l’APK 0.1.10, utilisable avec le serveur de cette étape. L’APK 0.1.9 ne le contient pas. Le binaire 0.1.10 a depuis été retiré des téléchargements locaux ; voir les [APK conservés](../docs/APK_TEST_LOCAL.md). Au moment de cette étape, il restait à recompiler/redémarrer le backend pour embarquer le nouveau worker Python et activer la gestion des colonnes. Aucun serveur ni tunnel n’avait été relancé. La recompilation Rust n’avait pas pu être vérifiée dans cette session, `cargo` étant absent ; le worker Python avait été exécuté directement avec les modèles locaux.
 
 ## Validation du 1er octobre 2026
 

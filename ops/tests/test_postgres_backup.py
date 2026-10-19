@@ -26,14 +26,18 @@ class BackupTests(unittest.TestCase):
         dump = self.bin / 'pg_dump'
         dump.write_text('#!' + sys.executable + '''
 import os, pathlib, sys
-path = next(arg.split('=',1)[1] for arg in sys.argv if arg.startswith('--file='))
-pathlib.Path(path).write_bytes(b'' if os.environ.get('EMPTY_DUMP') else b'fixture dump')
+path = next((arg.split('=',1)[1] for arg in sys.argv if arg.startswith('--file=')), None)
+data = b'' if os.environ.get('EMPTY_DUMP') else b'fixture dump'
+if path: pathlib.Path(path).write_bytes(data)
+else: sys.stdout.buffer.write(data)
 sys.exit(int(os.environ.get('DUMP_EXIT', '0')))
 ''')
         restore = self.bin / 'pg_restore'
         restore.write_text('#!' + sys.executable + '''
 import json, os, pathlib, sys
 pathlib.Path(os.environ['RESTORE_TRACE']).write_text(json.dumps(sys.argv[1:]))
+if os.environ.get('EXPECT_RESTORE_BYTES'):
+    assert pathlib.Path(sys.argv[-1]).read_bytes() == os.environ['EXPECT_RESTORE_BYTES'].encode()
 sys.exit(int(os.environ.get('RESTORE_EXIT', '0')))
 ''')
         dump.chmod(0o755)
@@ -74,6 +78,37 @@ sys.exit(int(os.environ.get('RESTORE_EXIT', '0')))
             self.assertEqual(item.stat().st_mode & 0o077, 0)
         manifest = Path(str(path)+'.sha256').read_text()
         self.assertNotIn(str(path.parent), manifest)
+
+    @unittest.skipUnless(shutil.which('gpg'), 'GnuPG required for real encryption round trip')
+    def test_encrypted_backup_round_trip_and_tamper_rejection(self):
+        keyring = self.root / 'isolated-keyring'
+        keyring.mkdir(mode=0o700)
+        env = dict(self.env, GNUPGHOME=str(keyring), EXPECT_RESTORE_BYTES='fixture dump')
+        subprocess.run(['gpg', '--batch', '--pinentry-mode', 'loopback', '--passphrase', '', '--quick-generate-key', 'Poduna fixture <fixture@example.invalid>', 'rsa2048', 'encr', '0'], env=env, check=True, capture_output=True)
+        public = self.root / 'recipient.asc'
+        public.write_bytes(subprocess.check_output(['gpg', '--armor', '--export', 'fixture@example.invalid'], env=env))
+        env['BACKUP_RECIPIENT_FILE'] = str(public)
+        result = self.run_script('backup-postgres.sh', self.root / 'encrypted', env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        archive = Path(result.stdout.strip())
+        self.assertTrue(archive.name.endswith('.dump.gpg'))
+        self.assertNotIn(b'fixture dump', archive.read_bytes())
+        self.assertEqual(sorted(p.name for p in archive.parent.iterdir()), ['smartshopping.dump.gpg', 'smartshopping.dump.gpg.sha256'])
+        result = self.run_script('restore-postgres.sh', archive, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = json.loads(self.trace.read_text())
+        self.assertFalse(Path(args[-1]).exists(), 'decrypted temporary dump removed')
+        self.assertNotIn(self.env['DATABASE_URL'], ' '.join(args))
+        self.trace.unlink()
+        archive.write_bytes(b'not encrypted data')
+        Path(str(archive)+'.sha256').write_text(hashlib.sha256(archive.read_bytes()).hexdigest() + '  smartshopping.dump.gpg\n')
+        result = self.run_script('restore-postgres.sh', archive, env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.trace.exists())
+        # Encryption must not hide a failure in the upstream pg_dump pipeline.
+        result = self.run_script('backup-postgres.sh', self.root / 'failed-encryption', env=dict(env, DUMP_EXIT='7'))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list((self.root / 'failed-encryption').iterdir()), [])
 
     def test_failed_or_empty_dump_leaves_no_published_backup(self):
         for overrides in [dict(DUMP_EXIT='1'), dict(EMPTY_DUMP='1')]:

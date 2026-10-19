@@ -5,7 +5,7 @@ import { HomeScreen } from './HomeScreen';
 import { BackendApiError, confirmCommunityProposal, getCommunitySuggestions, getProduct, submitCommunityProposal } from '@/services/api/backend';
 import { ShoppingListStorage as Storage } from '@/services/storage/shoppingListStorage';
 import { getProductPreference, getRememberedCategory, rememberProductCategory } from '@/services/storage/productPreferences';
-import { LocalKeyValueStorage } from '@/services/storage/localKeyValueStorage';
+import { PersonalSettings as LocalKeyValueStorage } from '@/services/storage/personalSettings';
 import type { ShoppingItem } from '@/types';
 
 let mockActiveList = 'home';
@@ -16,6 +16,11 @@ let mockCategoryOrders = new Map<string, string[]>();
 let mockItems = new Map<string, ShoppingItem[]>();
 let mockOcrDrafts = [{ name: 'lait', quantity: 2 }, { name: 'Pain', quantity: 1 }];
 const mockPreferencesDisk = new Map<string, string>();
+jest.mock('@/services/storage/personalSettings', () => ({ THEME_STORAGE_KEY: 'appearance.theme.v1', PersonalSettings: {
+  getString: (key: string) => mockPreferencesDisk.get(key) ?? null,
+  setString: (key: string, value: string) => { mockPreferencesDisk.set(key, value); },
+  delete: (key: string) => { mockPreferencesDisk.delete(key); },
+} }));
 jest.mock('@/services/storage/localKeyValueStorage', () => ({ LocalKeyValueStorage: {
   getString: (key: string) => mockPreferencesDisk.get(key) ?? null,
   setString: (key: string, value: string) => { mockPreferencesDisk.set(key, value); },

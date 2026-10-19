@@ -6,7 +6,8 @@ import { groupEquivalentItems, incrementGroup, decrementGroup } from '@/services
 import { groupItemsByCategory } from '@/services/categorization/categoryOrder';
 import { ShoppingListStorage as Storage } from './shoppingListStorage';
 import type { ShoppingItem } from '@/types';
-import { rememberProductCategory } from './productPreferences';
+import { rememberProductCategory, getRememberedCategory, getProductPreference, saveProductPreference } from './productPreferences';
+import { PersonalSettings, THEME_STORAGE_KEY } from './personalSettings';
 import { LocalKeyValueStorage } from './localKeyValueStorage';
 
 let database: Database;
@@ -119,6 +120,61 @@ describe('local lists and explicit sharing', () => {
 });
 
 describe('portable list backups', () => {
+  it('exports legacy choices, absent-list preferences and theme, then restores atomically on a fresh device', () => {
+    LocalKeyValueStorage.setString('product-category:v1:quinoa', 'Épicerie salée');
+    saveProductPreference('12345678', { name: 'Mon café', category: 'Épicerie sucrée' });
+    PersonalSettings.setString(THEME_STORAGE_KEY, 'nuit');
+    const backup = Storage.createBackup();
+    expect(backup.version).toBe(2);
+    if (backup.version !== 2) throw new Error('v2 expected');
+    expect(backup.preferences.categories).toContainEqual({ name: 'Quinoa', category: 'Épicerie salée' });
+    LocalKeyValueStorage.delete('product-category:v1:quinoa');
+    database.run('DELETE FROM app_metadata');
+    database.run("CREATE TRIGGER fail_settings BEFORE INSERT ON app_metadata WHEN NEW.key LIKE 'restored-backup:%' BEGIN SELECT RAISE(ABORT, 'full'); END");
+    expect(() => Storage.restoreBackup(backup)).toThrow();
+    expect(PersonalSettings.getString(THEME_STORAGE_KEY)).toBeNull();
+    expect(getProductPreference('12345678')).toBeNull();
+    expect(Storage.getLists()).toHaveLength(2);
+    database.run('DROP TRIGGER fail_settings');
+    Storage.restoreBackup(backup);
+    expect(PersonalSettings.getString(THEME_STORAGE_KEY)).toBe('nuit');
+    expect(getRememberedCategory('Quinoa')).toBe('Épicerie salée');
+    expect(getProductPreference('12345678')?.name).toBe('Mon café');
+    const disk = database.export(); database.close(); database = createDatabase(disk);
+    expect(PersonalSettings.getString(THEME_STORAGE_KEY)).toBe('nuit');
+    expect(getRememberedCategory('Quinoa')).toBe('Épicerie salée');
+  });
+  it('keeps current choices on conflict and accepts v1 without touching preferences', () => {
+    rememberProductCategory('Quinoa', 'Épicerie salée');
+    PersonalSettings.setString(THEME_STORAGE_KEY, 'nuit');
+    saveProductPreference('12345678', { name: 'Avant' });
+    const backup = Storage.createBackup();
+    rememberProductCategory('Quinoa', 'Boissons');
+    PersonalSettings.setString(THEME_STORAGE_KEY, 'papier');
+    saveProductPreference('12345678', { name: 'Après' });
+    Storage.restoreBackup(backup);
+    expect(PersonalSettings.getString(THEME_STORAGE_KEY)).toBe('papier');
+    expect(getRememberedCategory('Quinoa')).toBe('Boissons');
+    expect(getProductPreference('12345678')?.name).toBe('Après');
+    const legacy = { ...backup, version: 1, backupId: 'legacy-backup-123456' } as Record<string, unknown>;
+    delete legacy.preferences;
+    Storage.restoreBackup(legacy);
+    expect(PersonalSettings.getString(THEME_STORAGE_KEY)).toBe('papier');
+  });
+  it('does not resurrect a deleted legacy preference after a restart', () => {
+    const key = 'product-category:v1:quinoa';
+    LocalKeyValueStorage.setString(key, 'Épicerie salée');
+    expect(getRememberedCategory('Quinoa')).toBe('Épicerie salée');
+    rememberProductCategory('Quinoa', 'À classer');
+    const disk = database.export(); database.close(); database = createDatabase(disk);
+    expect(getRememberedCategory('Quinoa')).toBeNull();
+    const backup = Storage.createBackup();
+    if (backup.version !== 2) throw new Error('v2 expected');
+    backup.preferences.categories = [{ name: 'Quinoa', category: 'Boissons' }];
+    Storage.restoreBackup(backup);
+    expect(getRememberedCategory('Quinoa')).toBeNull();
+    LocalKeyValueStorage.delete(key);
+  });
   it('normalizes restored plurals and reuses remembered aisles only when the backup item was unclassified', () => {
     rememberProductCategory('Orange', 'Fruits & légumes');
     try {

@@ -12,7 +12,7 @@ const ctx = await context({ entryPoints: ['preview/index.tsx'], bundle: true, ou
   alias: { 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
   plugins: [{ name: 'isolated-preview', setup(build) {
     build.onResolve({ filter: /services\/backup\/backupFiles$/ }, () => ({ path: resolve('preview/backupFiles.ts') }));
-    build.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
+    build.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|personalSettings|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
   } }],
 });
 await ctx.watch();

@@ -6,7 +6,7 @@ from pathlib import Path
 import stat
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, mock_open
 
 def module(name, filename):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
@@ -18,6 +18,16 @@ setup = module('setup_admin', 'setup-admin.py')
 https = module('local_https', 'local-https.py')
 
 class AdminSetupTests(unittest.TestCase):
+    def test_totp_reference_and_confirmation(self):
+        secret = b'12345678901234567890'
+        self.assertEqual(setup.totp(secret, 1), '287082')
+        with patch.object(setup.secrets, 'token_bytes', return_value=secret), patch.object(setup.time, 'time', return_value=59), \
+             patch('builtins.open', mock_open()), patch.object(setup.getpass, 'getpass', return_value='287082'):
+            self.assertEqual(setup.enroll_totp('owner'), (secret.hex(), 1))
+        with patch.object(setup.secrets, 'token_bytes', return_value=secret), patch.object(setup.time, 'time', return_value=59), \
+             patch('builtins.open', mock_open()), patch.object(setup.getpass, 'getpass', return_value='invalid'):
+            with self.assertRaisesRegex(ValueError, 'non confirmé'):
+                setup.enroll_totp('owner')
     def test_contact_requires_explicit_admin(self):
         with patch.object(https.subprocess, 'Popen') as spawn:
             with self.assertRaisesRegex(RuntimeError, '--contact exige --admin'):
@@ -37,10 +47,15 @@ class AdminSetupTests(unittest.TestCase):
             args = ['setup-admin.py', '--hasher', str(hasher), '--output', str(target)]
             with patch('sys.argv', args), patch('builtins.input', return_value='owner'), \
                  patch.object(setup.getpass, 'getpass', return_value=password), \
+                 patch.object(setup, 'enroll_totp', return_value=('ab'*20, 100)), \
                  patch.object(setup.subprocess, 'run', return_value=result) as run, contextlib.redirect_stdout(output):
                 setup.main()
             self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
-            self.assertEqual(json.loads(target.read_text()), {'username': 'owner', 'password_hash': hashed})
+            self.assertEqual(json.loads(target.read_text()), {'username': 'owner', 'password_hash': hashed, 'totp_secret_hex': 'ab'*20})
+            state = Path(str(target) + '.totp-state')
+            self.assertEqual(stat.S_IMODE(state.stat().st_mode), 0o600)
+            self.assertEqual(json.loads(state.read_text())['last_step'], 100)
+            self.assertNotIn('ab'*20, output.getvalue())
             self.assertEqual(run.call_args.kwargs['input'], password)
             self.assertNotIn(password, str(run.call_args.args))
             self.assertNotIn(password, output.getvalue())

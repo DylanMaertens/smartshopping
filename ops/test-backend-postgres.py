@@ -17,6 +17,7 @@ root = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--browser', action='store_true')
+    parser.add_argument('--backups', action='store_true', help='Restore only into two extra disposable databases.')
     args = parser.parse_args()
     pg = os.environ.get('PODUNA_TEST_PG_BIN')
     def tool(name):
@@ -31,8 +32,16 @@ def main():
         try:
             subprocess.run([tool('createdb'), '-h', temp, 'workflow_test'], check=True)
             env = dict(os.environ, TEST_DATABASE_URL=f'postgresql:///workflow_test?host={quote(temp, safe="")}')
-            for target in ['admin', 'community_catalog', 'postgres_sync']:
+            for target in ['admin', 'community_catalog', 'postgres_sync', 'database_role', 'access_security']:
                 subprocess.run(['cargo', 'test', '--manifest-path', 'backend/Cargo.toml', '--locked', '--offline', '--test', target, '--', '--ignored', '--test-threads=1'], cwd=root, env=env, check=True)
+            if args.backups:
+                for name in ['backup_source', 'backup_target']:
+                    subprocess.run([tool('createdb'), '-h', temp, name], check=True)
+                backup_env = dict(env, RUN_POSTGRES_BACKUP_TESTS='1',
+                    TEST_BACKUP_SOURCE_URL=f'postgresql:///backup_source?host={quote(temp, safe="")}',
+                    TEST_BACKUP_TARGET_URL=f'postgresql:///backup_target?host={quote(temp, safe="")}',
+                    PATH=str(Path(tool('psql')).parent) + os.pathsep + env['PATH'])
+                subprocess.run(['python3', '-m', 'unittest', 'discover', '-s', 'ops/tests', '-p', 'test_postgres_restore_integration.py'], cwd=root, env=backup_env, check=True)
             if args.browser:
                 # Separate DB: UI assertions see only their own fixtures.
                 subprocess.run([tool('createdb'), '-h', temp, 'browser_test'], check=True)

@@ -110,6 +110,10 @@ pnpm test:integration
 
 ## Règle de maintenance documentaire
 
+Le [bilan du nettoyage](docs/NETTOYAGE_PROJET.md) décrit les dossiers actifs, les
+éléments à protéger et les fichiers régénérables. Le compte rendu Markdown initial
+est conservé dans [`docs/archives/`](docs/archives/COMPTE_RENDU_INITIAL.md) à titre historique.
+
 - `README.md` décrit uniquement l’accès au dépôt, son démarrage et ses commandes stables.
 - `CAHIER_DES_CHARGES_CORRIGE.md` constitue le référentiel produit et technique ; il ne change qu’en cas de nouvelle décision de cadrage validée.
 - `COMPTE_RENDU.html` est l’unique source pour les fonctionnalités livrées, les résultats de validation, les points d’attention et la feuille de route.

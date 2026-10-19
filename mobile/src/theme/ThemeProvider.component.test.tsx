@@ -1,15 +1,24 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { ThemeProvider, THEME_STORAGE_KEY } from './ThemeProvider';
+import { ThemeProvider, THEME_STORAGE_KEY, useTheme } from './ThemeProvider';
+import { Button } from 'react-native';
 import { AppearancePicker } from '@/components/AppearancePicker';
-import { LocalKeyValueStorage } from '@/services/storage/localKeyValueStorage';
+import { PersonalSettings as LocalKeyValueStorage } from '@/services/storage/personalSettings';
 import { themeIds, themes } from './themes';
-jest.mock('@/services/storage/localKeyValueStorage', () => ({ LocalKeyValueStorage: { getString: jest.fn(), setString: jest.fn() } }));
+jest.mock('@/services/storage/personalSettings', () => ({ THEME_STORAGE_KEY: 'appearance.theme.v1', PersonalSettings: { getString: jest.fn(), setString: jest.fn() } }));
 beforeEach(() => { jest.mocked(LocalKeyValueStorage.getString).mockReset().mockReturnValue(null); jest.mocked(LocalKeyValueStorage.setString).mockReset(); });
 it('defaults to Origine without writing over storage', () => {
   const screen = render(<ThemeProvider><AppearancePicker /></ThemeProvider>);
   expect(screen.getByLabelText('Origine').props.accessibilityState.checked).toBe(true);
   expect(screen.getAllByRole('radio')).toHaveLength(7);
+  expect(LocalKeyValueStorage.setString).not.toHaveBeenCalled();
+});
+it('reloads a restored theme immediately without writing a second preference', () => {
+  function Reload() { const { reloadTheme } = useTheme(); return <Button title="Relire le thème" onPress={reloadTheme} />; }
+  const screen = render(<ThemeProvider><AppearancePicker /><Reload /></ThemeProvider>);
+  jest.mocked(LocalKeyValueStorage.getString).mockReturnValue('nuit');
+  fireEvent.press(screen.getByText('Relire le thème'));
+  expect(screen.getByLabelText('Nuit').props.accessibilityState.checked).toBe(true);
   expect(LocalKeyValueStorage.setString).not.toHaveBeenCalled();
 });
 it.each(themeIds)('preserves the saved theme %s', (id) => {

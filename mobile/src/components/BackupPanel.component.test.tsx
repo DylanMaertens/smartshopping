@@ -39,6 +39,17 @@ it('retains the preview when persistence fails and allows retry', async () => {
   await act(async () => fireEvent.press(screen.getByText('Restaurer les listes')));
   expect(restored).toHaveBeenCalledWith(['copy']);
 });
+it('previews v2 preferences explicitly and restores only after confirmation', async () => {
+  const extended: ListBackup = { ...backup, version: 2, preferences: { theme: 'nuit', products: [{ barcode: '12345678', name: 'Café' }], categories: [{ name: 'Quinoa', category: 'Épicerie salée' }] } };
+  jest.mocked(importBackupFile).mockResolvedValue(extended);
+  const screen = render(<BackupPanel onRestored={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Choisir une sauvegarde')));
+  screen.getByText(/1 produit\(s\) personnalisé\(s\) · 1 rayon/);
+  screen.getByText(/tes choix déjà enregistrés seront conservés/);
+  expect(Storage.restoreBackup).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(screen.getByText('Restaurer les listes')));
+  expect(Storage.restoreBackup).toHaveBeenCalledWith(extended);
+});
 it('handles picker cancellation and malformed files without a restore', async () => {
   jest.mocked(importBackupFile).mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('Fichier invalide'));
   const screen = render(<BackupPanel onRestored={jest.fn()} />);

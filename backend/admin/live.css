@@ -5,3 +5,13 @@
 .pending-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px;margin-bottom:12px}.pending-counts a{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;border:1px solid var(--line);border-radius:10px;background:white;font-size:.875rem}.pending-counts strong{font-size:1.35rem}#counts-status{margin-bottom:24px}#dossier-notice:not(:empty){padding:12px;border-radius:8px;background:#fbefdb;color:#775018}
 .sr-only,.trap{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden;padding:0;white-space:nowrap}textarea{font:inherit;resize:vertical;width:100%;border:1px solid #aebcaf;border-radius:8px;padding:.65rem;color:inherit;min-height:100px}textarea:focus-visible{outline:3px solid #b17c1e;outline-offset:3px}fieldset{border:0;margin:0;padding:0;min-width:0}fieldset>*,#decision-form>*{margin-bottom:1rem}.queue{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:1rem;margin:1rem 0}.queue .card{min-width:0;overflow-wrap:anywhere}dialog{border:1px solid var(--line);border-radius:14px;padding:1.5rem;max-width:min(720px,calc(100% - 2rem));width:100%;max-height:85vh;color:inherit;background:#faf8f3}dialog::backdrop{background:#173c2fa8}.message-body{white-space:pre-wrap;overflow-wrap:anywhere;font-weight:400}details{padding:1rem 0;border-bottom:1px solid var(--line)}summary{cursor:pointer;font-weight:600}details p{margin:1rem 0 0}#dossier-history{font-size:.875rem}#dossier-close{margin-top:1rem}
 @media(max-width:600px){main{padding:1rem}.card{padding:1rem}.metrics{grid-template-columns:1fr}.login{margin:1rem 0}h1{font-size:1.7rem}thead{display:none}table,tbody,tr,td{display:block}tr{padding:.75rem 0;border-bottom:1px solid var(--line)}td{border:0;padding:.2rem 0}header{padding:1rem}.toolbar button{width:100%}}
+/* Long pseudonymous identifiers remain readable without widening the viewport. */
+.security-events { overflow: auto; max-height: 65vh; }
+.security-events table { min-width: 650px; }
+#securite code, #securite button, #security-history, #security-device { overflow-wrap: anywhere; }
+#security-form { margin-block: 1rem; }
+@media(max-width:600px){
+  .security-events table { min-width: 0; }
+  .security-events caption { display: block; width: 100%; }
+  .security-events td::before { content: attr(data-label); display:block; font-weight:600; color:var(--muted); }
+}

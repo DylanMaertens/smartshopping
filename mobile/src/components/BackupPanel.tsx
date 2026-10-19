@@ -7,7 +7,7 @@ import { exportBackupFile, importBackupFile, saveBackupOnDevice } from '@/servic
 import type { ListBackup } from '@/services/backup/listBackup';
 
 export function BackupPanel({ onRestored }: { onRestored: (ids: string[]) => void }) {
-  const { theme } = useTheme();
+  const { theme, reloadTheme, error: themeError } = useTheme();
   const [draft, setDraft] = useState<ListBackup | null>(null);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
@@ -22,8 +22,8 @@ export function BackupPanel({ onRestored }: { onRestored: (ids: string[]) => voi
   }
   return <>
     {!draft ? <>
-    <Text>Conserve tes listes, leurs articles et l’ordre de tes rayons dans un fichier, puis retrouve-les sur un autre téléphone.</Text>
-    <Text style={{ color: theme.muted }}>Le fichier contient tes listes en clair. Choisis un emplacement privé pour le conserver. Aucun code d’invitation ni secret de connexion n’y est inclus.</Text>
+    <Text>Conserve tes listes, leurs articles, l’ordre des rayons, les noms et rayons de produits mémorisés et ton thème dans un fichier.</Text>
+    <Text style={{ color: theme.muted }}>Le fichier contient tes listes et préférences en clair. Choisis un emplacement privé pour le conserver. Aucun code d’invitation ni secret de connexion n’y est inclus.</Text>
     <Button label="Enregistrer sur l’appareil" disabled={busy} onPress={() => void run(async () => {
       const filename = await saveBackupOnDevice(ShoppingListStorage.createBackup());
       if (filename) setMessage(`Sauvegarde enregistrée dans le dossier choisi : ${filename}`);
@@ -42,8 +42,11 @@ export function BackupPanel({ onRestored }: { onRestored: (ids: string[]) => voi
       <Text>Sauvegarde du {new Date(draft.createdAt).toLocaleString('fr-FR')}</Text>
       <Text>{draft.lists.slice(0, 5).map((list) => list.name).join(' · ')}{draft.lists.length > 5 ? '…' : ''}</Text>
       <Text>De nouvelles copies seront ajoutées. Tes listes actuelles seront conservées. Pour retrouver les membres d’une liste partagée, rejoins-la avec une invitation.</Text>
+      {draft.version === 2 ? <Text>{draft.preferences.products.length} produit(s) personnalisé(s) · {draft.preferences.categories.length} rayon(s) mémorisé(s). Les préférences manquantes et le thème seront restaurés ; tes choix déjà enregistrés seront conservés.</Text>
+        : <Text>Ancien format : cette sauvegarde ne contient pas de préférences ni de thème.</Text>}
       <Button label="Restaurer les listes" disabled={busy} onPress={() => void run(async () => {
         const ids = ShoppingListStorage.restoreBackup(draft);
+        reloadTheme();
         setDraft(null);
         onRestored(ids);
       })} />
@@ -51,6 +54,7 @@ export function BackupPanel({ onRestored }: { onRestored: (ids: string[]) => voi
     </View> : null}
     {busy ? <Text accessibilityRole="alert">Traitement en cours…</Text> : null}
     {error ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{error}</Text> : null}
+    {themeError ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{themeError}</Text> : null}
     {message ? <Text accessibilityRole="alert">{message}</Text> : null}
   </>;
 }

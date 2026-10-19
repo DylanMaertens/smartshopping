@@ -1,5 +1,7 @@
 # Administration privée — première version
 
+Ajout du 16 octobre : [onglet Sécurité, blocages d’appareils et limites de surveillance](SECURITE_EXPLOITATION.md).
+
 Supervision, journaux, modération et messages **réels**, servis par le backend à `/admin/` sur son origine HTTPS. La page locale `http://127.0.0.1:8057/admin/index.html` reste une **démonstration** : son formulaire prépare un lien vers le serveur choisi, sans demander ni mémoriser de secret. Les vraies données ne sont jamais copiées dans cette maquette.
 
 ## Périmètre et protections
@@ -12,7 +14,11 @@ Supervision, journaux, modération et messages **réels**, servis par le backend
 - **Relais HTTPS sur la même machine obligatoire** : le backend n’accepte l’API admin que depuis une connexion TCP loopback. Il ne fait pas confiance à `X-Forwarded-For`/`X-Forwarded-Proto`. Cloudflared vers `127.0.0.1` convient. Un proxy dans un autre conteneur ne fonctionnera pas sans une évolution explicite de cette politique ; ne pas supprimer le contrôle pour le contourner.
 - L’API mobile garde ses signatures d’appareil ; la session admin ne donne pas accès aux listes. `/metrics` exige désormais un bearer configuré et retourne 404 sans secret. Prometheus conserve son secret dédié ; ne pas le réutiliser dans un navigateur.
 
-Cette version est **mono-processus pour les sessions, mono-administrateur, sans MFA ni rôles multiples**. Avant une ouverture publique durable/VPS : MFA ou barrière d’accès supplémentaire, architecture du proxy, copie d’audit externe, supervision externe, sauvegardes et recette dédiée. Ce travail n’active pas le catalogue communautaire.
+Cette version est **mono-processus, mono-administrateur, avec 2FA TOTP obligatoire**, sans rôles multiples. Les codes de 6 chiffres expirent, sont limités en tentatives et ne peuvent pas être réutilisés après succès, même après redémarrage. Un fichier privé compagnon conserve le compteur ; son absence, sa corruption ou son utilisation par un autre processus bloquent l’accès. La clé TOTP n’est ni dans PostgreSQL ni dans l’APK.
+
+**Important pour un compte existant : préparer une nouvelle paire de fichiers avant de redémarrer sur ce nouveau binaire.** Les anciens comptes sans second facteur ne sont pas acceptés. Aucune migration ni désactivation automatique du 2FA. Voir [activation, récupération et protection des bases](SECURITE_DONNEES.md).
+
+Avant une ouverture publique durable/VPS : architecture du proxy, copie d’audit externe, supervision externe, sauvegardes et recette dédiée. Le 2FA ne rend pas un serveur compromis sûr et reste sensible au phishing ; une barrière d’accès supplémentaire peut le compléter. Ce travail n’active pas le catalogue communautaire.
 
 ## Créer le compte puis activer sur le tunnel temporaire
 
@@ -30,7 +36,7 @@ Cette version est **mono-processus pour les sessions, mono-administrateur, sans 
    python3 ops/setup-admin.py
    ```
 
-   Le script détecte `backend/target/debug/admin-password-hash`, sinon son voisin dans le répertoire du backend configuré. Option `--hasher /chemin/admin-password-hash` disponible. Mot de passe saisi sans écho, transmis au hacheur par stdin, pas comme argument. Fichier créé : `.local-dev/admin/credentials.json`, ignoré par Git. Il n’écrase aucun compte existant.
+   Le script détecte `backend/target/debug/admin-password-hash`, sinon son voisin dans le répertoire du backend configuré. Option `--hasher /chemin/admin-password-hash` disponible. Mot de passe saisi sans écho, transmis au hacheur par stdin, pas comme argument. La clé TOTP est affichée uniquement dans le terminal privé (`/dev/tty`), jamais dans stdout/stderr. Ajouter le compte à l’application d’authentification, puis confirmer un code avant toute création. Fichiers créés : `.local-dev/admin/credentials.json` et `.totp-state`, modes 600 dans un dossier 700, ignorés par Git. Aucun fichier existant n’est écrasé. Le code de confirmation est consommé ; attendre le suivant pour la première connexion.
 
 3. Arrêter volontairement l’ancienne session serveur/tunnel, puis lancer :
 
@@ -86,7 +92,7 @@ Migration additive `007_admin_workflows.sql`, appliquée par le backend au déma
 
 `ADMIN_CREDENTIALS_FILE` désigne le JSON privé avec `username` et `password_hash`. `ADMIN_ORIGIN=https://hote.example` définit une seule origine, sans chemin, identifiants, paramètres ou fragment. Pour le tunnel, `ADMIN_ORIGIN_FILE` remplace cette valeur et est relu à chaque requête. Un fichier absent/vide/invalide ferme l’accès ; une configuration de compte invalide interrompt le démarrage. Ne pas activer l’admin sur HTTP et ne pas rendre le cookie non sécurisé pour faciliter les tests.
 
-Pour changer/récupérer le mot de passe, créer un **nouveau fichier** avec `setup-admin.py --output …`, pointer `ADMIN_CREDENTIALS_FILE` dessus puis redémarrer. Cela invalide toutes les sessions. Avec `--admin`, qui utilise le chemin fixe, remplacer volontairement le fichier local après en avoir conservé une copie privée si nécessaire. Aucune réinitialisation par e-mail.
+Pour changer/récupérer le compte (mot de passe ou téléphone perdu), créer une **nouvelle paire de fichiers** avec `setup-admin.py --output …`, appairer le nouveau second facteur et pointer `ADMIN_CREDENTIALS_FILE` dessus avant de redémarrer. Cela invalide toutes les sessions. Avec le lanceur `--admin`, utiliser `PODUNA_ADMIN_CREDENTIALS_FILE` ; `PODUNA_BACKEND_BIN` permet de choisir explicitement le nouveau binaire compilé. Aucune réinitialisation par e-mail, aucun bouton web permettant de supprimer le 2FA, aucun code de secours réutilisable. Ne jamais remettre le compteur à zéro ni restaurer une vieille copie de ce compteur : reprovisionner une nouvelle clé en cas de doute.
 
 ## Mesures et journaux
 

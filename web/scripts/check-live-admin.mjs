@@ -1,5 +1,6 @@
 // Real Rust backend, isolated data, self-signed HTTPS on loopback only. Never uses the live tunnel/database.
 import assert from 'node:assert/strict';
+import { provisionFixture } from './admin-totp-fixture.mjs';
 import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -18,7 +19,7 @@ const password = 'Fixture-only password, never deployed!';
 try {
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(temp, 'key.pem'), '-out', join(temp, 'cert.pem'), '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdio: 'ignore' });
   const hash = execFileSync(hasher, { input: password, encoding: 'utf8' }).trim();
-  await writeFile(join(temp, 'credentials.json'), JSON.stringify({ username: 'qa-owner', password_hash: hash }), { mode: 0o600 });
+  const nextCode = await provisionFixture(join(temp, 'credentials.json'), 'qa-owner', hash);
   const reservation = tcpServer(); await new Promise(r => reservation.listen(0, '127.0.0.1', r));
   const port = reservation.address().port; await new Promise(r => reservation.close(r));
   proxy = httpsServer({ key: await readFile(join(temp, 'key.pem')), cert: await readFile(join(temp, 'cert.pem')) }, (req, res) => {
@@ -50,12 +51,14 @@ try {
     await page.screenshot({ path: join(output, `login-${width}.png`), fullPage: true });
     if (width === 1440) {
       await page.locator('#username').fill('qa-owner'); await page.locator('#password').fill('wrong-password');
+      await page.locator('#code').fill('123456');
       await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
-      await page.getByText('Identifiant ou mot de passe incorrect.', { exact: true }).waitFor();
+      await page.getByText('Identifiant, mot de passe ou code incorrect ou expiré. Utilisez un nouveau code.', { exact: true }).waitFor();
       assert.equal(await page.locator('#password').inputValue(), '');
       assert.equal(await page.locator('#dashboard').isVisible(), false);
     }
     await page.locator('#username').fill('qa-owner'); await page.locator('#password').fill(password);
+    await page.locator('#code').fill(await nextCode());
     await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
     await page.waitForFunction(() => document.getElementById('updated').textContent.startsWith('Actualisé'));
     assert.equal(await page.locator('#requests').textContent(), '1');

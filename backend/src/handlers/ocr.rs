@@ -52,6 +52,16 @@ pub async fn recognize(Json(payload): Json<OcrRequest>) -> Result<Json<OcrRespon
     })?;
     let python = std::env::var("OCR_PYTHON").unwrap_or_else(|_| "python3".into());
     let mut child = Command::new(python)
+        // Do not pass database URLs, encryption keys or admin configuration to Python.
+        // This reduces exposure; the same OS user is not a separate security boundary.
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("HOME", std::env::temp_dir())
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .env(
+            "OCR_MODELS_DIR",
+            std::env::var("OCR_MODELS_DIR").unwrap_or_else(|_| "backend/ocr/models".into()),
+        )
         .args(["-c", RUNNER])
         .env("OMP_NUM_THREADS", "2")
         .env("OPENBLAS_NUM_THREADS", "2")

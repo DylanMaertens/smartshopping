@@ -1,5 +1,9 @@
 # Compte rendu d'avancement
 
+> Archive historique du socle initial, déplacée le 15 octobre 2026. Ce document
+> décrit des étapes anciennes (dont MMKV) et ne reflète pas l’état actuel.
+> Le suivi actif est [COMPTE_RENDU.html](../../COMPTE_RENDU.html).
+
 ## Ce qui a été fait jusqu'ici
 
 ### 1) Cadrage et documentation

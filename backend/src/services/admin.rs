@@ -22,6 +22,7 @@ const LOG_CAPACITY: usize = 1000;
 pub struct Credentials {
     pub username: String,
     pub password_hash: String,
+    pub totp_secret_hex: String,
 }
 
 pub struct AdminState {
@@ -32,6 +33,7 @@ pub struct AdminState {
     inner: Mutex<Inner>,
 }
 struct Inner {
+    totp: super::admin_totp::TotpState,
     sessions: HashMap<String, Session>,
     login_window: Instant,
     login_attempts: u32,
@@ -75,6 +77,8 @@ impl AdminState {
     }
     pub fn from_env() -> Self {
         let credentials = std::env::var("ADMIN_CREDENTIALS_FILE").ok().map(|path| {
+            super::admin_totp::private_file(std::path::Path::new(&path))
+                .expect("admin credentials must be a regular private file");
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -87,8 +91,9 @@ impl AdminState {
             }
             let bytes = std::fs::read(path).expect("cannot read admin credentials file");
             assert!(bytes.len() <= 4096, "admin credentials file too large");
-            let credentials: Credentials =
-                serde_json::from_slice(&bytes).expect("invalid admin credentials file");
+            let credentials: Credentials = serde_json::from_slice(&bytes).expect(
+                "invalid admin credentials: provision 2FA with ops/setup-admin.py into a NEW file",
+            );
             assert!(
                 Self::valid_credentials(&credentials),
                 "invalid admin credential format"
@@ -100,6 +105,13 @@ impl AdminState {
             std::env::var("ADMIN_ORIGIN").unwrap_or_default(),
         );
         admin.origin_file = std::env::var("ADMIN_ORIGIN_FILE").ok().map(PathBuf::from);
+        if let (Some(credentials), Ok(path)) =
+            (&admin.credentials, std::env::var("ADMIN_CREDENTIALS_FILE"))
+        {
+            admin.inner.get_mut().unwrap().totp = super::admin_totp::TotpState::open(
+                std::path::Path::new(&format!("{path}.totp-state")), &credentials.totp_secret_hex
+            ).expect("cannot open private TOTP state; restore the matching state or reprovision 2FA; never reset its counter");
+        }
         admin
     }
 
@@ -110,6 +122,7 @@ impl AdminState {
             origin_file: None,
             started: Instant::now(),
             inner: Mutex::new(Inner {
+                totp: super::admin_totp::TotpState::default(),
                 sessions: HashMap::new(),
                 login_window: Instant::now(),
                 login_attempts: 0,
@@ -127,6 +140,7 @@ impl AdminState {
             return false;
         };
         !value.username.is_empty()
+            && super::admin_totp::valid_secret(&value.totp_secret_hex)
             && value.username.len() <= 80
             && hash.algorithm.as_str() == "argon2id"
             && hash.params.get_decimal("m") == Some(19456)
@@ -194,6 +208,23 @@ impl AdminState {
             .verify_password(password.as_bytes(), &hash)
             .is_ok();
         correct && username == credentials.username
+    }
+
+    pub fn verify_login(&self, username: &str, password: &str, code: &str) -> bool {
+        if !self.verify_password(username, password) {
+            return false;
+        }
+        let Some(credentials) = &self.credentials else {
+            return false;
+        };
+        let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) else {
+            return false;
+        };
+        self.inner
+            .lock()
+            .unwrap()
+            .totp
+            .consume(&credentials.totp_secret_hex, code, now.as_secs())
     }
 
     pub fn create_session(&self, origin: String, previous: Option<&str>) -> (String, String) {
@@ -367,6 +398,7 @@ mod tests {
     #[test]
     fn trusted_origin_is_explicit_https_only_and_log_retention_is_bounded_in_time() {
         let credentials = Credentials {
+            totp_secret_hex: "ab".repeat(20),
             username: "test".into(),
             password_hash: String::new(),
         };

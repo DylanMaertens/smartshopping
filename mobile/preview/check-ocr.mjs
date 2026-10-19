@@ -21,11 +21,11 @@ await build({ absWorkingDir: mobile, bundle: true, outfile: out + '/app.js',
   plugins: [{ name: 'ocr-fixtures', setup(builder) {
     builder.onResolve({ filter: /BarcodeScannerPanel$/ }, () => ({ path: 'camera', namespace: 'fixture' }));
     builder.onResolve({ filter: /services\/api\/backend$/ }, () => ({ path: 'backend', namespace: 'fixture' }));
-    builder.onResolve({ filter: /localKeyValueStorage$/ }, () => ({ path: 'storage', namespace: 'fixture' }));
+    builder.onResolve({ filter: /(localKeyValueStorage|personalSettings)$/ }, () => ({ path: 'storage', namespace: 'fixture' }));
     builder.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ loader: 'tsx', resolveDir: mobile, contents: path === 'camera'
       ? `import React from 'react'; export const BarcodeScannerPanel = ({onPhotographed}) => <button onClick={() => onPhotographed('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=')}>Photo fictive</button>;`
       : path === 'backend' ? `export class BackendApiError extends Error {} export const recognizeListPhoto = async () => ({text:${JSON.stringify(sample)}});`
-      : 'export const LocalKeyValueStorage = {getString: () => null, setString: () => {}};' }));
+      : 'export const LocalKeyValueStorage = {getString: () => null, setString: () => {}}; export const PersonalSettings = LocalKeyValueStorage; export const THEME_STORAGE_KEY = "appearance.theme.v1";' }));
   } }],
 });
 const server = createServer(async (req, res) => {

@@ -18,12 +18,14 @@
       <form id="login-form">
         <label for="username">Identifiant<input id="username" name="username" autocomplete="username" maxlength="80" required></label>
         <label for="password">Mot de passe<input id="password" name="password" type="password" autocomplete="current-password" maxlength="1024" required></label>
+        <label for="code">Code de l’application d’authentification<input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required aria-describedby="code-help"></label>
+        <p id="code-help">6 chiffres, renouvelés toutes les 30 secondes. Après une connexion, attendez le code suivant pour vous reconnecter. Téléphone perdu : réinitialisation depuis le terminal privé du serveur, jamais par e-mail.</p>
         <button id="login-button" type="submit">Se connecter</button>
       </form>
       <p class="muted small">Session limitée à 8 heures et 30 minutes d’inactivité. Mot de passe non conservé par la page ; session dans un cookie protégé.</p>
     </section>
     <div id="dashboard" hidden>
-      <nav aria-label="Administration"><a href="#supervision" aria-current="page">Supervision</a><a href="#journaux">Journaux</a><a href="#moderation">Modération</a><a href="#messages">Messages</a></nav>
+      <nav aria-label="Administration"><a href="#supervision" aria-current="page">Supervision</a><a href="#journaux">Journaux</a><a href="#securite">Sécurité</a><a href="#moderation">Modération</a><a href="#messages">Messages</a></nav>
       <div class="toolbar"><p id="updated" class="muted">Pas encore actualisé</p><button id="refresh" class="secondary" type="button">Actualiser</button></div>
       <div class="pending-counts" aria-label="Dossiers à traiter"><a href="#moderation">Signalements en attente <strong id="pending-reports">—</strong></a><a href="#moderation">Propositions en attente de consensus <strong id="pending-proposals">—</strong></a><a href="#messages">Messages nouveaux <strong id="pending-messages">—</strong></a><a href="#messages">Messages en cours <strong id="active-messages">—</strong></a></div><p id="counts-status" class="small muted" role="status"></p>
       <section id="supervision" aria-labelledby="supervision-title">
@@ -52,6 +54,23 @@
           <div id="log-results"></div>
         </div>
       </section>
+      <section id="securite" hidden aria-labelledby="securite-title">
+        <p class="eyebrow">ACCÈS APPLICATIFS</p><h1 id="securite-title" tabindex="-1">Sécurité</h1>
+        <p>Historique persistant : jusqu’à 5 000 accès et 7 jours affichables. Nettoyage à la prochaine écriture. En cas de surcharge, certains événements ne sont pas conservés ; le compteur ci-dessous le signale. Ce n’est pas un journal d’audit exhaustif.</p>
+        <p>Seuls les appareils avec une signature vérifiée peuvent être identifiés ici. Un blocage coupe leurs prochains accès signés à l’API (synchronisation, catalogue, communauté, OCR), pas les données locales. Une requête déjà en cours peut finir. Une nouvelle installation peut obtenir une autre identité.</p>
+        <p class="muted">Les connexions SSH, les pages publiques et les accès réseau bruts ne sont pas bloqués ici. Aucune IP déduite des en-têtes Cloudflare : le relais local ne doit jamais être banni.</p>
+        <p id="security-status" role="status" aria-live="polite"></p>
+        <form id="security-form" class="card" hidden>
+          <h2>Gérer cet appareil</h2><p id="security-device"></p><p id="security-current"></p>
+          <label for="security-minutes">Action<select id="security-minutes"><option value="15">Bloquer 15 minutes</option><option value="60">Bloquer 1 heure</option><option value="1440">Bloquer 24 heures</option><option value="0">Débloquer</option></select></label>
+          <label for="security-reason">Motif interne (10 à 500 caractères)<textarea id="security-reason" minlength="10" maxlength="500" rows="3" required></textarea></label>
+          <p class="small muted">Décision et identifiant administrateur conservés en base. Ne copiez aucun secret ni contenu privé dans le motif.</p>
+          <button id="security-submit" type="submit">Confirmer…</button> <button id="security-cancel" class="secondary" type="button">Annuler</button>
+        </form>
+        <h2>Blocages actifs</h2><div id="security-blocks" class="queue"></div>
+        <h2>Accès récents</h2><div id="access-events" class="security-events" tabindex="0" role="region" aria-label="Accès récents, tableau défilant"></div>
+        <h2>50 dernières décisions</h2><div id="security-history"></div>
+      </section>
       <section id="moderation" hidden aria-labelledby="moderation-title">
         <p class="eyebrow">CATALOGUE COMMUNAUTAIRE</p><h1 id="moderation-title" tabindex="-1">Modération</h1>
         <p>Examiner les propositions et signalements. Aucun accès aux listes privées. Les votes restent nécessaires à la validation : pas d’approbation forcée ni de sanction automatique des contributeurs.</p>
@@ -73,7 +92,7 @@
         <form id="decision-form"><label for="decision-action">Décision<select id="decision-action" required></select></label><label for="decision-reason">Motif interne (10 à 1 000 caractères)<textarea id="decision-reason" rows="3" minlength="10" maxlength="1000" required></textarea></label><p class="small muted">Le motif et l’identifiant administrateur seront conservés dans l’historique. Ne pas y copier de données personnelles.</p><button id="decision-submit" type="submit">Confirmer la décision…</button></form>
         <h3>Historique · 50 dernières décisions</h3><div id="dossier-history"></div><button id="dossier-close" type="button" class="secondary">Fermer</button>
       </dialog>
-      <p class="footnote">Décisions et messages conservés dans PostgreSQL, contrairement aux journaux techniques en mémoire. CPU, mémoire, disque, sauvegardes et alertes externes restent à instrumenter. La conservation des messages doit être définie avant ouverture publique.</p>
+      <p class="footnote">Décisions, messages et historique de Sécurité conservés dans PostgreSQL ; les diagnostics de l’onglet Journaux restent en mémoire. CPU, mémoire, disque, sauvegardes et alertes externes restent à instrumenter. La conservation des messages doit être définie avant ouverture publique.</p>
     </div>
     <noscript><p class="card">JavaScript est nécessaire pour se connecter et consulter la supervision.</p></noscript>
   </main>

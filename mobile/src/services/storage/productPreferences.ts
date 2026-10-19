@@ -1,4 +1,4 @@
-import { LocalKeyValueStorage } from './localKeyValueStorage';
+import { PersonalSettings as LocalKeyValueStorage } from './personalSettings';
 import { itemNameKey, normalizeItemName, truncateUtf8 } from '../itemValidation';
 import { canonicalCategoryName, STORE_CATEGORIES } from '../categorization/categoryService';
 

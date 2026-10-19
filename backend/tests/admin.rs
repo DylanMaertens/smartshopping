@@ -17,6 +17,177 @@ use tower::ServiceExt;
 
 const ORIGIN: &str = "https://admin.example.test";
 const PASSWORD: &str = "Test-only password, not a deployed credential!";
+
+#[tokio::test]
+async fn security_endpoints_require_session_csrf_and_persistence() {
+    let state = state(true);
+    let (token, csrf) = state.admin.create_session(ORIGIN.into(), None);
+    let cookie = format!("__Host-poduna_admin={token}");
+    let app = create_router(state);
+    let payload = json!({"device_id":uuid::Uuid::new_v4(),"minutes":15,"expected_version":null,"reason":"Test security restriction"});
+    for path in [
+        "/admin/api/security",
+        "/admin/api/security/devices/00000000-0000-0000-0000-000000000001",
+    ] {
+        assert_eq!(
+            app.clone()
+                .oneshot(request("GET", path, None, None, Value::Null))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(request("GET", path, Some(&cookie), None, Value::Null))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+    assert_eq!(
+        app.clone()
+            .oneshot(request(
+                "POST",
+                "/admin/api/security/decisions",
+                Some(&cookie),
+                None,
+                payload.clone()
+            ))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        app.oneshot(request(
+            "POST",
+            "/admin/api/security/decisions",
+            Some(&cookie),
+            Some(&csrf),
+            payload
+        ))
+        .await
+        .unwrap()
+        .status(),
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL on a disposable PostgreSQL cluster"]
+async fn security_decision_http_contract_and_audit() {
+    let mut state = state(true);
+    state.db_pool = Some(
+        sqlx::PgPool::connect(&std::env::var("TEST_DATABASE_URL").unwrap())
+            .await
+            .unwrap(),
+    );
+    let pool = state.db_pool.as_ref().unwrap();
+    crate_prepare_database(pool).await;
+    let device = uuid::Uuid::new_v4();
+    state.enroll_device(&device.to_string()).await.unwrap();
+    let (token, csrf) = state.admin.create_session(ORIGIN.into(), None);
+    let cookie = format!("__Host-poduna_admin={token}");
+    let app = create_router(state.clone());
+    let payload = json!({"device_id":device,"minutes":15,"expected_version":null,"reason":"Test security restriction"});
+    assert_eq!(
+        app.clone()
+            .oneshot(request(
+                "POST",
+                "/admin/api/security/decisions",
+                Some(&cookie),
+                Some(&csrf),
+                payload.clone()
+            ))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        app.clone()
+            .oneshot(request(
+                "POST",
+                "/admin/api/security/decisions",
+                Some(&cookie),
+                Some(&csrf),
+                payload
+            ))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::CONFLICT
+    );
+    let response = app
+        .oneshot(request(
+            "GET",
+            "/admin/api/security",
+            Some(&cookie),
+            None,
+            Value::Null,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_body(response).await;
+    assert!(body["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|b| b["device_id"] == device.to_string()));
+    assert!(body["history"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|b| b["device_id"] == device.to_string() && b["actor"] == "owner"));
+}
+
+async fn crate_prepare_database(pool: &sqlx::PgPool) {
+    shopping_list_backend::db::prepare_database(pool)
+        .await
+        .unwrap();
+}
+#[tokio::test]
+async fn second_factor_is_required_single_use_and_never_logged() {
+    let state = state(true);
+    let app = create_router(state.clone());
+    let code = test_code(0);
+    for payload in [
+        json!({"username":"owner", "password":PASSWORD}),
+        json!({"username":"owner", "password":PASSWORD, "code":"abcdef"}),
+        json!({"username":"owner", "password":"wrong", "code":code}),
+        json!({"username":"owner", "password":PASSWORD, "code":test_code(5)}),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(request("POST", "/admin/api/login", None, None, payload))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(!response.headers().contains_key("set-cookie"));
+    }
+    let payload = json!({"username":"owner", "password":PASSWORD, "code":code});
+    let (a, b) = tokio::join!(
+        app.clone().oneshot(request(
+            "POST",
+            "/admin/api/login",
+            None,
+            None,
+            payload.clone()
+        )),
+        app.clone()
+            .oneshot(request("POST", "/admin/api/login", None, None, payload))
+    );
+    let mut statuses = [a.unwrap().status().as_u16(), b.unwrap().status().as_u16()];
+    statuses.sort();
+    assert_eq!(statuses, [200, 401]);
+    let logs = serde_json::to_string(&state.admin.events()).unwrap();
+    assert!(!logs.contains(&code));
+    assert!(!logs.contains(PASSWORD));
+    assert!(!logs.contains("3132333435363738393031323334353637383930"));
+}
 fn state(enabled: bool) -> AppState {
     let mut config = Config::from_env();
     config.database_url = None;
@@ -40,6 +211,7 @@ fn state(enabled: bool) -> AppState {
     });
     state.admin = Arc::new(AdminState::new(
         enabled.then(|| Credentials {
+            totp_secret_hex: "3132333435363738393031323334353637383930".into(),
             username: "owner".into(),
             password_hash: hash.clone(),
         }),
@@ -92,7 +264,7 @@ async fn login(app: &Router) -> (String, String) {
             "/admin/api/login",
             None,
             None,
-            json!({"username":"owner", "password": PASSWORD}),
+            json!({"username":"owner", "password": PASSWORD, "code": test_code(0)}),
         ))
         .await
         .unwrap();
@@ -118,6 +290,17 @@ async fn login(app: &Router) -> (String, String) {
         .unwrap()
         .to_owned();
     (cookie.split(';').next().unwrap().to_owned(), csrf)
+}
+fn test_code(offset: u64) -> String {
+    shopping_list_backend::services::admin_totp::code_at(
+        "3132333435363738393031323334353637383930",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            / 30
+            + offset,
+    )
 }
 
 #[tokio::test]
@@ -404,7 +587,7 @@ async fn session_forgery_duplicate_cookie_and_old_session_after_login_are_reject
             "/admin/api/login",
             Some(&cookie),
             None,
-            json!({"username":"owner", "password":PASSWORD}),
+            json!({"username":"owner", "password":PASSWORD, "code": test_code(1)}),
         ))
         .await
         .unwrap();

@@ -5,6 +5,7 @@ import { validateBackup, type ListBackup } from '@/services/backup/listBackup';
 import type { ShoppingItem, ShoppingList } from '@/types';
 import type { SyncListName } from '@/services/api/backend';
 import { getRememberedCategory } from './productPreferences';
+import { exportPersonalSettings, restorePersonalSettings } from '@/services/backup/personalBackup';
 
 const ACTIVE_LIST_KEY = 'active-list-id';
 
@@ -27,7 +28,8 @@ export class ShoppingListStorage {
     let backup!: ListBackup;
     getDatabase().withTransactionSync(() => {
       backup = validateBackup({
-        format: 'smartshopping-lists', version: 1, backupId: newStorageId(), createdAt: new Date().toISOString(),
+        format: 'smartshopping-lists', version: 2, backupId: newStorageId(), createdAt: new Date().toISOString(),
+        preferences: exportPersonalSettings(),
         lists: this.getLists().map((list) => ({
           name: list.name, categoryOrder: this.getCategoryOrder(list.id),
           items: this.getCurrentList(list.id).filter((item) => !item.deletedAt).map((item) => ({
@@ -49,6 +51,7 @@ export class ShoppingListStorage {
     db.withTransactionSync(() => {
       const key = `restored-backup:${backup.backupId}`;
       if (getMetadata(key)) throw new Error('Cette sauvegarde a déjà été restaurée sur cet appareil.');
+      if (backup.version === 2) restorePersonalSettings(backup.preferences);
       const now = Date.now();
       for (const source of backup.lists) {
         const listId = `restored-${newStorageId()}`;

@@ -14,6 +14,20 @@ it('rejects invalid JSON, unknown versions and unexpected credentials', () => {
   expect(() => validateBackup({ ...example(), version: 2 })).toThrow(/version/);
   expect(() => validateBackup({ ...example(), deviceSecret: 'private' })).toThrow();
 });
+it('validates v2 preferences strictly, normalizes aisles and rejects duplicate or injected keys', () => {
+  const prefs = { theme: 'nuit', products: [{ barcode: '12345678', name: 'Croquettes', category: 'Alimentation animale' }], categories: [{ name: 'Oranges', category: 'Fruits & légumes' }] };
+  const make = (preferences: unknown) => ({ ...example(), version: 2, preferences });
+  const backup = validateBackup(make(prefs));
+  expect(parseBackup(serializeBackup(backup))).toEqual(backup);
+  if (backup.version !== 2) throw new Error('v2 expected');
+  expect(backup.preferences.products[0].category).toBe('Animaux');
+  for (const preferences of [
+    { ...prefs, theme: 'invalid' }, { ...prefs, deviceSecret: 'secret' },
+    { ...prefs, products: [...prefs.products, ...prefs.products] },
+    { ...prefs, categories: [...prefs.categories, { name: 'Orange', category: 'Boissons' }] },
+    { ...prefs, categories: [{ name: 'Orange', category: 'Inconnu' }] },
+  ]) expect(() => validateBackup(make(preferences))).toThrow();
+});
 it.each([0, -1, 1000, 1.5, '2'])('rejects invalid quantity %s', (quantity) => {
   const backup = example();
   (backup.lists[0].items[0] as { quantity: unknown }).quantity = quantity;

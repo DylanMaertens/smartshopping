@@ -16,11 +16,31 @@ async fn main() {
 
     let config = Config::from_env();
     let state = AppState::new(config.clone());
+    if std::env::var("REQUIRE_RESTRICTED_DATABASE_ROLE").as_deref() == Ok("true") {
+        assert!(
+            state.db_pool.is_some(),
+            "restricted database mode requires a valid PostgreSQL configuration"
+        );
+    }
 
     if let Some(pool) = &state.db_pool {
-        prepare_database(pool)
-            .await
-            .expect("failed to connect to PostgreSQL or apply migrations");
+        let restricted = std::env::var("REQUIRE_RESTRICTED_DATABASE_ROLE").as_deref() == Ok("true");
+        let migrate = std::env::var("RUN_DATABASE_MIGRATIONS").as_deref() != Ok("false");
+        assert!(!(restricted && migrate), "restricted API must use RUN_DATABASE_MIGRATIONS=false and a separate migration process");
+        if restricted {
+            shopping_list_backend::db::verify_runtime_role(pool)
+                .await
+                .expect("unsafe PostgreSQL runtime role; provision least-privilege grants first");
+        }
+        if migrate {
+            prepare_database(pool)
+                .await
+                .expect("failed to connect to PostgreSQL or apply migrations");
+        } else {
+            shopping_list_backend::db::verify_schema(pool)
+                .await
+                .expect("database schema not ready; run migrate-db separately");
+        }
         tracing::info!("PostgreSQL persistence ready");
     }
 
@@ -35,5 +55,10 @@ async fn main() {
         .expect("failed to bind");
 
     tracing::info!("backend listening on {}", addr);
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.expect("server error");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .expect("server error");
 }

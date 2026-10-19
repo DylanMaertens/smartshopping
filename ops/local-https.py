@@ -108,7 +108,7 @@ def run_server(port, enable_admin=False, enable_contact=False):
     if not os.access(cloudflared, os.X_OK):
         raise RuntimeError('Installer le tunnel : bash ops/install-local-https.sh')
     origin = f'http://127.0.0.1:{port}'
-    admin_credentials = STATE / 'admin/credentials.json'
+    admin_credentials = Path(os.environ.get('PODUNA_ADMIN_CREDENTIALS_FILE', STATE / 'admin/credentials.json')).resolve()
     admin_origin = HTTPS / 'admin-origin'
     if enable_admin:
         if not admin_credentials.is_file():
@@ -150,18 +150,21 @@ def run_server(port, enable_admin=False, enable_contact=False):
             # Fail before touching the database if an unrelated service holds the port.
             with socket.socket() as probe:
                 probe.bind(('127.0.0.1', port))
-            binary = tool('backend', settings)
+            binary = str(Path(os.environ.get('PODUNA_BACKEND_BIN') or tool('backend', settings)).resolve())
+            if not os.access(binary, os.X_OK):
+                raise RuntimeError('Binaire backend absent ou non exécutable.')
             pg_isready = tool('pg_isready', settings)
             pg_ctl = tool('pg_ctl', settings)
             pg_socket = STATE / 'socket'
-            pg_socket.mkdir(exist_ok=True)
+            pg_socket.mkdir(mode=0o700, exist_ok=True)
+            pg_socket.chmod(0o700)
             pg_data = STATE / 'postgres'
             ready = subprocess.run([pg_isready, '-h', str(pg_socket)], stdout=subprocess.DEVNULL).returncode == 0
             if not ready:
                 if not (pg_data / 'PG_VERSION').exists():
-                    subprocess.run([tool('initdb', settings), '-D', str(pg_data), '--auth=trust', '--no-locale', '--encoding=UTF8'], check=True)
+                    subprocess.run([tool('initdb', settings), '-D', str(pg_data), '--auth-local=peer', '--auth-host=scram-sha-256', '--no-locale', '--encoding=UTF8'], check=True)
                 subprocess.run([pg_ctl, '-D', str(pg_data), '-l', str(HTTPS / 'postgres.log'),
-                                '-o', f"-h '' -k '{pg_socket}'", '-w', 'start'], check=True)
+                                '-o', f"-h '' -k '{pg_socket}' -c unix_socket_permissions=0700", '-w', 'start'], check=True)
                 pg_owned = True
             psql = tool('psql', settings)
             exists = subprocess.check_output([psql, '-h', str(pg_socket), '-d', 'postgres', '-Atc',

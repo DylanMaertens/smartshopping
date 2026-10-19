@@ -2,6 +2,7 @@
 name = "shopping-list-backend"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.89"
 default-run = "shopping-list-backend"
 
 [dependencies]
@@ -20,6 +21,8 @@ redis = { version = "0.32", features = ["tokio-comp"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate", "macros"] }
 hmac = "0.12"
 sha2 = "0.10"
+sha1 = "0.10"
+subtle = "2.6"
 hex = "0.4"
 aes-gcm = "0.10"
 base64 = "0.22"

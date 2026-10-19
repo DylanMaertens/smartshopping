@@ -1,4 +1,5 @@
 import { setupWorkflows } from './workflows.js';
+import { setupSecurity } from './security.js';
 const $ = id => document.getElementById(id);
 let csrf = null;
 let events = [];
@@ -14,10 +15,11 @@ const node = (tag, text, className) => { const el = document.createElement(tag);
 function notice(text, error = false) { $('notice').textContent = text; $('notice').className = error ? 'notice error' : 'notice'; }
 
 function lock(message = '') {
+  security.reset();
   workflows.reset();
   generation += 1; csrf = null; events = [];
   $('dashboard').hidden = true; $('logout').hidden = true; $('login-panel').hidden = false;
-  $('connection').textContent = 'Non connecté'; $('password').value = '';
+  $('connection').textContent = 'Non connecté'; $('password').value = ''; $('code').value = '';
   $('log-results').replaceChildren(); $('services').replaceChildren(); $('activity').replaceChildren();
   for (const id of ['requests', 'latency', 'errors', 'rejected']) $(id).textContent = '—';
   $('updated').textContent = 'Pas encore actualisé'; $('count').textContent = '';
@@ -36,7 +38,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     if (response.status === 401 && path !== 'login') lock('Session expirée. Reconnectez-vous.');
     const messages = {
-      ADMIN_LOGIN_FAILED: 'Identifiant ou mot de passe incorrect.',
+      ADMIN_LOGIN_FAILED: 'Identifiant, mot de passe ou code incorrect ou expiré. Utilisez un nouveau code.',
       ADMIN_LOGIN_THROTTLED: 'Trop de tentatives. Réessayez dans cinq minutes.',
       ADMIN_SESSION_EXPIRED: 'Session expirée. Reconnectez-vous.',
       ADMIN_NOT_CONFIGURED: 'Accès administrateur non configuré sur ce serveur. Aucun mot de passe par défaut.',
@@ -46,6 +48,9 @@ async function api(path, options = {}) {
       WORKFLOW_UNAVAILABLE: 'Base de données indisponible. Aucun résultat ni enregistrement confirmé.',
       WORKFLOW_STALE: 'Ce dossier a changé. Fermez-le et actualisez avant de décider.',
       BAD_REQUEST: 'Demande invalide. Vérifiez le motif et la décision.',
+      SECURITY_UNAVAILABLE: 'Surveillance indisponible : PostgreSQL et signatures sont nécessaires pour bloquer un appareil.',
+      SECURITY_STALE: 'Cet accès a été modifié depuis votre consultation. Aucun changement effectué.',
+      SECURITY_UNKNOWN_DEVICE: 'Appareil signé inconnu. Aucun changement effectué.',
     };
     const error = new Error(messages[data.code] || `Requête refusée (HTTP ${response.status}).`);
     error.code = data.code; error.reference = response.headers.get('x-request-id');
@@ -57,18 +62,19 @@ async function api(path, options = {}) {
 function loggedIn(data) {
   csrf = data.csrf; generation += 1;
   $('login-panel').hidden = true; $('dashboard').hidden = false; $('logout').hidden = false;
-  $('connection').textContent = 'Session administrateur'; $('password').value = '';
+  $('connection').textContent = 'Session administrateur'; $('password').value = ''; $('code').value = '';
   notice(''); navigate();
 }
 function navigate(focus = false) {
   const [target, query = ''] = location.hash.slice(1).split('?');
-  const current = ['journaux','moderation','messages'].includes(target) ? target : 'supervision';
-  for (const id of ['supervision','journaux','moderation','messages']) $(id).hidden = current !== id;
+  const current = ['journaux','moderation','messages','securite'].includes(target) ? target : 'supervision';
+  for (const id of ['supervision','journaux','moderation','messages','securite']) $(id).hidden = current !== id;
   document.querySelectorAll('nav a').forEach(link => {
     if (link.hash === `#${current}`) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   });
   if (query) { const value = new URLSearchParams(query).get('level'); $('level').value = Object.hasOwn(levelLabels, value) ? value : ''; renderLogs(); }
   if (csrf) workflows.refresh(current);
+  if (csrf && current === 'securite') security.refresh();
   if (focus && csrf) $(current === 'journaux' ? 'logs-title' : `${current}-title`).focus();
 }
 function renderOverview(data) {
@@ -112,6 +118,7 @@ async function refresh() {
   if (busy || !csrf) return;
   workflows.refreshCounts();
   const tab = location.hash.slice(1).split('?')[0];
+  if (tab === 'securite') { await security.refresh(); return; }
   if (['moderation','messages'].includes(tab)) { await workflows.refresh(tab); return; }
   busy = true; $('refresh').disabled = true;
   const current = generation;
@@ -127,12 +134,14 @@ async function refresh() {
   } finally { busy = false; $('refresh').disabled = false; }
 }
 const workflows = setupWorkflows(api, () => Boolean(csrf));
+const security = setupSecurity(api, () => Boolean(csrf));
 const contactOption = node('option', 'Contact'); contactOption.value = 'contact'; $('service').append(contactOption);
 $('login-form').addEventListener('submit', async event => {
   event.preventDefault(); if ($('login-button').disabled) return;
   $('login-button').disabled = true;
   const password = $('password').value; $('password').value = '';
-  try { loggedIn(await api('login', { method: 'POST', body: JSON.stringify({ username: $('username').value.trim(), password }) })); await refresh(); }
+  const code = $('code').value; $('code').value = '';
+  try { loggedIn(await api('login', { method: 'POST', body: JSON.stringify({ username: $('username').value.trim(), password, code }) })); await refresh(); }
   catch (error) { notice(error.message || 'Connexion impossible.', true); }
   finally { $('login-button').disabled = false; }
 });

@@ -24,7 +24,7 @@ const result = await build({ absWorkingDir: mobile, entryPoints: ['preview/index
       export const speechErrorMessage = () => 'Erreur simulée';
     ` }));
     builder.onResolve({ filter: /services\/backup\/backupFiles$/ }, () => ({ path: resolve(mobile, 'preview/backupFiles.ts') }));
-    builder.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
+    builder.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|personalSettings|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
   } }],
 });
 const server = createServer((req, res) => {

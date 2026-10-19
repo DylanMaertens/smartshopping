@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { MAX_BACKUP_BYTES, type ListBackup } from './listBackup';
+import { MAX_BACKUP_BYTES, serializeBackup, type ListBackup } from './listBackup';
 import { exportBackupFile, importBackupFile, saveBackupOnDevice } from './backupFiles';
 const mocks = vi.hoisted(() => ({
   picker: vi.fn(), available: vi.fn(), share: vi.fn(), text: vi.fn(), remove: vi.fn(),
@@ -27,7 +27,7 @@ beforeEach(() => {
   mocks.directoryPicker.mockResolvedValue({ uri: 'content://documents/selected-folder' });
   mocks.createDocument.mockImplementation((name: string) => ({ name, write: mocks.write, text: mocks.text, delete: mocks.remove }));
   mocks.picker.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///cache/picked.json' }] });
-  mocks.text.mockResolvedValue(JSON.stringify(backup));
+  mocks.text.mockResolvedValue(serializeBackup(backup));
   mocks.available.mockResolvedValue(true);
 });
 it('reads a selected file then removes only its temporary cache copy', async () => {

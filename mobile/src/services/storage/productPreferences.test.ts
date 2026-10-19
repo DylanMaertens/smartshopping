@@ -1,6 +1,12 @@
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { LocalKeyValueStorage } from './localKeyValueStorage';
 import { getProductPreference, getRememberedCategory, rememberProductCategory, saveProductPreference } from './productPreferences';
+const settings = vi.hoisted(() => new Map<string, string>());
+vi.mock('@/db/client', () => ({ getDatabase: () => ({
+  getFirstSync: (_sql: string, key: string) => settings.has(key) ? { value: settings.get(key) } : null,
+  runSync: (_sql: string, key: string, value: string) => settings.set(key, value),
+}) }));
+beforeEach(() => settings.clear());
 
 it('persists personal names independently of list deletion, cache TTL and module restart', async () => {
   const disk = new Map<string, string>();

@@ -25,6 +25,7 @@ use crate::{
 #[derive(Clone)]
 pub struct AppState {
     pub admin: Arc<crate::services::admin::AdminState>,
+    pub access_journal: Arc<crate::services::access_security::AccessJournal>,
     pub contact_enabled: bool,
     pub contact_rate_limiter: Arc<ApiRateLimiter>,
     pub config: Config,
@@ -133,6 +134,7 @@ impl AppState {
         let secret_cipher = SecretCipher::from_env().expect("invalid device secret encryption key");
         Self {
             admin: Arc::new(crate::services::admin::AdminState::from_env()),
+            access_journal: Arc::new(crate::services::access_security::AccessJournal::default()),
             contact_enabled: std::env::var("ENABLE_CONTACT_FORM").as_deref() == Ok("true"),
             contact_rate_limiter: Arc::new(ApiRateLimiter::new(20)),
             config,

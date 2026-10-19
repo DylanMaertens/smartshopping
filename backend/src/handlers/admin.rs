@@ -22,6 +22,9 @@ pub fn router(state: AppState) -> Router {
         .route("/admin/api/logout", post(logout))
         .route("/admin/api/overview", get(overview))
         .route("/admin/api/logs", get(logs))
+        .route("/admin/api/security", get(super::admin_security::snapshot))
+        .route("/admin/api/security/devices/:device", get(super::admin_security::device))
+        .route("/admin/api/security/decisions", post(super::admin_security::decide))
         .route(
             "/admin/api/queue-counts",
             get(super::admin_workflows::counts),
@@ -48,6 +51,9 @@ pub fn router(state: AppState) -> Router {
         .route("/admin/live.html", get(page))
         .route("/admin/live.js", get(script))
         .route("/admin/workflows.js", get(workflow_script))
+        .route("/admin/security.js", get(|| async {
+            ([(header::CONTENT_TYPE, "text/javascript; charset=utf-8")], include_str!("../../admin/security.js"))
+        }))
         .route("/admin/live.css", get(styles))
         .with_state(state)
         .route_layer(axum::middleware::from_fn(security_headers))
@@ -97,7 +103,7 @@ async fn styles() -> impl IntoResponse {
     )
 }
 
-fn failure(status: StatusCode, code: &'static str) -> Response {
+pub(crate) fn failure(status: StatusCode, code: &'static str) -> Response {
     let mut response = (status, Json(json!({"code": code}))).into_response();
     response.extensions_mut().insert(DiagnosticCode(code));
     response
@@ -179,18 +185,20 @@ struct AdminSession {
 struct Login {
     username: String,
     password: String,
+    #[serde(default)]
+    code: String,
 }
 async fn login(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<Login>,
 ) -> Response {
-    if payload.username.len() > 80 || payload.password.len() > 1024 {
+    if payload.username.len() > 80 || payload.password.len() > 1024 || payload.code.len() > 6 {
         return failure(StatusCode::UNAUTHORIZED, "ADMIN_LOGIN_FAILED");
     }
     let admin = state.admin.clone();
     let ok = tokio::task::spawn_blocking(move || {
-        admin.verify_password(&payload.username, &payload.password)
+        admin.verify_login(&payload.username, &payload.password, &payload.code)
     })
     .await
     .unwrap_or(false);

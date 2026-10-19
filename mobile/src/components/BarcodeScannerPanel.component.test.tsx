@@ -164,7 +164,7 @@ it('scans invitation QR codes and rejects other links without locking the camera
 it.each(Object.values(themes))('reflects camera readiness and cooldown in the $name theme', (theme) => {
   jest.useFakeTimers();
   try {
-    jest.spyOn(themeContext, 'useTheme').mockReturnValue({ theme, headingFont: undefined, selectTheme: jest.fn(), error: null });
+    jest.spyOn(themeContext, 'useTheme').mockReturnValue({ theme, headingFont: undefined, selectTheme: jest.fn(), reloadTheme: jest.fn(), error: null });
     const screen = render(<BarcodeScannerPanel onCancel={jest.fn()} onScanned={jest.fn()} />);
     const frame = () => screen.getByTestId('camera-frame').props.style;
     expect(frame()).toMatchObject({ borderColor: theme.muted, borderStyle: 'dashed', borderRadius: theme.radius });

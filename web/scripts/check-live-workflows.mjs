@@ -1,9 +1,10 @@
 // Invoked by ops/test-backend-postgres.py --browser, on a new isolated database only.
 import assert from 'node:assert/strict';
+import { provisionFixture } from './admin-totp-fixture.mjs';
 import { mkdtemp,readFile,writeFile,mkdir,rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join,resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { createServer as httpsServer } from 'node:https';
 import { createServer as tcpServer } from 'node:net';
 import { request as httpRequest } from 'node:http';
@@ -21,7 +22,7 @@ const password = 'Fixture password for workflow tests only!';
 try {
   execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',join(temp,'key.pem'),'-out',join(temp,'cert.pem'),'-days','1','-subj','/CN=localhost'],{stdio:'ignore'});
   const hash = execFileSync(hasher,{input:password,encoding:'utf8'}).trim();
-  await writeFile(join(temp,'credentials.json'),JSON.stringify({username:'qa-owner',password_hash:hash}),{mode:0o600});
+  const nextCode = await provisionFixture(join(temp,'credentials.json'),'qa-owner',hash);
   const reserve = tcpServer(); await new Promise(r=>reserve.listen(0,'127.0.0.1',r)); const port = reserve.address().port; await new Promise(r=>reserve.close(r));
   proxy = httpsServer({key:await readFile(join(temp,'key.pem')),cert:await readFile(join(temp,'cert.pem'))},(req,res)=>{
     const upstream = httpRequest({hostname:'127.0.0.1',port,path:req.url,method:req.method,headers:req.headers},response=>{res.writeHead(response.statusCode,response.headers);response.pipe(res);});
@@ -56,7 +57,7 @@ try {
     await page.screenshot({path:join(output,`contact-${width}.png`),fullPage:true});
     for(const size of ['200%','']){await page.evaluate(size=>document.documentElement.style.fontSize=size,size);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`contact overflow ${width}/${size}`);}
     await page.goto(`${origin}/admin/#messages`); await page.locator('#login-panel').waitFor({state:'visible'});
-    await page.locator('#username').fill('qa-owner'); await page.locator('#password').fill(password); await page.locator('#login-button').click();
+    await page.locator('#username').fill('qa-owner'); await page.locator('#password').fill(password); await page.locator('#code').fill(await nextCode()); await page.locator('#login-button').click();
     await page.waitForFunction(()=>document.getElementById('pending-messages').textContent==='1');
     await page.locator('#messages-search').fill('no-matching-address'); await page.locator('#messages-search-form button[type="submit"]').click();
     await page.getByText('Aucun dossier dans cet état.',{exact:true}).waitFor();
@@ -102,9 +103,37 @@ try {
     await page.locator('#moderation-status').selectOption('upheld'); await page.locator('#moderation-results .card').first().waitFor();
     await page.screenshot({path:join(output,`moderation-${width}.png`),fullPage:true});
     for(const size of ['200%','']){await page.evaluate(size=>document.documentElement.style.fontSize=size,size);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`moderation overflow ${width}/${size}`);}
+    // A disposable, signed device exercises the actual middleware and security UI.
+    const accessDevice=randomUUID(), accessSecret=randomUUID();
+    sql(`INSERT INTO anonymous_devices(device_id,first_seen_at,last_seen_at,auth_secret) VALUES('${accessDevice}',${now},${now},'${accessSecret}');`);
+    const access=async()=>{
+      const id=randomUUID(), timestamp=Date.now(), path='/api/v1/categories';
+      const signature=createHmac('sha256',accessSecret).update(`${timestamp}\n${id}\nGET\n${path}\n${createHash('sha256').update('').digest('hex')}`).digest('hex');
+      return fetch(`http://127.0.0.1:${port}${path}`,{headers:{'x-device-id':accessDevice,'x-request-id':id,'x-device-timestamp':String(timestamp),'x-device-signature':signature}});
+    };
+    assert.equal((await access()).status,200);
+    await page.locator('nav a[href="#securite"]').click();
+    await page.locator('#access-events button').filter({hasText:accessDevice}).first().click();
+    await page.locator('#security-form').waitFor({state:'visible'});
+    await page.locator('#security-reason').fill('Test <img src=x onerror=alert(1)> restriction');
+    acceptDialog=false; await page.locator('#security-submit').click();
+    assert.equal((await access()).status,200,'Cancel leaves device allowed');
+    acceptDialog=true; await page.locator('#security-submit').click();
+    await page.locator('#security-blocks button').filter({hasText:accessDevice}).waitFor();
+    assert.equal((await access()).status,403,'Signed device blocked');
+    assert.equal(await page.locator('#security-blocks img').count(),0);
+    await page.screenshot({path:join(output,`security-${width}.png`),fullPage:true});
+    for(const size of ['200%','']){await page.evaluate(size=>document.documentElement.style.fontSize=size,size);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`security overflow ${width}/${size}`);}
+    await page.locator('#security-blocks button').filter({hasText:accessDevice}).click();
+    await page.locator('#security-form').waitFor({state:'visible'});
+    assert.equal(await page.locator('#security-minutes').inputValue(),'0');
+    await page.locator('#security-reason').fill('Fin de la restriction de test'); await page.locator('#security-submit').click();
+    await page.waitForFunction(()=>document.getElementById('security-form').hidden);
+    assert.equal((await access()).status,200,'Immediate unblock');
     assert.equal(await page.evaluate(()=>localStorage.length+sessionStorage.length),0);
     await page.locator('#logout').click(); await page.locator('#login-panel').waitFor({state:'visible'});
     assert.equal(await page.locator('#dossier-content').textContent(),''); assert.equal(await page.locator('#messages-results').textContent(),'');
+    assert.equal(await page.locator('#access-events').textContent(),'');
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await context.close();
     console.log(`${width}px: real contact/retry/inbox/status/audit/report/withdrawal, no XSS or browser storage, 200% layout OK`);
   }

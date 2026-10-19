@@ -1,0 +1,14 @@
+# Future VPS only: review the SSH port and console recovery BEFORE installing.
+# /etc/fail2ban/jail.d/poduna-sshd.local (Debian/Ubuntu with systemd + nftables).
+# Deliberately disabled until tested on the actual VPS.
+[sshd]
+enabled = false
+backend = systemd
+port = 22
+mode = normal
+maxretry = 5
+findtime = 10m
+bantime = 15m
+usedns = no
+ignoreip = 127.0.0.1/8 ::1
+banaction = nftables-multiport

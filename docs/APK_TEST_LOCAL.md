@@ -92,6 +92,13 @@ Tester les transitions 1 → 2 → 1 dans l’ajout et dans la liste.
 lampe puis photographier ; annuler pendant la lecture ou après correction ; rouvrir
 Liste écrite et vérifier qu’elle propose une nouvelle photo sans ancien résultat.
 
+## Archives des APK
+
+Nettoyage du 15 octobre 2026 : seuls les APK 0.1.15 (dernier test), 0.1.14
+(retour arrière) et 0.1.11 (téléchargement du site) restent dans `artifacts/android/`.
+Les versions plus anciennes et leurs empreintes ont été déplacées dans la corbeille
+du système ; les notes ci-dessous restent historiques. Voir [le bilan du nettoyage](NETTOYAGE_PROJET.md).
+
 ## Historique 0.1.13 — Scanner unifié et retours continus
 
 Menu Produit / Scanner / Dicter dans une seule fenêtre. Scanner propose le sélecteur
@@ -99,7 +106,7 @@ Code-barres / Liste écrite avec des commandes exclusives. Retour ramène au for
 sans fermer puis rouvrir la fenêtre ; les brouillons restent conservés lors des
 changements de mode. Caméra et micro s’arrêtent lorsqu’on quitte leur mode.
 
-[APK Poduna 0.1.13](../artifacts/android/poduna-0.1.13-preview.apk) · [SHA-256](../artifacts/android/poduna-0.1.13-preview.apk.sha256)
+APK Poduna 0.1.13 et fichier SHA-256 retirés des téléchargements locaux (corbeille du 15 octobre 2026).
 
 Installer par-dessus la version actuelle, sans désinstaller. Code Android **14**,
 56 263 544 octets, paquet inchangé et certificat identique à la 0.1.12.
@@ -125,7 +132,7 @@ Installer **par-dessus la version actuelle, sans désinstaller**, code Android *
 Paquet inchangé (`com.smartshopping.app`), certificat identique à la 0.1.11 :
 `b771d84b4ecae6434ffa325a2e21acffd3e7a24ef9ad21eed5b3cf63b96e1cc4`.
 
-[APK Poduna 0.1.12](../artifacts/android/poduna-0.1.12-preview.apk) · [SHA-256](../artifacts/android/poduna-0.1.12-preview.apk.sha256)
+APK Poduna 0.1.12 et fichier SHA-256 retirés des téléchargements locaux (corbeille du 15 octobre 2026).
 
 SHA-256 : `b4392849f0de2842b05972e53aa92e0bd80427663202b64b090915e454040b8c`.
 
@@ -167,7 +174,7 @@ Installer **par-dessus la version précédente, sans désinstaller**, code Andro
 
 **Le nouveau correcteur est utilisable avec le serveur OCR actuel.** La meilleure séparation et remise en ordre des colonnes est une modification côté serveur : elle nécessite sa recompilation et son redémarrage, non effectués ici. L’APK ne met pas à jour le serveur. Le site local conserve son téléchargement 0.1.9 ; utiliser le nouvel artefact lié ci-dessous pour cet essai.
 
-[APK Poduna 0.1.10](../artifacts/android/poduna-0.1.10-preview.apk) · [SHA-256](../artifacts/android/poduna-0.1.10-preview.apk.sha256)
+APK Poduna 0.1.10 et fichier SHA-256 retirés des téléchargements locaux (corbeille du 15 octobre 2026).
 
 SHA-256 : `bae65abe414fdd013c6ebb55f058f26e36a79d2b48af814d533b15f8c3198ff4`.
 

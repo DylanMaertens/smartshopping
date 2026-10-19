@@ -1,5 +1,7 @@
-pub mod categories;
 pub mod admin;
+pub mod access_security;
+pub mod admin_totp;
+pub mod categories;
 pub mod community_catalog;
 pub mod device_auth;
 pub mod device_registry;

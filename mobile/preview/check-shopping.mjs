@@ -16,7 +16,7 @@ const result = await build({ absWorkingDir: mobile, entryPoints: ['preview/index
   alias: { 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
   plugins: [{ name: 'fixtures', setup(builder) {
     builder.onResolve({ filter: /services\/backup\/backupFiles$/ }, () => ({ path: resolve(mobile, 'preview/backupFiles.ts') }));
-    builder.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
+    builder.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|personalSettings|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
   } }],
 });
 const server = createServer((req, res) => {
