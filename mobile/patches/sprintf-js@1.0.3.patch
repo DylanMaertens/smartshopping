@@ -1,0 +1,41 @@
+diff --git a/src/sprintf.js b/src/sprintf.js
+index c0fc7c08b2e6fe38de2883034b8d28c8f34e9866..2b0d6effce090626b5efb8df28bb3838e8fec207 100644
+--- a/src/sprintf.js
++++ b/src/sprintf.js
+@@ -22,7 +22,7 @@
+     }
+ 
+     sprintf.format = function(parse_tree, argv) {
+-        var cursor = 1, tree_length = parse_tree.length, node_type = "", arg, output = [], i, k, match, pad, pad_character, pad_length, is_positive = true, sign = ""
++        var cursor = 1, tree_length = parse_tree.length, node_type = "", arg, output = [], i, k, match, precision, pad, pad_character, pad_length, is_positive = true, sign = ""
+         for (i = 0; i < tree_length; i++) {
+             node_type = get_type(parse_tree[i])
+             if (node_type === "string") {
+@@ -30,6 +30,10 @@
+             }
+             else if (node_type === "array") {
+                 match = parse_tree[i] // convenience purposes only
++                // Bound numeric precision before calling ECMAScript number
++                // methods. Invalid extremes are clamped, not allowed to crash
++                // an asynchronous CLI renderer. Do not mutate the cached tree.
++                precision = match[7] === undefined ? undefined : Math.min(100, Math.max(0, Number(match[7])))
+                 if (match[2]) { // keyword argument
+                     arg = argv[cursor]
+                     for (k = 0; k < match[2].length; k++) {
+@@ -73,13 +77,13 @@
+                         arg = JSON.stringify(arg, null, match[6] ? parseInt(match[6]) : 0)
+                     break
+                     case "e":
+-                        arg = match[7] ? arg.toExponential(match[7]) : arg.toExponential()
++                        arg = precision !== undefined ? arg.toExponential(precision) : arg.toExponential()
+                     break
+                     case "f":
+-                        arg = match[7] ? parseFloat(arg).toFixed(match[7]) : parseFloat(arg)
++                        arg = precision !== undefined ? parseFloat(arg).toFixed(precision) : parseFloat(arg)
+                     break
+                     case "g":
+-                        arg = match[7] ? parseFloat(arg).toPrecision(match[7]) : parseFloat(arg)
++                        arg = precision !== undefined ? parseFloat(arg).toPrecision(Math.max(1, precision)) : parseFloat(arg)
+                     break
+                     case "o":
+                         arg = arg.toString(8)

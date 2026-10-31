@@ -1,4 +1,5 @@
 import SQLiteKeyValueStorage from 'expo-sqlite/kv-store';
+import { Platform } from 'react-native';
 
 const memoryStore = new Map<string, string>();
 
@@ -11,6 +12,9 @@ type BrowserLikeStorage = {
 };
 
 function getBrowserStorage(): BrowserLikeStorage | null {
+  // Native runtimes may expose Web Storage too. Never switch an existing
+  // installation away from its SQLite keys (identity, preferences, API URL).
+  if (Platform.OS !== 'web') return null;
   if (typeof globalThis === 'undefined') return null;
 
   const maybeStorage = (globalThis as { localStorage?: BrowserLikeStorage }).localStorage;

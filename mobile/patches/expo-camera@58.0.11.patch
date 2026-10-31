@@ -1,0 +1,380 @@
+diff --git a/android/src/main/java/expo/modules/camera/CameraSession.kt b/android/src/main/java/expo/modules/camera/CameraSession.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..712f68e2de26d94c91a9746f47219eff75ffad1f
+--- /dev/null
++++ b/android/src/main/java/expo/modules/camera/CameraSession.kt
+@@ -0,0 +1,26 @@
++package expo.modules.camera
++
++/** Invalidates asynchronous camera starts as soon as their view leaves the window. */
++internal class CameraSession {
++  private var generation = 0L
++  private var active = false
++  private var destroyed = false
++
++  fun resume() {
++    if (!destroyed) active = true
++  }
++
++  fun stop() {
++    active = false
++    generation++
++  }
++
++  fun destroy() {
++    stop()
++    destroyed = true
++  }
++
++  fun begin(): Long? = if (active) ++generation else null
++
++  fun isCurrent(request: Long) = active && request == generation
++}
+diff --git a/android/src/main/java/expo/modules/camera/CameraStateSubscription.kt b/android/src/main/java/expo/modules/camera/CameraStateSubscription.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..d68054a29aec426770cb57a12e40603c21f81c0a
+--- /dev/null
++++ b/android/src/main/java/expo/modules/camera/CameraStateSubscription.kt
+@@ -0,0 +1,31 @@
++package expo.modules.camera
++
++import androidx.camera.core.CameraState
++import androidx.lifecycle.LifecycleOwner
++import androidx.lifecycle.LiveData
++import androidx.lifecycle.Observer
++
++// Own the subscription at view lifetime, not at Activity lifetime. A discarded
++// camera view must never replay its torch preference when a new view opens.
++internal class CameraStateSubscription {
++  private var stopObserving: (() -> Unit)? = null
++
++  fun observe(state: LiveData<CameraState>, owner: LifecycleOwner, onOpen: () -> Unit) {
++    clear()
++    var active = true
++    val observer = Observer<CameraState> {
++      if (active && it.type == CameraState.Type.OPEN) onOpen()
++    }
++    stopObserving = {
++      active = false
++      state.removeObserver(observer)
++    }
++    state.observe(owner, observer)
++  }
++
++  fun clear() {
++    val stop = stopObserving
++    stopObserving = null
++    stop?.invoke()
++  }
++}
+diff --git a/android/src/main/java/expo/modules/camera/ExpoCameraView.kt b/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
+index a676d64e853b96fc838ea27165cf265929df91a1..02164b5cd8881bfc211185692ffa27d814f40842 100644
+--- a/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
++++ b/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
+@@ -24,7 +24,6 @@ import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+ import androidx.camera.core.Camera
+ import androidx.camera.core.CameraInfo
+ import androidx.camera.core.CameraSelector
+-import androidx.camera.core.CameraState
+ import androidx.camera.core.DisplayOrientedMeteringPointFactory
+ import androidx.camera.core.FocusMeteringAction
+ import androidx.camera.core.ImageAnalysis
+@@ -34,6 +33,7 @@ import androidx.camera.core.ImageProxy
+ import androidx.camera.core.MirrorMode
+ import androidx.camera.core.Preview
+ import androidx.camera.core.UseCaseGroup
++import androidx.camera.core.UseCase
+ import androidx.camera.core.resolutionselector.ResolutionSelector
+ import androidx.camera.core.resolutionselector.ResolutionStrategy
+ import androidx.camera.lifecycle.ProcessCameraProvider
+@@ -126,6 +126,9 @@ class ExpoCameraView(
+   private var activeRecording: Recording? = null
+ 
+   private var cameraProvider: ProcessCameraProvider? = null
++  private val cameraStateSubscription = CameraStateSubscription()
++  private val cameraSession = CameraSession()
++  private var boundUseCases: List<UseCase> = emptyList()
+   private var imageCaptureUseCase: ImageCapture? = null
+   private var imageAnalysisUseCase: ImageAnalysis? = null
+   private var barcodeAnalyzer: BarcodeAnalyzer? = null
+@@ -346,7 +349,7 @@ class ExpoCameraView(
+ 
+   private fun setTorchEnabled(enabled: Boolean) {
+     if (camera?.cameraInfo?.hasFlashUnit() == true) {
+-      camera?.cameraControl?.enableTorch(enabled)
++      camera?.cameraControl?.enableTorch(enabled && isAttachedToWindow && !previewPaused)
+     }
+   }
+ 
+@@ -450,13 +453,15 @@ class ExpoCameraView(
+   }
+ 
+   private suspend fun createCamera() {
+-    if (!shouldCreateCamera || previewPaused) {
++    if (!shouldCreateCamera || previewPaused || !isAttachedToWindow) {
+       return
+     }
++    val request = cameraSession.begin() ?: return
+     shouldCreateCamera = false
+     try {
+-      configureAndBindCamera()
++      configureAndBindCamera(request)
+     } catch (e: Exception) {
++      if (!cameraSession.isCurrent(request)) return
+       shouldCreateCamera = true
+       onMountError(
+         CameraMountErrorEvent(
+@@ -467,8 +472,10 @@ class ExpoCameraView(
+   }
+ 
+   @SuppressLint("UnsafeOptInUsageError")
+-  private suspend fun configureAndBindCamera() {
++  private suspend fun configureAndBindCamera(request: Long) {
+     val cameraProvider = ProcessCameraProvider.awaitInstance(context)
++    // The view may have left (and even re-entered) the window during awaitInstance.
++    if (!cameraSession.isCurrent(request) || !isAttachedToWindow) return
+ 
+     ratio?.let {
+       previewView.scaleType =
+@@ -551,14 +558,16 @@ class ExpoCameraView(
+       }
+     }.build()
+ 
++    cameraStateSubscription.clear()
+     cameraProvider.unbindAll()
++    this.cameraProvider = cameraProvider
++    boundUseCases = useCases.useCases
+     camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)
+     camera?.let {
+-      observeCameraState(it.cameraInfo)
++      observeCameraState(it.cameraInfo, request)
+     }
+     // Set the previous zoom level after recreating the camera
+     setCameraZoom(zoom)
+-    this.cameraProvider = cameraProvider
+   }
+ 
+   private fun createImageAnalyzer(): ImageAnalysis =
+@@ -685,15 +694,11 @@ class ExpoCameraView(
+     camera?.cameraControl?.setZoomRatio(targetZoomRatio)
+   }
+ 
+-  private fun observeCameraState(cameraInfo: CameraInfo) {
+-    cameraInfo.cameraState.observe(currentActivity) {
+-      when (it.type) {
+-        CameraState.Type.OPEN -> {
+-          onCameraReady(Unit)
+-          setTorchEnabled(enableTorch)
+-        }
+-
+-        else -> {}
++  private fun observeCameraState(cameraInfo: CameraInfo, request: Long) {
++    cameraStateSubscription.observe(cameraInfo.cameraState, currentActivity) {
++      if (cameraSession.isCurrent(request) && isAttachedToWindow) {
++        setTorchEnabled(enableTorch)
++        onCameraReady(Unit)
+       }
+     }
+   }
+@@ -710,14 +715,44 @@ class ExpoCameraView(
+   fun resumePreview() {
+     shouldCreateCamera = true
+     previewPaused = false
++    if (isAttachedToWindow) cameraSession.resume()
+     scope.launch {
+       createCamera()
+     }
+   }
+ 
+   fun pausePreview() {
++    cameraSession.stop()
+     previewPaused = true
+-    cameraProvider?.unbindAll()
++    cameraStateSubscription.clear()
++    enableTorch = false
++    flashMode = FlashMode.OFF
++    camera?.cameraControl?.cancelFocusAndMetering()
++    // A late teardown of an old view must not unbind the new view's camera.
++    cameraProvider?.unbind(*boundUseCases.toTypedArray())
++    boundUseCases = emptyList()
++    camera = null
++    cameraProvider = null
++    releaseBarcodeAnalyzer()
++    imageAnalysisUseCase = null
++    imageCaptureUseCase = null
++    recorder = null
++    shouldCreateCamera = true
++  }
++
++  override fun onAttachedToWindow() {
++    super.onAttachedToWindow()
++    enableTorch = false
++    flashMode = FlashMode.OFF
++    orientationEventListener.enable()
++    resumePreview()
++  }
++
++  override fun onDetachedFromWindow() {
++    // React's final destruction callback can arrive later than the actual exit.
++    pausePreview()
++    orientationEventListener.disable()
++    super.onDetachedFromWindow()
+   }
+ 
+   fun setShouldScanBarcodes(shouldScanBarcodes: Boolean) {
+@@ -895,10 +930,11 @@ class ExpoCameraView(
+   }
+ 
+   fun cleanupCamera() {
++    pausePreview()
++    cameraSession.destroy()
+     orientationEventListener.disable()
+     cancelCoroutineScope()
+-    cameraProvider?.unbindAll()
+-    releaseBarcodeAnalyzer()
+     glSurfaceTexture?.release()
++    glSurfaceTexture = null
+   }
+ }
+diff --git a/android/src/test/java/expo/modules/camera/CameraSessionTest.kt b/android/src/test/java/expo/modules/camera/CameraSessionTest.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..66fb100e8dcbc31d34def1bb062b55df1daaeeed
+--- /dev/null
++++ b/android/src/test/java/expo/modules/camera/CameraSessionTest.kt
+@@ -0,0 +1,53 @@
++package expo.modules.camera
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class CameraSessionTest {
++  @Test
++  fun cannotStartBeforeAttachmentOrAfterExit() {
++    val session = CameraSession()
++    assertNull(session.begin())
++    session.resume()
++    val request = session.begin()!!
++    assertTrue(session.isCurrent(request))
++    session.stop()
++    assertFalse(session.isCurrent(request))
++    assertNull(session.begin())
++  }
++
++  @Test
++  fun reopeningDoesNotReviveAPendingOldStart() {
++    val session = CameraSession()
++    session.resume()
++    val old = session.begin()!!
++    session.stop()
++    session.resume()
++    assertFalse(session.isCurrent(old))
++    val fresh = session.begin()!!
++    assertFalse(session.isCurrent(old))
++    assertTrue(session.isCurrent(fresh))
++  }
++
++  @Test
++  fun newestConfigurationWins() {
++    val session = CameraSession()
++    session.resume()
++    val old = session.begin()!!
++    val fresh = session.begin()!!
++    assertFalse(session.isCurrent(old))
++    assertTrue(session.isCurrent(fresh))
++  }
++
++  @Test
++  fun destructionIsFinalAndIdempotent() {
++    val session = CameraSession()
++    session.resume()
++    val request = session.begin()!!
++    session.destroy()
++    session.destroy()
++    session.resume()
++    assertFalse(session.isCurrent(request))
++    assertNull(session.begin())
++  }
++}
+diff --git a/android/src/test/java/expo/modules/camera/CameraStateSubscriptionTest.kt b/android/src/test/java/expo/modules/camera/CameraStateSubscriptionTest.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..2bdc47b1368403facdabbaa67baaaa28433b550e
+--- /dev/null
++++ b/android/src/test/java/expo/modules/camera/CameraStateSubscriptionTest.kt
+@@ -0,0 +1,77 @@
++package expo.modules.camera
++
++import androidx.camera.core.CameraState
++import androidx.lifecycle.Lifecycle
++import androidx.lifecycle.LifecycleOwner
++import androidx.lifecycle.LifecycleRegistry
++import androidx.lifecycle.MutableLiveData
++import androidx.lifecycle.Observer
++import org.junit.Assert.*
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
++
++@RunWith(RobolectricTestRunner::class)
++@Config(manifest = Config.NONE, sdk = [28])
++class CameraStateSubscriptionTest {
++  private class Owner : LifecycleOwner {
++    override val lifecycle = LifecycleRegistry(this).apply {
++      currentState = Lifecycle.State.RESUMED
++    }
++  }
++
++  @Test
++  fun discardedCameraCannotReplayItsTorchPreference() {
++    val state = MutableLiveData(CameraState.create(CameraState.Type.CLOSED))
++    val owner = Owner()
++    var torch = false
++    val oldCamera = CameraStateSubscription()
++    oldCamera.observe(state, owner) { torch = true }
++    state.value = CameraState.create(CameraState.Type.OPEN)
++    assertTrue(torch)
++    oldCamera.clear()
++    oldCamera.clear() // cleanup is safe more than once
++    torch = false
++    assertFalse(state.hasObservers())
++    state.value = CameraState.create(CameraState.Type.CLOSED)
++    val newCamera = CameraStateSubscription()
++    var newCameraReady = 0
++    newCamera.observe(state, owner) { newCameraReady++ }
++    state.value = CameraState.create(CameraState.Type.OPEN)
++    assertFalse(torch)
++    assertEquals(1, newCameraReady)
++    newCamera.clear()
++  }
++
++  @Test
++  fun rebindingReplacesThePreviousSubscription() {
++    val state = MutableLiveData(CameraState.create(CameraState.Type.CLOSED))
++    val owner = Owner()
++    val subscription = CameraStateSubscription()
++    var oldCalls = 0
++    var newCalls = 0
++    subscription.observe(state, owner) { oldCalls++ }
++    subscription.observe(state, owner) { newCalls++ }
++    state.value = CameraState.create(CameraState.Type.OPEN)
++    assertEquals(0, oldCalls)
++    assertEquals(1, newCalls)
++    subscription.clear()
++    assertFalse(state.hasObservers())
++  }
++
++  @Test
++  fun clearingOneViewPreservesOtherObserversOnTheActivity() {
++    val state = MutableLiveData(CameraState.create(CameraState.Type.CLOSED))
++    val owner = Owner()
++    var otherCalls = 0
++    val other = Observer<CameraState> { if (it.type == CameraState.Type.OPEN) otherCalls++ }
++    state.observe(owner, other)
++    val subscription = CameraStateSubscription()
++    subscription.observe(state, owner) { fail("Discarded observer invoked") }
++    subscription.clear()
++    state.value = CameraState.create(CameraState.Type.OPEN)
++    assertEquals(1, otherCalls)
++    state.removeObserver(other)
++  }
++}

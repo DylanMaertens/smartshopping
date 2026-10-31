@@ -4,7 +4,7 @@ import { Heading, Pressable, Text, TextInput } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
 import { BarcodeScannerPanel } from './BarcodeScannerPanel';
 import { BackendApiError, recognizeListPhoto } from '@/services/api/backend';
-import { cleanOcrText, parseOcrItems, type OcrItem } from '@/services/ocrItems';
+import { cleanOcrText, prepareOcrText, parseOcrItems, type OcrItem } from '@/services/ocrItems';
 import { applyLikelyOcrCorrections, applyOcrCorrection, suggestOcrCorrections } from '@/services/ocrSpelling';
 
 type Props = { onCancel: () => void; onImport: (items: OcrItem[]) => void; knownNames?: readonly string[]; embedded?: boolean; active?: boolean };
@@ -39,8 +39,11 @@ export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = fals
     try {
       const result = await recognizeListPhoto(base64);
       if (!mounted.current || requestId !== recognitionId.current) return;
-      setText(cleanOcrText(result.text));
-      if (!cleanOcrText(result.text)) setError('Aucun texte reconnu. Reprends une photo plus nette ou saisis les articles ci-dessous.');
+      const prepared = prepareOcrText(result.text);
+      const original = cleanOcrText(result.text);
+      setText(prepared);
+      setBeforeCorrection(prepared !== original ? original : null);
+      if (!prepared) setError('Aucun texte reconnu. Reprends une photo plus nette ou saisis les articles ci-dessous.');
     } catch (failure) {
       if (!mounted.current || requestId !== recognitionId.current) return;
       const message = failure instanceof BackendApiError && failure.status === 429
@@ -101,7 +104,7 @@ export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = fals
     {stage === 'reading' ? <ActivityIndicator accessibilityLabel="Reconnaissance en cours" /> : <>
       {!keyboardVisible ? <>
         {photo ? <Image source={{ uri: photo }} accessibilityLabel="Photo de la liste à relire" resizeMode="contain" style={{ height: 180, borderRadius: theme.radius, backgroundColor: theme.raised }} /> : null}
-        <Text>Corrige les mots et retire les lignes inutiles avant l’ajout. Un article par ligne ; « 2 x lait » pour une quantité. Aucun ajout sans ta validation.</Text>
+        <Text>Corrige les mots et retire les lignes inutiles avant l’ajout. Les séparateurs reconnus sont convertis en retours à la ligne : vérifie le découpage. Un article par ligne ; « 2 x lait » pour une quantité. Aucun ajout sans ta validation.</Text>
       </> : null}
       <TextInput multiline scrollEnabled autoCorrect spellCheck autoCapitalize="sentences" accessibilityLabel="Articles reconnus" value={text} onChangeText={(value) => { setText(value); setError(null); setBeforeCorrection(null); }}
         maxLength={20000} textAlignVertical="top" style={{ height: keyboardVisible ? 150 : 240, padding: 12, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius }} />

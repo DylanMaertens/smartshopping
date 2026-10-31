@@ -2,17 +2,25 @@ appId: com.smartshopping.app
 ---
 - launchApp:
     clearState: true
+- tapOn: "Ma liste"
+- tapOn: "Ajouter un article"
 - tapOn:
     id: add-item-input
 - inputText: Riz
 - tapOn:
     id: add-item-button
+- tapOn: "Terminer"
 - assertVisible: Riz
 - stopApp
 - launchApp
+- tapOn: "Ma liste"
 - assertVisible: Riz
+- tapOn: "Réglages"
+- scrollUntilVisible:
+    element:
+      id: run-device-diagnostics
 - tapOn:
     id: run-device-diagnostics
-- assertVisible: "Lecture/écriture SQLite native"
-- assertVisible: "Clés étrangères et cascade"
-- assertVisible: "Cache produit local"
+- assertVisible: ".*Lecture/écriture SQLite native.*"
+- assertVisible: ".*Clés étrangères et cascade.*"
+- assertVisible: ".*Cache produit local.*"

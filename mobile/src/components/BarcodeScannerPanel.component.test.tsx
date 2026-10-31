@@ -13,6 +13,27 @@ jest.mock('expo-camera', () => ({
 }));
 beforeEach(() => { mockPermission.granted = true; mockPermission.canAskAgain = true; jest.clearAllMocks(); });
 afterEach(() => jest.restoreAllMocks());
+it('uses autofocus and a checksum-valid Android raw value even before cameraReady, with slow frames', () => {
+  jest.useFakeTimers();
+  try {
+    const onScanned = jest.fn();
+    const screen = render(<BarcodeScannerPanel onCancel={jest.fn()} onScanned={onScanned} />);
+    const camera = screen.getByTestId('barcode-camera-view');
+    expect(camera.props.autofocus).toBe('off');
+    const result = { data: 'null', raw: '3017620422003', type: 'ean13' };
+    fireEvent(camera, 'barcodeScanned', result);
+    expect(screen.getByTestId('barcode-camera-view').props.autofocus).toBe('on');
+    expect(onScanned).not.toHaveBeenCalled();
+    screen.getByText('Lecture reçue. Garde le code dans le cadre pour confirmer.');
+    act(() => jest.advanceTimersByTime(1800));
+    fireEvent(camera, 'barcodeScanned', result);
+    expect(onScanned).toHaveBeenCalledWith('3017620422003');
+    expect(onScanned).toHaveBeenCalledTimes(1);
+    screen.unmount();
+    act(() => jest.runAllTicks());
+    expect(jest.getTimerCount()).toBe(0);
+  } finally { jest.useRealTimers(); }
+});
 it('does not listen for barcodes in the photo mode and omits the standalone header when embedded', async () => {
   const onScanned = jest.fn();
   const screen = render(<BarcodeScannerPanel embedded mode="text" onCancel={jest.fn()} onScanned={onScanned} />);
@@ -66,6 +87,9 @@ it('waits for a stable code, pauses between products and permits deliberate repe
     fireEvent.press(screen.getByText('Ajouter encore ce produit'));
     expect(onScanned).toHaveBeenCalledTimes(3);
     screen.unmount();
+    // RN Animated detaches props in queueMicrotask. Drain that cleanup only;
+    // a leaked scanner timeout/interval must still fail the assertion below.
+    act(() => jest.runAllTicks());
     expect(jest.getTimerCount()).toBe(0);
   } finally { jest.useRealTimers(); }
 });
@@ -135,6 +159,37 @@ it('enables the torch only after the camera is ready', () => {
   expect(screen.getByTestId('barcode-camera-view').props.enableTorch).toBe(true);
   screen.getByText('Prêt à scanner');
 });
+it.each(['product', 'text'] as const)('reopens %s camera with the torch off after leaving with it on', async (mode) => {
+  const props = { mode, onCancel: jest.fn(), onScanned: jest.fn() };
+  const first = render(<BarcodeScannerPanel {...props} />);
+  await act(async () => fireEvent(first.getByTestId('barcode-camera-view'), 'cameraReady'));
+  fireEvent.press(first.getByText('Allumer la lampe'));
+  expect(first.getByTestId('barcode-camera-view').props.enableTorch).toBe(true);
+  // Tab changes remove the camera, including the OCR panel's inactive state.
+  first.unmount();
+  const reopened = render(<BarcodeScannerPanel {...props} />);
+  await act(async () => fireEvent(reopened.getByTestId('barcode-camera-view'), 'cameraReady'));
+  expect(reopened.getByTestId('barcode-camera-view').props.enableTorch).toBe(false);
+  reopened.getByText('Allumer la lampe');
+  reopened.unmount();
+});
+it.each(['product', 'text'] as const)('forgets the %s torch preference on backgrounding', async (mode) => {
+  let change!: (state: AppStateStatus) => void;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_, callback) => {
+    change = callback;
+    return { remove: jest.fn() };
+  });
+  const screen = render(<BarcodeScannerPanel mode={mode} onCancel={jest.fn()} onScanned={jest.fn()} />);
+  await act(async () => fireEvent(screen.getByTestId('barcode-camera-view'), 'cameraReady'));
+  fireEvent.press(screen.getByText('Allumer la lampe'));
+  expect(screen.getByTestId('barcode-camera-view').props.enableTorch).toBe(true);
+  act(() => change('background'));
+  expect(screen.queryByTestId('barcode-camera-view')).toBeNull();
+  await act(async () => change('active'));
+  await act(async () => fireEvent(screen.getByTestId('barcode-camera-view'), 'cameraReady'));
+  expect(screen.getByTestId('barcode-camera-view').props.enableTorch).toBe(false);
+  screen.unmount();
+});
 it('keeps a close button while permissions are denied', () => {
   mockPermission.granted = false;
   const close = jest.fn();
@@ -170,7 +225,7 @@ it.each(Object.values(themes))('reflects camera readiness and cooldown in the $n
     expect(frame()).toMatchObject({ borderColor: theme.muted, borderStyle: 'dashed', borderRadius: theme.radius });
     fireEvent(screen.getByTestId('barcode-camera-view'), 'cameraReady');
     expect(frame()).toMatchObject({ borderColor: theme.primary, borderStyle: 'solid' });
-    expect(screen.queryByText('Relancer la caméra')).toBeNull();
+    screen.getByText('Relancer la caméra');
     fireEvent(screen.getByTestId('barcode-camera-view'), 'barcodeScanned', { data: '3017620422003' });
     act(() => jest.advanceTimersByTime(250));
     fireEvent(screen.getByTestId('barcode-camera-view'), 'barcodeScanned', { data: '3017620422003' });

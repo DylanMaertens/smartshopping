@@ -3,11 +3,43 @@ import { itemNameKey, normalizeItemName, truncateUtf8 } from './itemValidation';
 import type { ShoppingItem } from '@/types';
 
 export type OcrItem = { name: string; quantity: number };
+const listDecoration = /^\s*(?:(?:\[[ xX✓✔]?\]|[-*+•·☐☑✓✔✗✘□■○●]+)\s*|\d+[.)]\s+)/u;
+
+/** Only prepare recognition output, never silently re-split the user's reviewed names.
+ * A tight hyphen is ambiguous (pain-lait / chou-fleur): preserve it rather than guess. */
+export function prepareOcrText(text: string): string {
+  const lines = text.split(/\r?\n/).map((raw) => {
+    const line = raw.replace(listDecoration, '').replace(/[‐‑−]/gu, '-');
+    const protectedPositions = new Set<number>();
+    const protectedTokens = [
+      /\d+(?:[ \t]*[./\-–—][ \t]*\d+)+/gu, // fractions, decimals, dates and ranges
+      /\b(?:st|ste|dr|mr|mrs|mme|mlle|m)\./giu,
+      /(?:\p{L}\.){2,}/gu, // U.H.T., M.G., etc.
+      /\b(?:mg|g|kg|ml|cl|dl|l|km|m|kcal|kj)[ \t]*\/[ \t]*(?:\d+[ \t]*)?(?:mg|g|kg|ml|cl|dl|l|km|m|h)(?!\p{L})/giu,
+    ];
+    for (const pattern of protectedTokens) for (const match of line.matchAll(pattern)) {
+      for (let i = match.index; i < match.index + match[0].length; i++) protectedPositions.add(i);
+    }
+    let result = '', parentheses = 0;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '(') parentheses++;
+      const separator = /[./;|•·●○■□▪◦☐☑✓✔★*→➜]/u.test(char)
+        || /[–—]/u.test(char)
+        || (char === '-' && (line[i - 1] === '-' || line[i + 1] === '-'
+          || (/\s/u.test(line[i - 1] ?? '') && /\s/u.test(line[i + 1] ?? ''))));
+      result += separator && !parentheses && !protectedPositions.has(i) ? '\n' : char.replace(/[–—]/u, '-');
+      if (char === ')') parentheses = Math.max(0, parentheses - 1);
+    }
+    return result;
+  });
+  return cleanOcrText(lines.join('\n'));
+}
 
 /** Remove list decoration, not product punctuation, weights or quantity markers. */
 export function cleanOcrText(text: string): string {
   return text.split(/\r?\n/).map((line) => line
-    .replace(/^\s*(?:(?:\[[ xX✓✔]?\]|[-*+•·☐☑✓✔✗✘□■○●]+)\s*|\d+[.)]\s+)/u, '')
+    .replace(listDecoration, '')
     .replace(/[^\p{L}\p{M}\p{N}\s'’.,%/()×+\-]/gu, '')
     .replace(/\s+/gu, ' ').replace(/^[\s.,\-]+|[\s.,\-]+$/gu, '')
     .trim()).filter((line) => /[\p{L}\p{N}]/u.test(line)).join('\n');

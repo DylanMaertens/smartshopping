@@ -1,5 +1,6 @@
 // UI-only fixture: no microphone, recognition provider or real app storage.
 import { build } from 'esbuild';
+import { svgWebCompatibility } from './svgWebCompatibility.mjs';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdir } from 'node:fs/promises';
@@ -12,9 +13,9 @@ await mkdir(output, { recursive: true });
 const fixtures = resolve(mobile, 'preview/fixtures.ts'), native = resolve(mobile, 'preview/native.tsx');
 const result = await build({ absWorkingDir: mobile, entryPoints: ['preview/index.tsx'], bundle: true, write: false,
   resolveExtensions: ['.web.tsx', '.tsx', '.web.ts', '.ts', '.web.js', '.js', '.json'],
-  define: { __DEV__: 'true', 'process.env.NODE_ENV': '"development"' },
-  alias: { 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
-  plugins: [{ name: 'isolated-voice-fixture', setup(builder) {
+  define: { global: 'globalThis', __DEV__: 'true', 'process.env.NODE_ENV': '"development"' },
+  alias: { '@react-native/assets-registry/registry': 'react-native-web/dist/modules/AssetRegistry/index.js', 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
+  plugins: [svgWebCompatibility, { name: 'isolated-voice-fixture', setup(builder) {
     builder.onResolve({ filter: /services\/localSpeech$/ }, () => ({ path: 'voice', namespace: 'voice-fixture' }));
     builder.onLoad({ filter: /.*/, namespace: 'voice-fixture' }, () => ({ contents: `
       export const localSpeech = {
@@ -36,7 +37,8 @@ let browser;
 try {
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   for (const width of [320, 390]) {
-    const page = await browser.newPage({ viewport: { width, height: 850 } });
+    const page = await browser.newPage({ viewport: { width, height: 850 },
+      reducedMotion: process.env.SMARTSHOPPING_REDUCED_MOTION === 'reduce' ? 'reduce' : 'no-preference' });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const open = async (query = '') => {
       await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);

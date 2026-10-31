@@ -4,7 +4,7 @@ import { Heading, Pressable, Text } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
 import { parseInvitationCode } from '@/services/api/invitationCode';
 import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
-import { BarcodeScanGate, SCAN_COOLDOWN_MS } from '@/services/barcodeScanGate';
+import { BarcodeScanGate, normalizeScannedBarcode, SCAN_COOLDOWN_MS } from '@/services/barcodeScanGate';
 
 type Props = {
   mode?: 'product' | 'invitation' | 'text';
@@ -30,6 +30,7 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
   const [coolingDown, setCoolingDown] = useState(false);
   const [lastProduct, setLastProduct] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [readingReceived, setReadingReceived] = useState(false);
   const invitation = mode === 'invitation';
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -85,6 +86,7 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
 
   function restartCamera() {
     scanGate.current.resetCandidate();
+    setReadingReceived(false);
     lockedRef.current = false;
     setLocked(false);
     setCameraError(null);
@@ -134,9 +136,16 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
 
   function handleBarcodeScanned(result: BarcodeScanningResult) {
     if (!mounted.current || textMode || lockedRef.current || paused) return;
-    if (!active || !cameraReady || cameraError) return;
+    if (!active || cameraError) return;
+    // A delivered native barcode is itself proof that the camera is ready.
+    // Some devices deliver it before onCameraReady.
+    setCameraReady(true);
+    setReadingReceived(true);
+    // Android's display value can differ from the actual encoded GTIN.
+    const data = !invitation && result.raw && normalizeScannedBarcode(result.raw, result.type)
+      ? result.raw : result.data;
     const value = invitation ? parseInvitationCode(result.data)
-      : scanGate.current.read(result.data, result.type, Date.now());
+      : scanGate.current.read(data, result.type, Date.now());
     if (!value) {
       if (invitation) setScanError('Ce QR code n’est pas une invitation Poduna.');
       return;
@@ -195,7 +204,7 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
               ) : active ? (
                 <CameraView ref={cameraRef} key={cameraAttempt} pictureSize={pictureSize}
                   barcodeScannerSettings={{ barcodeTypes: invitation ? ['qr'] : ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
-                  facing="back" enableTorch={torch}
+                  facing="back" autofocus={cameraReady ? 'on' : 'off'} enableTorch={torch}
                   onCameraReady={() => void prepareCamera()}
                   onMountError={({ message }) => { setCameraReady(false); setCameraError(message); }}
                   onBarcodeScanned={textMode || locked || paused ? undefined : handleBarcodeScanned}
@@ -217,12 +226,16 @@ export function BarcodeScannerPanel({ onCancel, onScanned, mode = 'product', onP
               <Text>Ajouter encore ce produit</Text>
             </Pressable>
           </View> : null}
+          {!textMode && !invitation && cameraReady && !lastProduct ? <Text style={{ color: theme.muted, fontSize: 13 }}>
+            {readingReceived ? 'Lecture reçue. Garde le code dans le cadre pour confirmer.'
+              : 'Aucune lecture reçue pour le moment. Éloigne un peu le produit et éclaire le code.'}
+          </Text> : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
             <Pressable accessibilityRole="button" disabled={!cameraReady || capturing || !!cameraError}
               onPress={() => setTorch((value) => !value)} style={{ backgroundColor: theme.raised, borderRadius: theme.radius, padding: 14 }}>
               <Text>{torch ? 'Éteindre la lampe' : 'Allumer la lampe'}</Text>
             </Pressable>
-            {cameraError || locked ? <Pressable accessibilityRole="button" onPress={restartCamera}
+            {!textMode || cameraError || locked ? <Pressable accessibilityRole="button" onPress={restartCamera}
               style={{ backgroundColor: theme.raised, borderRadius: theme.radius, padding: 14 }}>
               <Text>{locked ? 'Scanner encore' : 'Relancer la caméra'}</Text>
             </Pressable> : null}

@@ -1,10 +1,11 @@
 import { TestServerCard } from '@/components/TestServerCard';
 import { canConfigureTestServer, getTestServerUrl } from '@/services/api/testServer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, BackHandler, Keyboard, Linking, Modal, ScrollView, TextInput as NativeTextInput, View } from 'react-native';
+import { Alert, AppState, BackHandler, Keyboard, Linking, Modal, ScrollView, type TextInputInstance, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Heading, PageModal, Pressable, Text, TextInput } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
+import { MotionView } from '@/theme/motion';
 import { BasketIllustration } from '@/components/BasketIllustration';
 import { PodunaMark } from '@/components/PodunaMark';
 import { AppearancePicker } from '@/components/AppearancePicker';
@@ -52,7 +53,7 @@ export function HomeScreen() {
   const [invitationSession] = useState(() => new InvitationSession());
   const [sharingListId, setSharingListId] = useState<string | null>(null);
   const [invitationCode, setInvitationCode] = useState<string | undefined>();
-  const inputRef = useRef<NativeTextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [foreground, setForeground] = useState(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
   const backgroundSyncRef = useRef<Promise<void> | null>(null);
   const previousOnlineRef = useRef<boolean | null>(null);
@@ -97,7 +98,7 @@ export function HomeScreen() {
 
   useEffect(() => {
     let mounted = true;
-    const receive = (url: string | null) => {
+    const receive = (url: string | null | undefined) => {
       const code = url ? parseInvitationCode(url) : null;
       if (mounted && code) {
         setInvitationCode(code); setAddMode('product'); setOcrListId(null); setVoiceListId(null); setOrderingListId(null); setPanel('join');
@@ -642,21 +643,6 @@ export function HomeScreen() {
     return syncCurrentList('manual', listId);
   }
 
-  function deleteSharedListLocally(listId: string) {
-    const selectedId = activeListIdRef.current;
-    const nextId = ShoppingListStorage.deleteListPermanently(listId);
-    setLists(ShoppingListStorage.getLists());
-    if (selectedId === listId) {
-      const wasOpen = listOpen;
-      selectList(nextId);
-      setListOpen(wasOpen);
-    } else {
-      ShoppingListStorage.setActiveList(selectedId);
-      setPanel(null);
-    }
-    setSharingListId(null);
-  }
-
   const activeName = lists.find((list) => list.id === activeListId)?.name ?? 'Ma liste';
   const inferredInputCategory = getRememberedCategory(inputValue) ?? classifyProductLocally(inputValue).categoryName;
   const needsInputCategory = !!inputValue.trim() && inferredInputCategory === 'À classer';
@@ -690,6 +676,7 @@ export function HomeScreen() {
   const surface = { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: theme.stroke, borderRadius: theme.radius, padding: 16, gap: 12 };
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <MotionView replayKey={`${listOpen}:${activeListId}`} style={{ flex: 1 }}>
       {!listOpen ? <ScrollView testID="lists-home" keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ flexGrow: 1, padding: 20, paddingTop: 8, gap: 20 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -752,7 +739,8 @@ export function HomeScreen() {
       </View>
 
       </>}
-      {panel === 'add' ? <PageModal title="Ajouter un article" testID="add-modal" scrollable={false} onClose={addMode === 'product' ? closePanel : returnToProduct}>
+      </MotionView>
+      {panel === 'add' ? <PageModal title="Ajouter un article" testID="add-modal" transitionKey={addMode} scrollable={false} onClose={addMode === 'product' ? closePanel : returnToProduct}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 12 }}>
           <Button variant={addMode === 'product' ? 'secondary' : 'ghost'} label="Produit" accessibilityState={{ selected: addMode === 'product' }} onPress={() => { returnToProduct(); inputRef.current?.focus(); }} style={{ flexGrow: 1 }} />
           <Button variant={addMode === 'barcode' || addMode === 'text' ? 'secondary' : 'ghost'} label="Scanner" accessibilityLabel="Scanner un produit ou une liste" accessibilityState={{ selected: addMode === 'barcode' || addMode === 'text' }} onPress={() => chooseAddMode(scanMode)} style={{ flexGrow: 1 }} />
@@ -792,7 +780,7 @@ export function HomeScreen() {
           <Text style={{ color: theme.muted, fontSize: 14 }}>Facultatif : le rayon choisi sera mémorisé sur cet appareil après l’ajout.</Text>
         </View> : null}
         {inputError ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{inputError}</Text> : null}
-        {addedMessage ? <Text accessibilityLiveRegion="polite" style={{ color: theme.success }}>✓ {addedMessage}</Text> : null}
+        {addedMessage ? <MotionView replayKey={addedMessage}><Text accessibilityLiveRegion="polite" style={{ color: theme.success }}>✓ {addedMessage}</Text></MotionView> : null}
         <Button label="Ajouter à la liste" testID="add-item-button" disabled={!inputValue.trim()} onPress={addItem} />
         <Button variant="ghost" label="Terminer" onPress={closePanel} />
         {needsInputCategory && choosingInputCategory ? <PageModal title="Choisir un rayon" onClose={() => setChoosingInputCategory(false)}>
@@ -815,7 +803,7 @@ export function HomeScreen() {
       {panel === 'share' && sharingListId ? <PageModal title="Partager une liste" onClose={closePanel}>
         <Text style={{ color: theme.muted }}>{lists.find((list) => list.id === sharingListId)?.name}</Text>
         {ShoppingListStorage.isSyncDisabled(sharingListId) ? <Text style={{ color: theme.muted }}>Synchronisation coupée. Cette copie reste disponible sur cet appareil. Pour rétablir le partage, rejoins cette liste avec une nouvelle invitation.</Text> : <ShareListCard session={invitationSession} onBeforeInvite={() => prepareSharing(sharingListId)}
-          listId={sharingListId} onDeleted={() => deleteSharedListLocally(sharingListId)} />}
+          listId={sharingListId} />}
       </PageModal> : null}
       {panel === 'join' ? <PageModal title="Rejoindre une liste" onClose={() => { setInvitationCode(undefined); closePanel(); }}>
         <JoinListCard key={invitationCode ?? 'manual'} initialCode={invitationCode} onJoined={joinSharedList} />
@@ -851,10 +839,12 @@ export function HomeScreen() {
       </PageModal> : null}
       {orderingListId ? <Modal visible animationType="none" presentationStyle="fullScreen" testID="category-order-modal" onRequestClose={() => setOrderingListId(null)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <MotionView style={{ flex: 1 }}>
           <CategoryOrderPanel order={categoryOrder} onCancel={() => setOrderingListId(null)} onSave={(next) => {
             if (activeListIdRef.current !== orderingListId) throw new Error('La liste a changé.');
             ShoppingListStorage.saveCategoryOrder(orderingListId, next); setCategoryOrder(next); setOrderingListId(null);
           }} />
+          </MotionView>
         </SafeAreaView>
       </Modal> : null}
       {panel !== 'add' ? productNamePrompt : null}

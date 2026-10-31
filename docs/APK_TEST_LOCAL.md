@@ -4,7 +4,7 @@ L’APK se construit sur le PC, sans compte Expo, sans EAS et sans publication e
 
 ## Installer et essayer
 
-Le fichier produit par le lanceur est `artifacts/android/poduna-0.1.15-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle prend en charge les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent. La dictée locale nécessite Android 12 minimum et un moteur vocal local compatible avec le français.
+Le fichier produit par le lanceur est `artifacts/android/poduna-0.1.20-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle cible les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent. La dictée locale nécessite Android 12 minimum et un moteur vocal local compatible avec le français.
 
 1. Copier l’APK sur le téléphone et l’ouvrir pour l’installer. Android peut demander d’autoriser cette source d’installation.
 2. Ouvrir Poduna : les listes sont utilisables hors ligne immédiatement.
@@ -17,6 +17,233 @@ Quand le tunnel redémarre, mettre sa nouvelle adresse dans ce réglage sur les 
 Utiliser l’adresse du **même backend SmartShopping** : changer d’adresse de tunnel ne change pas la base ou les identités du serveur. Ne pas utiliser ce réglage pour passer arbitrairement entre différentes bases.
 
 **Les données d’Expo Go ne sont pas transférées automatiquement.** Conserver Expo Go et sa sauvegarde. Restaurer une sauvegarde dans l’APK crée des copies indépendantes ; pour conserver une liste partagée, la rejoindre avec une invitation valide. Les deux applications ont des identités d’appareil différentes.
+
+## Après la 0.1.20 — Découpage des listes OCR (pas encore dans un APK)
+
+Les points, slashs, tirets espacés ou répétés, tirets longs, puces et autres
+marqueurs explicites séparent désormais les articles avant l'écran de relecture.
+Les traits d'union internes (chou-fleur, demi-écrémé), fractions, décimales,
+plages numériques, unités composées et abréviations courantes sont préservés.
+Le contenu entre parenthèses reste groupé. Un trait d'union simple collé reste
+volontairement ambigu : `pain-lait` n'est pas séparé automatiquement.
+
+Le découpage peut être annulé avec « Annuler la dernière correction ». Les
+modifications manuelles ne sont jamais redécoupées à l'import, et rien n'est
+ajouté sans confirmation. La limite de 50 articles et les quantités continuent
+à être vérifiées. Cette préparation est réservée au résultat OCR : elle ne
+change pas la dictée ni la saisie manuelle. Aucun changement du moteur serveur.
+
+Validation locale : TypeScript, 384 tests Vitest, 278 tests Jest et les quatre
+fichiers de tests de configuration réussis. Les tests couvrent la préparation,
+la relecture, l'annulation, les quantités et l'absence de redécoupage à l'import.
+
+## Mise à jour 0.1.20 — Réinitialisation de la session caméra
+
+Retour utilisateur après installation : le problème du flash semble résolu.
+Les vérifications après migration, le partage et la communauté semblent
+également bons de son côté ; cela constitue un retour d'usage, pas une nouvelle
+exécution exhaustive des scénarios natifs automatisés.
+
+Retour utilisateur après la 0.1.19 : **le flash se réactive toujours** après
+une sortie/réouverture. En revanche, **OCR, sauvegarde et restauration sont
+confirmés fonctionnels**, ainsi que les codes-barres depuis la 0.1.18.
+
+Le patch caméra réinitialise désormais la session au détachement de la vue
+Android, pas seulement à sa destruction finale : lampe/flash éteints,
+abonnement retiré, aperçu et analyseur libérés. Une réouverture repart avec
+une session neuve ; une ancienne initialisation asynchrone ne peut plus se
+lier à la caméra après la sortie. Le nettoyage ne délie que les use cases de
+la vue concernée pour préserver une nouvelle caméra déjà ouverte.
+
+Validation locale de cette révision : compilations Kotlin debug/release,
+7 tests natifs (4 de session, 3 d'abonnement), 276 tests Jest, TypeScript et
+4 fichiers de tests de configuration réussis. La 0.1.19 existante ne contient
+pas cette révision. La 0.1.20 utilise le code Android 21.
+
+[APK Poduna 0.1.20](../artifacts/android/poduna-0.1.20-preview.apk) compilé
+le 21 octobre : ARM 32/64 bits, signature v2 vérifiée avec le même certificat
+que la 0.1.19, trois constructeurs ML Kit présents. Le DEX embarque bien les
+callbacks de détachement/réattachement et la remise à zéro de la session,
+de la lampe et du flash. SHA-256 vérifié :
+`8244d6d6227828b723a61d5d50da05d3628b550b5129d06f05d9667e76f85525`.
+Installer par-dessus l'app actuelle sans désinstallation. Aucun déploiement
+ADB effectué.
+
+Cette révision doit encore être testée physiquement dans un nouvel APK :
+lampe allumée → Produit → Scanner, Code-barres ↔ Liste écrite, fermeture du
+panneau puis réouverture, arrière-plan puis retour. Vérifier l'absence d'éclair
+fugitif, la réactivation manuelle de la lampe et la lecture répétée des codes.
+
+## Mise à jour 0.1.19 — Première correction de la lampe (insuffisante sur téléphone)
+
+La lecture des codes-barres de la **0.1.18 est confirmée fonctionnelle par
+l'utilisateur**, y compris les lectures suivantes.
+
+Scénario distinct signalé pour la lampe : l'activer dans Code-barres ou Liste
+écrite, quitter cette vue puis revenir. L'abonnement natif de l'ancienne vue
+restait attaché à l'Activity et pouvait réappliquer sa préférence de lampe.
+Le patch versionné `mobile/patches/expo-camera@58.0.11.patch` retire cet
+abonnement, éteint/réinitialise la lampe lors de la destruction de la vue et
+libère sa référence caméra. Le module caméra Android est explicitement
+compilé depuis les sources afin de ne pas utiliser l'AAR précompilé non corrigé.
+
+Validation du 21 octobre : compilation Kotlin Android **debug et release**
+réussie ; **3 tests natifs Robolectric**, **276 tests Jest**, TypeScript et
+les **4 fichiers de tests de configuration** passent. Réinstallation pnpm
+avec lockfile figé vérifiée. Ces contrôles ne remplacent pas le test du flash
+physique sur le téléphone.
+
+[APK Poduna 0.1.19](../artifacts/android/poduna-0.1.19-preview.apk) compilé
+le 21 octobre : code Android **20**, ARM 32/64 bits, signature v2 avec le même
+certificat que la 0.1.18. Contrôle des trois constructeurs ML Kit réussi et
+nettoyage corrigé de `ExpoCameraView.cleanupCamera` vérifié dans le DEX de
+l'APK (désabonnement, `setEnableTorch(false)`, référence caméra supprimée).
+SHA-256 vérifié :
+`646b68f8595cf81c09fb98333d828688c1190ad3a6395855962b07ee4bc06ea2`.
+Installer par-dessus l'app actuelle, sans désinstaller. Pas d'installation ADB.
+
+Le retour utilisateur confirme que cette première correction ne suffit pas
+à empêcher l'éclair fugitif. Ne pas considérer la lampe validée sur la 0.1.19.
+
+## Mise à jour 0.1.18 — Initialisation du moteur de codes-barres
+
+Diagnostic ADB du 20 octobre 2026 sur le OnePlus 11, Android 16, avec la
+0.1.17 (code 18) installée : l'aperçu démarre, mais le journal natif signale
+`Failed to initialize BarcodeAnalyzer` avec une référence nulle dans
+`BarcodeScanning.getClient`, inliné par R8 dans le constructeur de l'analyseur.
+La correspondance R8 ramène le composant manquant à
+`com.google.mlkit.vision.barcode.internal.zzg`.
+
+L'inspection du DEX de cet APK montre que `BarcodeRegistrar` existe mais que
+son constructeur sans argument a été supprimé. Ce registrar est découvert
+par réflexion via les métadonnées du manifeste ; garder uniquement sa classe
+ne suffit pas. Le plugin `withMlKitRegistrars.cjs` préserve explicitement les
+constructeurs publics sans argument des registrars ML Kit. Il est réappliqué
+aux prebuilds neufs et incrémentaux sans désactiver R8 ni ses optimisations.
+Voir aussi la [documentation Android sur les constructeurs et R8](https://developer.android.com/topic/performance/app-optimization/full-mode).
+
+`bash ops/check-apk-mlkit.sh chemin/vers/app.apk` contrôle les trois registrars
+dans le DEX. Le lanceur de compilation exécute désormais ce contrôle avant
+d'annoncer l'APK prêt. Il échoue bien sur la 0.1.17 (constructeur absent).
+
+Contrôles à réaliser sur l'APK release, pas uniquement sur les mocks Jest :
+
+- Vérifier que `BarcodeRegistrar`, `VisionCommonRegistrar` et
+  `CommonComponentRegistrar` possèdent chacun un constructeur public `()V`
+  dans le DEX optimisé.
+- Installer par-dessus la version précédente, sans désinstaller ; présenter
+  un EAN lisible et confirmer la réception effective d'un code.
+- Vérifier une nouvelle ouverture du scanner, puis un second produit ;
+  vérifier également la lecture d'un QR d'invitation.
+
+Résultats de compilation : **release ARM 32/64 bits réussie**, version 0.1.18,
+code Android 19. Les trois constructeurs sont présents dans le DEX optimisé ;
+le contrôle automatique passe. Signature v2 et même certificat que la 0.1.17.
+SHA-256 vérifié :
+`1370dade73a5c21fac1fdc95a206f0598be0f5bf2efbccdb6e1b04e8efe23a29`.
+TypeScript, 19 tests Jest du scanner, 4 tests Vitest du filtre de lecture et
+les trois fichiers de tests de configuration passent. L'APK est fourni à
+l'utilisateur sans installation ADB à sa demande : **lecture physique à
+revalider après installation manuelle**.
+
+L'allumage fugitif de la lampe est un problème distinct, non reproduit lors
+de cette capture contrôlée et laissé de côté à la demande de l'utilisateur.
+Aucune modification de ses commandes ou du cycle de vie caméra dans cette
+version. Aucun remplacement de l'ancien composant ni rétrogradation d'Expo.
+
+## Mise à jour 0.1.17 — Lecture, animations et partage (historique)
+
+Retour utilisateur sur la 0.1.16 : image caméra présente mais aucun code lu ;
+animations non perceptibles ; suppression définitive proposée dans le partage
+après création d’un code ou chargement des membres.
+
+- **Partage** : suppression du bouton de destruction serveur et de son callback
+  dans ce panneau. Les invitations, leur révocation et le retrait d’un membre
+  restent disponibles. La suppression locale via Options n’est pas transformée
+  en destruction serveur.
+- **Lecture** : mise au point activée après liaison de la caméra ; utilisation
+  du GTIN brut Android lorsqu’il est valide ; événement de code accepté même
+  s’il précède `onCameraReady` ; deux lectures concordantes permises jusqu’à
+  cinq secondes d’écart au lieu d’une. Somme de contrôle, délai anti-doublon
+  et confirmation par deux vrais événements conservés.
+- **Diagnostic de lecture** : distinction entre « Aucune lecture reçue » et
+  « Lecture reçue… confirmer » ; relance caméra disponible sans devoir fermer.
+  Le modèle ML Kit est bien présent dans la 0.1.16 et l’analyseur existe dans
+  son code compilé. Cela ne prouve pas qu’il fonctionne sur le téléphone.
+- **Animations** : fondu plus perceptible (280 ms, départ à 25 % d’opacité),
+  initialisé dès le premier rendu d’une nouvelle page quand les animations
+  sont permises ; préférence système relue au retour au premier plan, même
+  si Android n’a pas envoyé d’événement de changement.
+- **Réglages → Diagnostic appareil** : état réellement lu par l’app
+  (actives, réduites, en cours de vérification ou inaccessible) et bouton
+  « Tester le fondu ». Aucun forçage contre la réduction des animations.
+
+TypeScript, **345 tests Vitest + 272 tests Jest**, deux fichiers de configuration
+et les parcours navigateur 320/390 px passent, animations normales et réduites.
+[APK Poduna 0.1.17](../artifacts/android/poduna-0.1.17-preview.apk) :
+compilation release ARM 32/64 bits réussie, code Android **18**, signature v2
+et certificat identique aux 0.1.15/0.1.16 vérifiés. Bundle embarqué identique
+au bundle de cette compilation. Intégrité SHA-256 vérifiée :
+`f798bd56db3cd06462f8d0fe3e31fa12f5f8f066015f3c4d51d51af66ac23f25`.
+Installer par-dessus la version précédente, sans désinstaller.
+
+**Limite importante** : la cause exacte de la régression de lecture sur ce
+téléphone n’a pas été reproduite ici. Les nouveaux tests reproduisent les cas
+de callbacks tardifs/lents et de valeur Android brute, pas la caméra physique.
+Aucun appareil ADB connecté lors du contrôle. Si le scanner reste muet, relever
+le message sous la caméra ; si le fondu reste absent, relever l’état indiqué
+dans Diagnostic appareil. Des logs Android du scanner pourront être nécessaires.
+
+L’[historique officiel expo-camera](https://github.com/expo/expo/blob/main/packages/expo-camera/CHANGELOG.md)
+indique déjà les correctifs de flux caméra intégrés à la version 58.0.11 utilisée ;
+aucun correctif natif plus récent n’a été appliqué ni inventé pour cette version.
+
+## Mise à jour 0.1.16 — Migration et animations discrètes
+
+Version 0.1.16, code Android **17**, package `com.smartshopping.app` conservé.
+Cette version reprend la [migration Expo 58](MIGRATION_EXPO_58.md).
+
+[APK Poduna 0.1.16](../artifacts/android/poduna-0.1.16-preview.apk) ·
+[SHA-256](../artifacts/android/poduna-0.1.16-preview.apk.sha256).
+Compilation release réussie le 20 octobre, ARM 32/64 bits, **52 342 459 octets**.
+Signature v2 vérifiée ; certificat SHA-256 identique à la 0.1.15 :
+`b771d84b4ecae6434ffa325a2e21acffd3e7a24ef9ad21eed5b3cf63b96e1cc4`.
+Le JavaScript embarqué correspond au bundle généré lors de cette compilation.
+Intégrité APK vérifiée :
+`50be7f0a3c47eb1dd285d4eb719d4937eb0f90d68cc945b1c76fbe08db31f671`.
+
+- Fondu court des pages, des panneaux et des onglets Produit/Scanner/Dictée.
+- Retour visuel progressif à l’appui ; apparition des confirmations d’ajout
+  et des changements de quantité.
+- Aucun déplacement ni redimensionnement animé des contrôles. Pas de délai
+  sur les actions, de remontage des brouillons, de sortie différée gardant la
+  caméra active, ni d’animation infinie.
+- Réduction des animations respectée dès que la préférence Android est connue
+  et lors de ses changements ; animations désactivées tant qu’elle est inconnue.
+- Pas de nouvelle bibliothèque : [Animated](https://reactnative.dev/docs/animated)
+  et [AccessibilityInfo](https://reactnative.dev/docs/accessibilityinfo).
+
+Contrôles locaux : TypeScript, **344 tests Vitest + 270 tests Jest**, deux
+fichiers de tests de configuration et les trois parcours visuels à 320/390 px
+réussis. Les tests vérifient notamment le retour fixe, les brouillons conservés,
+les contrôles d’au moins 48 px et les changements de préférence d’animation.
+Le parcours de navigation passe aussi avec réduction des animations activée
+dans Chromium. Ces contrôles ne remplacent pas la recette sur téléphone.
+
+À tester sur téléphone, après sauvegarde puis installation **sans désinstaller** :
+
+1. Retrouver les listes, thèmes, rayons mémorisés et l’adresse du serveur.
+2. Naviguer entre Mes listes, une liste, Réglages et les panneaux ; revenir avec
+   le bouton de l’app puis avec le retour Android.
+3. Répéter Produit → Dictée → Produit → Dictée, puis Scanner → Produit → Dictée,
+   avec clavier ouvert et après défilement : pas de flash de la liste dessous,
+   de bouton agrandi, de perte de texte ni de saut de hauteur.
+4. Ajouter/cocher des articles, changer une quantité, toucher rapidement
+   plusieurs fois : les données ne doivent pas dépendre de la fin d’une animation.
+5. Activer le réglage Android de suppression/réduction des animations puis
+   refaire la navigation. Les écrans restent pleinement visibles et utilisables.
+6. Vérifier photo OCR, flash, annulation, dictée locale, sauvegarde et partage
+   avec le serveur HTTPS de test. Aucun téléphone réel n’a été utilisé ici.
 
 ## Mise à jour 0.1.15 — Relecture vocale et retour fixe
 

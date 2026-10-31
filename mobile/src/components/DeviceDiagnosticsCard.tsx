@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, View } from 'react-native';
 import { Pressable, Text } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
+import { MotionView, useMotionStatus } from '@/theme/motion';
 import {
   runDeviceStorageDiagnostics,
   type DeviceDiagnosticResult,
@@ -11,10 +12,17 @@ import { rotateAnonymousDeviceId } from '@/services/identity/deviceIdentity';
 export function DeviceDiagnosticsCard() {
   const { theme } = useTheme();
   const [results, setResults] = useState<DeviceDiagnosticResult[]>([]);
+  const motion = useMotionStatus();
+  const [motionTrial, setMotionTrial] = useState(0);
 
   return (
     <View style={{ backgroundColor: theme.surface, borderRadius: theme.radius, gap: 10, padding: 16 }}>
       <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>Diagnostic appareil</Text>
+      <MotionView replayKey={motionTrial}><Text>{motion === 'enabled' ? 'Animations : actives'
+        : motion === 'reduced' ? 'Animations : réduites par Android'
+        : motion === 'checking' ? 'Animations : vérification du réglage système…'
+        : 'Animations : réglage système inaccessible, désactivées par précaution'}</Text></MotionView>
+      <Pressable onPress={() => setMotionTrial((value) => value + 1)}><Text>Tester le fondu</Text></Pressable>
       <Text style={{ color: theme.muted }}>
         Vérifie le module SQLite natif. Pour le parcours offline, active le mode avion, modifie une liste,
         redémarre l’app puis réactive le réseau.

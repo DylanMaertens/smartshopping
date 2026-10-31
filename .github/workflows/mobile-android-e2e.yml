@@ -10,6 +10,10 @@ permissions:
 
 jobs:
   maestro:
+    env:
+      SMARTSHOPPING_CHANNEL: preview
+      SMARTSHOPPING_TEST_SERVER: 'true'
+      EXPO_NO_TELEMETRY: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -18,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: 10 }
+        with: { version: 11.25.0 }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -30,7 +34,9 @@ jobs:
         working-directory: mobile
       - run: pnpm exec expo prebuild --platform android --no-install
         working-directory: mobile
-      - run: ./gradlew assembleDebug
+      # Release contains its JS bundle: no Metro server or Expo Go is needed.
+      # The generated debug key is used only for this disposable CI installation.
+      - run: ./gradlew :app:assembleRelease -PreactNativeArchitectures=x86_64
         working-directory: mobile/android
       - run: curl -Ls "https://get.maestro.mobile.dev" | bash
       - uses: reactivecircus/android-emulator-runner@v2
@@ -39,7 +45,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           script: |
-            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
             $HOME/.maestro/bin/maestro test mobile/e2e/android
       - uses: actions/upload-artifact@v4
         if: failure()

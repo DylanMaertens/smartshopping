@@ -2,9 +2,23 @@
 allowBuilds:
   esbuild: true
 
+minimumReleaseAgeExclude:
+  - '@expo/cli@58.1.13'
+  - '@expo/metro-config@58.0.15'
+  - '@expo/router-server@58.0.15'
+  - babel-preset-expo@58.0.18
+  - expo-asset@58.0.17
+  - expo-camera@58.0.11
+  - expo-file-system@58.0.10
+  - expo-font@58.0.9
+  - expo-modules-cli@0.3.1
+  - expo-modules-core@58.0.23
+  - expo-modules-jsi@58.0.16
+  - expo@58.0.16
+
 # Security backports within the dependency's existing API branch. Keep scoped
 # ranges: do not silently replace older CommonJS APIs with new major versions.
-# Reviewed 2026-10-19; rationale and remaining advisories in docs/SECURITE_DEPENDANCES.md.
+# Reviewed 2026-10-21; rationale and remaining advisories in docs/SECURITE_DEPENDANCES.md.
 overrides:
   'postcss@>=8 <8.5.23': 8.5.23
   'undici@>=6 <6.28.1': 6.28.1
@@ -24,3 +38,15 @@ overrides:
   'baseline-browser-mapping@>=2 <2.11.0': 2.11.0
   'source-map-js@>=1 <1.2.2': 1.2.2
   'compression@>=1 <1.8.2': 1.8.2
+  'vite@>=7 <7.3.7': 7.3.7
+  # Narrow, tested tool-only major upgrades; not global API replacements.
+  '@react-native-community/cli-platform-android@12.1.1>fast-xml-parser': 5.11.2
+  '@react-native-community/cli-platform-ios@12.1.1>fast-xml-parser': 5.11.2
+  'xcode@3.0.1>uuid': 11.1.1
+
+patchedDependencies:
+  braces@3.0.3: patches/braces@3.0.3.patch
+  expo-camera@58.0.11: patches/expo-camera@58.0.11.patch
+  ip@1.1.9: patches/ip@1.1.9.patch
+  node-forge@1.4.0: patches/node-forge@1.4.0.patch
+  sprintf-js@1.0.3: patches/sprintf-js@1.0.3.patch

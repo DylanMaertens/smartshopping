@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Alert, AppState, Share, View } from 'react-native';
+import { AppState, Share, View } from 'react-native';
 import { Pressable, Text } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
 import { InvitationSession } from '@/services/api/invitationSession';
@@ -7,7 +7,6 @@ import QRCode from 'react-native-qrcode-svg';
 import {
   BackendApiError,
   createListInvitation,
-  deleteSharedList,
   getListMembers,
   removeListMember,
   revokeListInvitation,
@@ -15,7 +14,7 @@ import {
 } from '@/services/api/backend';
 import { getAnonymousDeviceId } from '@/services/identity/deviceIdentity';
 
-type Props = { session?: InvitationSession; listId: string; onDeleted: () => void; onBeforeInvite: () => Promise<boolean> };
+type Props = { session?: InvitationSession; listId: string; onBeforeInvite: () => Promise<boolean> };
 
 export function ShareListCard(props: Props) {
   const [localSession] = useState(() => new InvitationSession());
@@ -23,7 +22,7 @@ export function ShareListCard(props: Props) {
   return <ListShareControls key={props.listId} {...props} session={props.session ?? localSession} />;
 }
 
-function ListShareControls({ session, listId, onDeleted, onBeforeInvite }: Props & { session: InvitationSession }) {
+function ListShareControls({ session, listId, onBeforeInvite }: Props & { session: InvitationSession }) {
   const { theme } = useTheme();
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const key = session.key(deviceId ?? '', listId);
@@ -37,7 +36,6 @@ function ListShareControls({ session, listId, onDeleted, onBeforeInvite }: Props
   const busy = actionBusy || entry.pending;
   const busyRef = useRef(false);
   const mounted = useRef(true);
-  const [ownerControls, setOwnerControls] = useState(false);
   const [members, setMembers] = useState<SharedListMember[]>([]);
 
   useEffect(() => {
@@ -87,7 +85,6 @@ function ListShareControls({ session, listId, onDeleted, onBeforeInvite }: Props
           setMessage('Connexion nécessaire pour préparer le partage. Tes articles restent enregistrés.');
           return;
         }
-        setOwnerControls(true);
         setMessage('Transmets ce code uniquement à une personne de confiance.');
       })} style={{ alignItems: 'center', backgroundColor: theme.primary, borderRadius: theme.radius, padding: 10 }}>
         <Text style={{ color: theme.onPrimary, fontWeight: '700' }}>{entry.pending ? 'Préparation du code…' : 'Créer un code d’invitation'}</Text>
@@ -115,7 +112,7 @@ function ListShareControls({ session, listId, onDeleted, onBeforeInvite }: Props
       <Pressable disabled={busy} onPress={() => void run(async () => {
         const result = await getListMembers(await getAnonymousDeviceId(), listId);
         if (!mounted.current) return;
-        setOwnerControls(true); setMembers(result); setMessage(`${result.length} membre(s) autorisé(s).`);
+        setMembers(result); setMessage(`${result.length} membre(s) autorisé(s).`);
       })}><Text style={{ color: theme.muted, fontWeight: '700' }}>Gérer les membres</Text></Pressable>
       <Text style={{ color: theme.muted, fontSize: 13 }}>Révoquer un code bloque les nouvelles arrivées. Les membres déjà présents restent synchronisés. Pour couper leur accès, utilise Gérer les membres.</Text>
       {members.map((member) => (
@@ -129,18 +126,6 @@ function ListShareControls({ session, listId, onDeleted, onBeforeInvite }: Props
           })}><Text style={{ color: theme.danger, fontWeight: '700' }}>Retirer</Text></Pressable>
         </View>
       ))}
-      {ownerControls || createdCode ? <Pressable disabled={busy} onPress={() => Alert.alert(
-        'Supprimer définitivement la liste ?',
-        'Les articles, membres et invitations seront supprimés du serveur. Cette action est irréversible.',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Supprimer', style: 'destructive', onPress: () => void run(async () => {
-            await deleteSharedList(await getAnonymousDeviceId(), listId);
-            session.clear(key);
-            if (mounted.current) onDeleted();
-          }) },
-        ],
-      )}><Text style={{ color: theme.danger, fontWeight: '800' }}>Supprimer définitivement</Text></Pressable> : null}
     </View>
   );
 }

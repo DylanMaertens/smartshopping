@@ -97,10 +97,9 @@ jest.mock('@/components/JoinListCard', () => {
 jest.mock('@/components/ShareListCard', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
-  return { ShareListCard: ({ listId, onBeforeInvite, onDeleted }: { listId: string; onBeforeInvite: () => Promise<boolean>; onDeleted: () => void }) => <>
+  return { ShareListCard: ({ listId, onBeforeInvite }: { listId: string; onBeforeInvite: () => Promise<boolean> }) => <>
     <Text>{`Partage cible : ${listId}`}</Text>
     <Pressable onPress={() => void onBeforeInvite()}><Text>Préparer partage test</Text></Pressable>
-    <Pressable onPress={onDeleted}><Text>Suppression serveur test</Text></Pressable>
   </> };
 });
 jest.mock('@/components/ListManager', () => {
@@ -1269,11 +1268,12 @@ it('returns to the home screen with Android Back without exiting a shopping list
     const screen = renderNative(<HomeScreen />);
     await act(async () => {});
     const atHome = listener.mock.calls[listener.mock.calls.length - 1][1];
-    expect(atHome()).toBe(false);
+    const backEvent = { type: 'hardwareBackPress', timeStamp: Date.now() };
+    expect(atHome(backEvent)).toBe(false);
     fireEvent.press(screen.getByText('Ouvrir liste active test'));
     expect(screen.queryByTestId('lists-home')).toBeNull();
     const inList = listener.mock.calls[listener.mock.calls.length - 1][1];
-    act(() => { expect(inList()).toBe(true); });
+    act(() => { expect(inList(backEvent)).toBe(true); });
     screen.getByTestId('lists-home');
     screen.unmount();
   } finally { listener.mockRestore(); }
@@ -1383,17 +1383,17 @@ it('keeps the sharing shortcut of the currently open list', async () => {
   } finally { screen.unmount(); }
 });
 
-it('deletes the list targeted by the sharing menu without changing the other active list', async () => {
+it('opening sharing for another list never deletes or changes the active list', async () => {
   const screen = renderNative(<HomeScreen />);
   try {
     await act(async () => {});
     fireEvent.press(screen.getByText('Partager autre liste test'));
-    fireEvent.press(screen.getByText('Suppression serveur test'));
-    expect(Storage.deleteListPermanently).toHaveBeenCalledWith('other');
+    expect(screen.queryByText('Suppression serveur test')).toBeNull();
+    expect(Storage.deleteListPermanently).not.toHaveBeenCalled();
     expect(mockActiveList).toBe('home');
     expect(mockItems.has('home')).toBe(true);
     screen.getByTestId('lists-home');
-    expect(screen.queryByText('Partage cible : other')).toBeNull();
+    screen.getByText('Partage cible : other');
   } finally { screen.unmount(); }
 });
 

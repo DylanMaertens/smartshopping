@@ -1,0 +1,110 @@
+diff --git a/lib/ip.js b/lib/ip.js
+index 3f6a522c0d7cf7126bc028f30f3700ce05e12fd5..5f6ab03591b598a8d517cd02208570356714ba67 100644
+--- a/lib/ip.js
++++ b/lib/ip.js
+@@ -1,6 +1,29 @@
+ var ip = exports;
+ var { Buffer } = require('buffer');
+ var os = require('os');
++var net = require('net');
++var URL = require('url').URL;
++
++// Parse before classifying: regexes over the original spelling miss IPv6
++// compression, mapped IPv4 and legacy inet_aton octal/hex/short forms.
++function classificationBytes(addr) {
++  if (typeof addr !== 'string' || addr.length > 64) return null;
++  if (net.isIP(addr) === 6 && addr.indexOf('%') === -1) {
++    var bytes = ip.toBuffer(addr);
++    if (bytes.subarray(0, 10).every(byte => byte === 0) &&
++      (bytes.readUInt16BE(10) === 0 || bytes.readUInt16BE(10) === 0xffff)) {
++      return bytes.subarray(12);
++    }
++    return bytes;
++  }
++  if (!/^[0-9a-fx.]+$/i.test(addr)) return null;
++  try {
++    var canonical = new URL('http://' + addr).hostname;
++    return net.isIP(canonical) === 4 ? ip.toBuffer(canonical) : null;
++  } catch (_) {
++    return null;
++  }
++}
+ 
+ ip.toBuffer = function (ip, buff, offset) {
+   offset = ~~offset;
+@@ -311,31 +334,24 @@ ip.isEqual = function (a, b) {
+ };
+ 
+ ip.isPrivate = function (addr) {
+-  // check loopback addresses first
+-  if (ip.isLoopback(addr)) {
+-    return true;
++  var bytes = classificationBytes(addr);
++  // Fail closed for malformed/ambiguous input, never advertise it as public.
++  if (!bytes) return true;
++  if (bytes.length === 4) {
++    var a = bytes[0], b = bytes[1], c = bytes[2];
++    return a === 0 || a === 10 || a === 127 || a >= 224 ||
++      (a === 100 && b >= 64 && b <= 127) ||
++      (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
++      (a === 192 && (b === 168 || (b === 0 && (c === 0 || c === 2)))) ||
++      (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
++      (a === 203 && b === 0 && c === 113);
+   }
+-
+-  // ensure the ipv4 address is valid
+-  if (!ip.isV6Format(addr)) {
+-    const ipl = ip.normalizeToLong(addr);
+-    if (ipl < 0) {
+-      throw new Error('invalid ipv4 address');
+-    }
+-    // normalize the address for the private range checks that follow
+-    addr = ip.fromLong(ipl);
+-  }
+-
+-  // check private ranges
+-  return /^(::f{4}:)?10\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/i.test(addr)
+-    || /^(::f{4}:)?192\.168\.([0-9]{1,3})\.([0-9]{1,3})$/i.test(addr)
+-    || /^(::f{4}:)?172\.(1[6-9]|2\d|30|31)\.([0-9]{1,3})\.([0-9]{1,3})$/i
+-      .test(addr)
+-    || /^(::f{4}:)?169\.254\.([0-9]{1,3})\.([0-9]{1,3})$/i.test(addr)
+-    || /^f[cd][0-9a-f]{2}:/i.test(addr)
+-    || /^fe80:/i.test(addr)
+-    || /^::1$/.test(addr)
+-    || /^::$/.test(addr);
++  // Only ordinary global-unicast IPv6 is public. Special/tunnel ranges are
++  // deliberately conservative; this utility is not a DNS/redirect SSRF guard.
++  return (bytes[0] & 0xe0) !== 0x20 ||
++    (bytes[0] === 0x20 && bytes[1] === 0x01 &&
++      ((bytes[2] === 0x0d && bytes[3] === 0xb8) || bytes[2] < 2)) ||
++    (bytes[0] === 0x20 && bytes[1] === 0x02);
+ };
+ 
+ ip.isPublic = function (addr) {
+@@ -343,18 +359,15 @@ ip.isPublic = function (addr) {
+ };
+ 
+ ip.isLoopback = function (addr) {
+-  // If addr is an IPv4 address in long integer form (no dots and no colons), convert it
+-  if (!/\./.test(addr) && !/:/.test(addr)) {
+-    addr = ip.fromLong(Number(addr));
++  var bytes = classificationBytes(addr);
++  if (!bytes) return false;
++  if (bytes.length === 4) {
++    return bytes[0] === 127 ||
++      (bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 0 && bytes[3] <= 1);
+   }
+-
+-  return /^(::f{4}:)?127\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/
+-    .test(addr)
+-    || /^0177\./.test(addr)
+-    || /^0x7f\./i.test(addr)
+-    || /^fe80::1$/i.test(addr)
+-    || /^::1$/.test(addr)
+-    || /^::$/.test(addr);
++  // Preserve this package's historical IPv6 loopback() = fe80::1 convention.
++  return bytes[0] === 0xfe && bytes[1] === 0x80 &&
++    bytes.subarray(2, 15).every(byte => byte === 0) && bytes[15] === 1;
+ };
+ 
+ ip.loopback = function (family) {

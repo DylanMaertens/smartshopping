@@ -1,5 +1,6 @@
 // Browser QA of real components with fixture storage only. Does not touch site captures.
 import { build } from 'esbuild';
+import { svgWebCompatibility } from './svgWebCompatibility.mjs';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdir } from 'node:fs/promises';
@@ -12,9 +13,9 @@ await mkdir(output, { recursive: true });
 const fixtures = resolve(mobile, 'preview/fixtures.ts'), native = resolve(mobile, 'preview/native.tsx');
 const result = await build({ absWorkingDir: mobile, entryPoints: ['preview/index.tsx'], bundle: true, write: false,
   resolveExtensions: ['.web.tsx', '.tsx', '.web.ts', '.ts', '.web.js', '.js', '.json'],
-  define: { __DEV__: 'true', 'process.env.NODE_ENV': '"development"' },
-  alias: { 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
-  plugins: [{ name: 'fixtures', setup(builder) {
+  define: { global: 'globalThis', __DEV__: 'true', 'process.env.NODE_ENV': '"development"' },
+  alias: { '@react-native/assets-registry/registry': 'react-native-web/dist/modules/AssetRegistry/index.js', 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
+  plugins: [svgWebCompatibility, { name: 'fixtures', setup(builder) {
     builder.onResolve({ filter: /services\/backup\/backupFiles$/ }, () => ({ path: resolve(mobile, 'preview/backupFiles.ts') }));
     builder.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|personalSettings|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
   } }],
@@ -30,7 +31,7 @@ try {
   for (const width of [320, 390]) {
     const page = await browser.newPage({ viewport: { width, height: 850 } });
     const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
+    page.on('pageerror', error => { errors.push(error.message); console.error('Shopping preview:', error.message); });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.getByRole('button', { name: 'Courses de la semaine', exact: true }).click();
     await page.getByRole('button', { name: 'Ajouter un article', exact: true }).click();

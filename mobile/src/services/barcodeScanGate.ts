@@ -1,6 +1,8 @@
 export const SCAN_COOLDOWN_MS = 1500;
 const STABILITY_MS = 250;
-const MAX_READING_GAP_MS = 1000;
+// Native ML Kit can take longer than one second per frame on some phones.
+// Still require two matching, checksum-valid readings; never accept a timer alone.
+const MAX_READING_GAP_MS = 5000;
 
 // Canonical GTIN: UPC-A and its EAN-13 representation refer to the same product.
 export function normalizeScannedBarcode(data: string, type?: string): string | null {

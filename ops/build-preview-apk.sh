@@ -14,7 +14,8 @@ export SMARTSHOPPING_CHANNEL=preview SMARTSHOPPING_TEST_SERVER=true EXPO_NO_TELE
 export __UNSAFE_EXPO_HOME_DIRECTORY="$repo_dir/.local-dev/expo-home"
 unset EAS_BUILD_PROFILE EXPO_PUBLIC_API_BASE_URL
 for command in java keytool python3; do command -v "$command" >/dev/null || { echo "Outil manquant : $command" >&2; exit 1; }; done
-[[ -d "$ANDROID_HOME/platforms/android-36" ]] || { echo 'Installer le SDK Android 36 avant de compiler.' >&2; exit 1; }
+[[ -d "$ANDROID_HOME/platforms/android-37.0" || -d "$ANDROID_HOME/platforms/android-37" ]] || { echo 'Installer le SDK Android 37 (platforms;android-37.0) avant de compiler.' >&2; exit 1; }
+[[ -x "$ANDROID_HOME/build-tools/37.0.0/apksigner" ]] || { echo 'Installer Android Build-Tools 37.0.0 avant de compiler.' >&2; exit 1; }
 mkdir -p "$ANDROID_USER_HOME" "$GRADLE_USER_HOME" "$build_dir/signing" "$repo_dir/artifacts/android"
 signing_dir="$build_dir/signing"
 if [[ ! -e "$signing_dir/release.jks" ]]; then
@@ -29,7 +30,8 @@ PY
 fi
 [[ -s "$signing_dir/password" ]] || { echo 'Mot de passe de la clé manquant : restaurer la sauvegarde de signature.' >&2; exit 1; }
 cd "$repo_dir/mobile"
-"$node_binary" node_modules/expo/bin/cli prebuild --platform android --no-install
+# SDK 57+ cleans native directories by default; never erase an existing checkout.
+"$node_binary" node_modules/expo/bin/cli prebuild --platform android --no-install --no-clean
 python3 - "$repo_dir" "$ANDROID_HOME" <<'PY'
 from pathlib import Path
 import sys
@@ -59,6 +61,7 @@ cd android
 app_version=$("$node_binary" -p 'require("../app.json").expo.version')
 output="$repo_dir/artifacts/android/poduna-$app_version-preview.apk"
 cp app/build/outputs/apk/release/app-release.apk "$output"
-"$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$output"
+"$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose "$output"
+bash "$repo_dir/ops/check-apk-mlkit.sh" "$output"
 (cd "$repo_dir/artifacts/android" && sha256sum "poduna-$app_version-preview.apk") > "$output.sha256"
 printf '\nAPK prêt : %s\n' "$output"

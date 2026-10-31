@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+vi.mock('react-native', () => ({ Platform: { OS: 'web' } }));
 import { LocalKeyValueStorage } from './localKeyValueStorage';
 import { getProductPreference, getRememberedCategory, rememberProductCategory, saveProductPreference } from './productPreferences';
 const settings = vi.hoisted(() => new Map<string, string>());

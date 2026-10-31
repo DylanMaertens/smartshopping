@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Keyboard, View } from 'react-native';
 import { Button, PageModal, Pressable, Text, TextInput } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
+import { MotionView } from '@/theme/motion';
 import { canonicalCategoryName, STORE_CATEGORIES } from '@/services/categorization/categoryService';
 import { normalizeItemName, truncateUtf8 } from '@/services/itemValidation';
 import type { ShoppingItem as ShoppingItemType } from '@/types';
@@ -45,7 +46,7 @@ export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.ba
       {item.quantity > 1 ? <>
       <Pressable accessibilityLabel={`Diminuer la quantité de ${displayName}`}
         onPress={() => onDecreaseQuantity(item.id)} style={{ alignItems: 'center' }}><Text style={{ fontSize: 22 }}>−</Text></Pressable>
-      <Text accessibilityLabel={`Quantité : ${item.quantity}`} style={{ minWidth: 24, textAlign: 'center', fontWeight: '600' }}>{item.quantity}</Text>
+      <MotionView replayKey={item.quantity}><Text accessibilityLabel={`Quantité : ${item.quantity}`} style={{ minWidth: 24, textAlign: 'center', fontWeight: '600' }}>{item.quantity}</Text></MotionView>
       </> : null}
       <Pressable accessibilityLabel={`Augmenter la quantité de ${displayName}`} disabled={item.quantity >= 999}
         onPress={() => onIncreaseQuantity(item.id)} style={{ alignItems: 'center' }}><Text style={{ fontSize: 22 }}>+</Text></Pressable>

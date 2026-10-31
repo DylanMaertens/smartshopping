@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { Platform } from 'react-native';
 import { PersonalSettings as LocalKeyValueStorage, THEME_STORAGE_KEY } from '@/services/storage/personalSettings';
 import { DEFAULT_THEME_ID, isThemeId, themes, type ThemeId } from './themes';
+import { MotionProvider } from './motion';
 
 export { THEME_STORAGE_KEY } from '@/services/storage/personalSettings';
 const ThemeContext = createContext({ theme: themes[DEFAULT_THEME_ID], headingFont: Platform.select({ ios: 'Georgia', default: 'serif' }) as string | undefined,
@@ -25,6 +26,6 @@ export function ThemeProvider({ children, pixelFontReady = false }: React.PropsW
   }
   const headingFont = id === 'origine' || id === 'papier' ? Platform.select({ ios: 'Georgia', default: 'serif' })
     : id === 'pixel' ? (pixelFontReady ? 'Silkscreen' : Platform.select({ ios: 'Courier', default: 'monospace' })) : undefined;
-  return <ThemeContext.Provider value={{ theme: themes[id], headingFont, selectTheme, reloadTheme, error }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ theme: themes[id], headingFont, selectTheme, reloadTheme, error }}><MotionProvider>{children}</MotionProvider></ThemeContext.Provider>;
 }
 export const useTheme = () => useContext(ThemeContext);

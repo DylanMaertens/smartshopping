@@ -1,8 +1,11 @@
-import React, { forwardRef } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable as NativePressable, Text as NativeText,
-  TextInput as NativeInput, ScrollView, View, type TextProps, type TextInputProps, type PressableProps } from 'react-native';
+import React, { forwardRef, useState } from 'react';
+import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable as NativePressable, Text as NativeText,
+  TextInput as NativeInput, ScrollView, View, type TextProps, type TextInputProps, type TextInputInstance, type PressableProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from './ThemeProvider';
+import { MotionView, useMotionValue, useReducedMotion } from './motion';
+
+const AnimatedPressable = Animated.createAnimatedComponent(NativePressable);
 
 export function Text({ style, ...props }: TextProps) {
   const { theme } = useTheme();
@@ -13,18 +16,25 @@ export function Heading({ style, ...props }: TextProps) {
   return <Text {...props} style={[{ fontSize: theme.id === 'pixel' ? 24 : 28, lineHeight: 36,
     fontWeight: headingFont ? '400' : '700', fontFamily: headingFont }, style]} />;
 }
-export const TextInput = forwardRef<NativeInput, TextInputProps>(function TextInput({ style, ...props }, ref) {
+export const TextInput = forwardRef<TextInputInstance, TextInputProps>(function TextInput({ style, ...props }, ref) {
   const { theme } = useTheme();
   return <NativeInput ref={ref} placeholderTextColor={theme.muted} selectionColor={theme.primary}
     {...props} style={[{ color: theme.text, backgroundColor: theme.surface, fontSize: theme.bodySize,
       borderColor: theme.border, borderWidth: theme.stroke, borderRadius: theme.radius, padding: 14, minHeight: 52 }, style]} />;
 });
 // Shared targets also cover legacy secondary controls during the visual migration.
-export function Pressable({ style, ...props }: PressableProps) {
+export function Pressable({ style, onPressIn, onPressOut, ...props }: PressableProps) {
   const { theme } = useTheme();
-  return <NativePressable accessibilityRole="button" {...props} style={(state) => [
-    { minHeight: theme.tap, minWidth: theme.tap, justifyContent: 'center', opacity: props.disabled ? 0.5 : state.pressed ? 0.72 : 1 },
-    typeof style === 'function' ? style(state) : style,
+  const [pressed, setPressed] = useState(false);
+  const reduced = useReducedMotion();
+  const targetOpacity = props.disabled ? 0.5 : pressed ? 0.72 : 1;
+  const opacity = useMotionValue(targetOpacity, pressed ? 70 : 130);
+  return <AnimatedPressable accessibilityRole="button" {...props}
+    onPressIn={(event) => { setPressed(true); onPressIn?.(event); }}
+    onPressOut={(event) => { setPressed(false); onPressOut?.(event); }}
+    style={[
+    { minHeight: theme.tap, minWidth: theme.tap, justifyContent: 'center', opacity: reduced ? targetOpacity : opacity },
+    typeof style === 'function' ? style({ pressed }) : style,
   ]} />;
 }
 export function Button({ label, variant = 'primary', ...props }: Omit<PressableProps, 'children'> & {
@@ -39,7 +49,7 @@ export function Button({ label, variant = 'primary', ...props }: Omit<PressableP
       fontWeight: '700', textAlign: 'center' }}>{label}</Text>
   </Pressable>;
 }
-export function PageModal({ title, onClose, children, testID, showBackButton = true, scrollable = true }: React.PropsWithChildren<{ title: string; onClose: () => void; testID?: string; showBackButton?: boolean; scrollable?: boolean }>) {
+export function PageModal({ title, onClose, children, testID, showBackButton = true, scrollable = true, transitionKey = title }: React.PropsWithChildren<{ title: string; onClose: () => void; testID?: string; showBackButton?: boolean; scrollable?: boolean; transitionKey?: string }>) {
   const { theme } = useTheme();
   // Android's native Modal already uses adjustResize. A second height-based
   // keyboard adjustment retains stale measurements when switching add modes.
@@ -47,6 +57,7 @@ export function PageModal({ title, onClose, children, testID, showBackButton = t
   return <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose} testID={testID}>
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <Body style={{ flex: 1 }} {...(Platform.OS === 'ios' ? { behavior: 'padding' as const } : {})}>
+        <MotionView replayKey={transitionKey} style={{ flex: 1 }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, gap: 4 }}>
           {showBackButton ? <Pressable onPress={onClose} accessibilityLabel={`Fermer ${title}`} style={{ alignSelf: 'flex-start' }}>
             <Text style={{ color: theme.muted }}>← Retour</Text>
@@ -55,6 +66,7 @@ export function PageModal({ title, onClose, children, testID, showBackButton = t
         {scrollable ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 8, gap: 20 }}>
           {children}
         </ScrollView> : children}
+        </MotionView>
       </Body>
     </SafeAreaView>
   </Modal>;

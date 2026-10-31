@@ -1,14 +1,22 @@
 appId: com.smartshopping.app
 ---
-- launchApp
+- launchApp:
+    clearState: true
+- tapOn: "Ma liste"
 - toggleAirplaneMode
+- tapOn: "Ajouter un article"
 - tapOn:
     id: add-item-input
-- inputText: Pates
+- inputText: Riz
 - tapOn:
     id: add-item-button
-- assertVisible: Pates
+- tapOn: "Terminer"
+- assertVisible: Riz
+- stopApp
+- launchApp
+- tapOn: "Ma liste"
+- assertVisible: Riz
 - toggleAirplaneMode
-- tapOn: "Synchroniser maintenant"
-- assertVisible:
-    text: ".*(synchronisée|conservés en local).*"
+# A local list must not start synchronizing when connectivity returns.
+- assertNotVisible: "Synchroniser maintenant"
+- assertVisible: Riz

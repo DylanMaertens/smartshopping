@@ -16,7 +16,8 @@ def prepare_image(image_bytes):
     Image.MAX_IMAGE_PIXELS = 12_000_000
     warnings.simplefilter('error', Image.DecompressionBombWarning)
     try:
-        image = Image.open(io.BytesIO(image_bytes))
+        # Select the allowed decoders before parsing any untrusted image header.
+        image = Image.open(io.BytesIO(image_bytes), formats=('JPEG', 'PNG'))
         if image.format not in ('JPEG', 'PNG') or image.width * image.height > 12_000_000:
             raise ValueError('invalid dimensions or format')
         image.load()

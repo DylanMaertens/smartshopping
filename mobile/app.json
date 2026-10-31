@@ -3,19 +3,23 @@
     "name": "Poduna",
     "slug": "shopping-list-app",
     "scheme": "smartshopping",
-    "version": "0.1.15",
+    "version": "0.1.20",
     "icon": "./assets/brand/icon.png",
-    "splash": {
-      "image": "./assets/brand/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FAF8F3"
-    },
     "orientation": "portrait",
     "platforms": [
       "android",
       "ios"
     ],
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FAF8F3",
+          "imageWidth": 200
+        }
+      ],
       [
         "expo-camera",
         {
@@ -25,10 +29,11 @@
         }
       ],
       "expo-secure-store",
-      "./plugins/withLocalSpeech.cjs"
+      "./plugins/withLocalSpeech.cjs",
+      "./plugins/withMlKitRegistrars.cjs"
     ],
     "android": {
-      "versionCode": 16,
+      "versionCode": 21,
       "package": "com.smartshopping.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/adaptive-foreground.png",

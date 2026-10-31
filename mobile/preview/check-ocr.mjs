@@ -16,7 +16,7 @@ await build({ absWorkingDir: mobile, bundle: true, outfile: out + '/app.js',
   stdin: { resolveDir: mobile, loader: 'tsx', contents: `import React from 'react';
     import { createRoot } from 'react-dom/client'; import { OcrImportPanel } from './src/components/OcrImportPanel';
     createRoot(document.getElementById('root')).render(<OcrImportPanel onCancel={() => {}} onImport={(items) => { window.importedItems = items; }} />);` },
-  define: { __DEV__: 'true', 'process.env.NODE_ENV': '"development"' },
+  define: { global: 'globalThis', __DEV__: 'true', 'process.env.NODE_ENV': '"development"' },
   alias: { 'react-native': 'react-native-web' },
   plugins: [{ name: 'ocr-fixtures', setup(builder) {
     builder.onResolve({ filter: /BarcodeScannerPanel$/ }, () => ({ path: 'camera', namespace: 'fixture' }));

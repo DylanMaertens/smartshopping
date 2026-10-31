@@ -11,8 +11,8 @@ jest.mock('@/services/api/backend', () => ({
 }));
 const invitation = 'a'.repeat(32);
 it('shares the Poduna name with the backwards-compatible invitation scheme', async () => {
-  const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
-  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} onDeleted={jest.fn()} />);
+  const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} />);
   await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
   await act(async () => fireEvent.press(screen.getByText('Partager avec une application')));
   expect(share).toHaveBeenCalledWith({
@@ -29,7 +29,7 @@ beforeEach(() => {
   jest.mocked(getListMembers).mockResolvedValue([{ device_id: 'member-a', role: 'editor', joined_at: 1 }]);
 });
 it('clears invitation and members when selecting another list', async () => {
-  const callbacks = { onBeforeInvite: jest.fn(async () => true), onDeleted: jest.fn() };
+  const callbacks = { onBeforeInvite: jest.fn(async () => true) };
   const screen = render(<ShareListCard listId="a" {...callbacks} />);
   await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
   await act(async () => fireEvent.press(screen.getByText('Gérer les membres')));
@@ -41,7 +41,7 @@ it('clears invitation and members when selecting another list', async () => {
 it('does not display a late invitation on another list', async () => {
   let resolve!: (value: Awaited<ReturnType<typeof createListInvitation>>) => void;
   jest.mocked(createListInvitation).mockReturnValue(new Promise((yes) => { resolve = yes; }));
-  const callbacks = { onBeforeInvite: jest.fn(async () => true), onDeleted: jest.fn() };
+  const callbacks = { onBeforeInvite: jest.fn(async () => true) };
   const screen = render(<ShareListCard listId="a" {...callbacks} />);
   await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
   screen.rerender(<ShareListCard listId="b" {...callbacks} />);
@@ -49,7 +49,7 @@ it('does not display a late invitation on another list', async () => {
   expect(screen.queryByText(invitation)).toBeNull();
 });
 it('starts only one invitation for two presses in the same render', async () => {
-  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} onDeleted={jest.fn()} />);
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} />);
   await act(async () => {
     fireEvent.press(screen.getByText('Créer un code d’invitation'));
     fireEvent.press(screen.getByText('Créer un code d’invitation'));
@@ -59,14 +59,14 @@ it('starts only one invitation for two presses in the same render', async () => 
 it('waits for successful synchronization before creating an invitation', async () => {
   let finish!: (value: boolean) => void;
   const before = jest.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
-  const screen = render(<ShareListCard listId="a" onBeforeInvite={before} onDeleted={jest.fn()} />);
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={before} />);
   await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
   expect(createListInvitation).not.toHaveBeenCalled();
   await act(async () => finish(true));
   expect(createListInvitation).toHaveBeenCalledWith('owner', 'a');
 });
 it('does not create an invitation when synchronization fails', async () => {
-  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => false} onDeleted={jest.fn()} />);
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => false} />);
   await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
   expect(createListInvitation).not.toHaveBeenCalled();
   screen.getByText('Connexion nécessaire pour préparer le partage. Tes articles restent enregistrés.');
@@ -76,16 +76,19 @@ it('does not create an invitation when synchronization fails', async () => {
 
 
 
-it('only exposes server deletion after owner access has been verified', async () => {
-  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} onDeleted={jest.fn()} />);
+it('never exposes list deletion in sharing, after invitation creation or member management', async () => {
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} />);
+  expect(screen.queryByText('Supprimer définitivement')).toBeNull();
+  await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
   expect(screen.queryByText('Supprimer définitivement')).toBeNull();
   await act(async () => fireEvent.press(screen.getByText('Gérer les membres')));
-  screen.getByText('Supprimer définitivement');
+  expect(screen.queryByText('Supprimer définitivement')).toBeNull();
+  screen.getByText('Retirer');
 });
 
 
 
-const callbacks = { onBeforeInvite: async () => true, onDeleted: jest.fn() };
+const callbacks = { onBeforeInvite: async () => true };
 
 it('keeps the same QR after closing and reopening without creating another invitation', async () => {
   const session = new InvitationSession();

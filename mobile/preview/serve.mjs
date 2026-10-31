@@ -1,4 +1,5 @@
 import { context } from 'esbuild';
+import { svgWebCompatibility } from './svgWebCompatibility.mjs';
 import { mkdir, copyFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 const out = resolve('.preview');
@@ -8,9 +9,11 @@ await writeFile(out + '/index.html', `<!doctype html><html lang="fr"><meta chars
 const fixtures = resolve('preview/fixtures.ts');
 const native = resolve('preview/native.tsx');
 const ctx = await context({ entryPoints: ['preview/index.tsx'], bundle: true, outfile: out + '/app.js', sourcemap: true, resolveExtensions: ['.web.tsx', '.tsx', '.web.ts', '.ts', '.web.js', '.js', '.json'],
-  define: { __DEV__: 'true', 'process.env.NODE_ENV': '"development"' },
-  alias: { 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
-  plugins: [{ name: 'isolated-preview', setup(build) {
+  define: { global: 'globalThis', __DEV__: 'true', 'process.env.NODE_ENV': '"development"' },
+  // RN 0.88 moved its asset registry; SVG's web entry still uses the old name.
+  // Browser assets must resolve through the same registry as react-native-web.
+  alias: { '@react-native/assets-registry/registry': 'react-native-web/dist/modules/AssetRegistry/index.js', 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
+  plugins: [svgWebCompatibility, { name: 'isolated-preview', setup(build) {
     build.onResolve({ filter: /services\/backup\/backupFiles$/ }, () => ({ path: resolve('preview/backupFiles.ts') }));
     build.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|personalSettings|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
   } }],

@@ -11,14 +11,16 @@ test('Poduna changes presentation, never the installed app or invitation identit
   assert.equal(base.ios.bundleIdentifier, 'com.smartshopping.app');
   assert.equal(base.scheme, 'smartshopping');
   assert.equal(base.slug, 'shopping-list-app');
-  assert.equal(base.version, '0.1.15');
-  assert.equal(base.android.versionCode, 16);
+  assert.equal(base.version, '0.1.20');
+  assert.equal(base.android.versionCode, 21);
   const fs = require('node:fs');
   const path = require('node:path');
-  for (const image of [base.icon, base.splash.image, base.android.adaptiveIcon.foregroundImage, base.android.adaptiveIcon.monochromeImage]) {
+  const splash = base.plugins.find((entry) => Array.isArray(entry) && entry[0] === 'expo-splash-screen')[1];
+  for (const image of [base.icon, splash.image, base.android.adaptiveIcon.foregroundImage, base.android.adaptiveIcon.monochromeImage]) {
     assert.ok(fs.statSync(path.resolve(__dirname, '..', image)).size > 0);
   }
-  assert.equal(base.splash.backgroundColor, '#FAF8F3');
+  assert.equal(splash.backgroundColor, '#FAF8F3');
+  assert.equal(base.splash, undefined);
 });
 
 test('Expo Go still starts without a hosted API or Expo account', () => {
@@ -26,6 +28,12 @@ test('Expo Go still starts without a hosted API or Expo account', () => {
   assert.equal(result.extra.distributionChannel, 'development');
   assert.equal(result.extra.apiBaseUrl, undefined);
   assert.equal(result.extra.eas, undefined);
+});
+
+test('ordinary prebuild preserves native directories and cleanup stays explicit', () => {
+  const { scripts } = require('../package.json');
+  assert.equal(scripts.prebuild, 'expo prebuild --no-clean');
+  assert.equal(scripts['prebuild:clean'], 'expo prebuild --clean');
 });
 
 for (const profile of ['preview', 'direct', 'production']) {

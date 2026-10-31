@@ -11,6 +11,30 @@ jest.mock('./BarcodeScannerPanel', () => {
     <Pressable onPress={() => onPhotographed('image-data')}><Text>Photo test</Text></Pressable> };
 });
 beforeEach(() => jest.mocked(recognizeListPhoto).mockReset().mockResolvedValue({ text: 'Pain\n2 x lait' }));
+it('shows split articles before confirmation without breaking compound names or weights', async () => {
+  jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'Chou-fleur / 2 x lait demi-écrémé - Huile 1/2 L. Pain' });
+  const onImport = jest.fn();
+  const screen = render(<OcrImportPanel onImport={onImport} onCancel={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('Chou-fleur\n2 x lait demi-écrémé\nHuile 1/2 L\nPain');
+  expect(onImport).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText('Ajouter les 4 lignes'));
+  expect(onImport).toHaveBeenCalledWith([
+    { name: 'Chou-fleur', quantity: 1 }, { name: 'Lait demi-écrémé', quantity: 2 },
+    { name: 'Huile 1/2 l', quantity: 1 }, { name: 'Pain', quantity: 1 },
+  ]);
+});
+it('can undo automatic splitting and never re-splits the reviewed text on import', async () => {
+  jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'Shampooing / douche' });
+  const onImport = jest.fn();
+  const screen = render(<OcrImportPanel onImport={onImport} onCancel={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('Shampooing\ndouche');
+  fireEvent.press(screen.getByText('Annuler la dernière correction'));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('Shampooing / douche');
+  fireEvent.press(screen.getByText('Ajouter les 1 lignes'));
+  expect(onImport).toHaveBeenCalledWith([{ name: 'Shampooing / douche', quantity: 1 }]);
+});
 it('discards the photo, corrected draft and correction choices on explicit cancellation', async () => {
   jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'Litiéne\nwwhisky' });
   const onImport = jest.fn(), onCancel = jest.fn();

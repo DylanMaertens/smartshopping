@@ -31,10 +31,16 @@ describe('barcode validation', () => {
       expect(gate.read(time % 500 ? '3274080005003' : '3017620422003', 'ean13', time)).toBeNull();
     }
     expect(gate.read('036000291452', 'upc_a', 3000)).toBeNull();
-    expect(gate.read('0036000291452', 'ean13', 5000)).toBeNull();
-    expect(gate.read('036000291452', 'upc_a', 5250)).toBe('0036000291452');
     expect(gate.read('0036000291452', 'ean13', 9000)).toBeNull();
+    expect(gate.read('036000291452', 'upc_a', 9250)).toBe('0036000291452');
+    expect(gate.read('0036000291452', 'ean13', 11000)).toBeNull();
     gate.resetCandidate();
-    expect(gate.read('3274080005003', 'ean13', 10000)).toBeNull();
+    expect(gate.read('3274080005003', 'ean13', 12000)).toBeNull();
+  });
+  it('confirms two real readings on slower phones without accepting a single reading', () => {
+    const gate = new BarcodeScanGate();
+    expect(gate.read('3017620422003', 'ean13', 0)).toBeNull();
+    expect(gate.read('3017620422003', 'ean13', 1800)).toBe('3017620422003');
+    expect(gate.read('3017620422003', 'ean13', 4000)).toBeNull();
   });
 });

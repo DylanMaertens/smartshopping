@@ -1,8 +1,34 @@
 import { expect, it } from 'vitest';
-import { cleanOcrText, parseOcrItems, mergeOcrItems } from './ocrItems';
+import { cleanOcrText, prepareOcrText, parseOcrItems, mergeOcrItems } from './ocrItems';
 import type { ShoppingItem } from '@/types';
 const milk: ShoppingItem = { id: 'milk', listId: 'home', name: 'Lait', quantity: 2, checked: true, updatedAt: 1 };
 const create = (name: string): ShoppingItem => ({ ...milk, id: name, name, checked: false, quantity: 1 });
+it.each(['.', ' / ', '/', ' - ', '--', ' — ', '–', ' • ', ' · ', ' | ', ';', ' → ', ' ★ ', ' * ', ' ☑ ', ' □ ', ' ▪ '])('splits OCR list separators %s before review', (separator) => {
+  expect(prepareOcrText(`Pain${separator}Lait${separator}Œufs`)).toBe('Pain\nLait\nŒufs');
+});
+it.each([
+  'Chou-fleur', 'Lait demi-écrémé', 'Essuie-tout', 'Coca-Cola', 'Pain-lait',
+  'Huile 1/2 L', 'Huile 1 / 2 L', 'Lait 1.5 L', 'Crème 1,5%', 'Œufs 6 - 12',
+  'St. Môret', 'M. Propre', 'Lait U.H.T. entier', 'Crème 15% M.G.',
+  'Lessive 10 g/L', 'Protéines 20 g/100 g', 'Sauce (ail / fines herbes)',
+  'Shampooing (corps - cheveux)', 'Vitamine C + zinc',
+])('preserves compound words and meaningful punctuation: %s', (name) => {
+  expect(prepareOcrText(`${name} / Pain`)).toBe(`${cleanOcrText(name)}\nPain`);
+});
+it('handles typography, numbered lists, repeated markers and existing line breaks', () => {
+  expect(prepareOcrText('1. Chou‑fleur / lait demi‐écrémé\r\n2) Pain — Œufs 6–12\n• Café ... Thé // Sel')).toBe(
+    'Chou-fleur\nlait demi-écrémé\nPain\nŒufs 6-12\nCafé\nThé\nSel',
+  );
+});
+it('keeps quantities attached and enforces the import limit after separation', () => {
+  expect(parseOcrItems(prepareOcrText('2 x lait / Pain x 3'))).toEqual([
+    { name: 'Lait', quantity: 2 }, { name: 'Pain', quantity: 3 },
+  ]);
+  expect(() => parseOcrItems(prepareOcrText(Array(51).fill('Pain').join(' / ')))).toThrow('50');
+});
+it('does not re-split punctuation explicitly kept in a reviewed article or dictated text', () => {
+  expect(parseOcrItems('Shampooing / douche')).toEqual([{ name: 'Shampooing / douche', quantity: 1 }]);
+});
 it('removes decorative OCR symbols while preserving quantities, accents and packaging', () => {
   const cleaned = cleanOcrText('[x] 2 × Lait 1,5% ★\n☑ Huile d’olive 1/2 L\n→ Café 250 g\n___\n🥕 Carottes\n1. Pâtes sans-gluten');
   expect(cleaned).toBe('2 × Lait 1,5%\nHuile d’olive 1/2 L\nCafé 250 g\nCarottes\nPâtes sans-gluten');

@@ -5,13 +5,11 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "jsx": "react-native",
-    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ]
     },
-    "ignoreDeprecations": "5.0",
     "skipLibCheck": true,
     "lib": [
       "ES2020"
@@ -28,5 +26,5 @@
     "src",
     "App.tsx"
   ],
-  "extends": "expo/tsconfig.base"
+  "extends": "expo/tsconfig.base.json"
 }

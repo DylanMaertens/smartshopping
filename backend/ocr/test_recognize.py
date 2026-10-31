@@ -2,6 +2,7 @@
 import io
 import struct
 import unittest
+from unittest.mock import patch
 from PIL import Image
 from recognize import layout_lines, prepare_image
 
@@ -13,10 +14,18 @@ def encoded(image, format='PNG', **options):
 
 
 class ImageValidationTests(unittest.TestCase):
+    def test_only_jpeg_and_png_decoders_are_invoked(self):
+        data = encoded(Image.new('RGB', (10, 10)))
+        with patch('PIL.Image.open', wraps=Image.open) as open_image:
+            prepare_image(data)
+        self.assertEqual(open_image.call_args.kwargs['formats'], ('JPEG', 'PNG'))
+
     def test_invalid_truncated_and_unsupported_images_are_rejected(self):
         valid = encoded(Image.new('RGB', (100, 100), 'white'))
         for data in (b'', b'not an image', b'\xff\xd8\xffbroken', valid[:40],
-                     encoded(Image.new('RGB', (10, 10)), 'GIF')):
+                     encoded(Image.new('RGB', (10, 10)), 'GIF'),
+                     encoded(Image.new('RGB', (10, 10)), 'TIFF'),
+                     encoded(Image.new('RGB', (10, 10)), 'BMP')):
             with self.subTest(data=data[:10]), self.assertRaises(SystemExit) as error:
                 prepare_image(data)
             self.assertEqual(error.exception.code, 2)

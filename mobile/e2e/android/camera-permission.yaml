@@ -2,6 +2,8 @@ appId: com.smartshopping.app
 ---
 - launchApp:
     clearState: true
+    permissions:
+      all: deny
 - tapOn: "Ma liste"
 - tapOn: "Ajouter un article"
 - tapOn: "Scanner un produit ou une liste"
@@ -11,6 +13,15 @@ appId: com.smartshopping.app
 - tapOn: "While using the app"
 - assertVisible:
     id: barcode-camera-view
+# From Scanner, the first back returns to Produit inside the same modal.
 - tapOn: "Fermer Ajouter un article"
+- assertVisible:
+    id: add-item-input
+- assertNotVisible:
+    id: barcode-camera-view
+- tapOn: "Fermer Ajouter un article"
+- assertNotVisible:
+    id: add-item-input
+- tapOn: "Ajouter un article"
 - assertVisible:
     id: add-item-input
