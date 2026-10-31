@@ -4,7 +4,7 @@ L’APK se construit sur le PC, sans compte Expo, sans EAS et sans publication e
 
 ## Installer et essayer
 
-Le fichier produit par le lanceur est `artifacts/android/poduna-0.1.20-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle cible les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent. La dictée locale nécessite Android 12 minimum et un moteur vocal local compatible avec le français.
+Le fichier produit par le lanceur est `artifacts/android/poduna-0.1.21-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle cible les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent. La dictée locale nécessite Android 12 minimum et un moteur vocal local compatible avec le français.
 
 1. Copier l’APK sur le téléphone et l’ouvrir pour l’installer. Android peut demander d’autoriser cette source d’installation.
 2. Ouvrir Poduna : les listes sont utilisables hors ligne immédiatement.
@@ -18,7 +18,24 @@ Utiliser l’adresse du **même backend SmartShopping** : changer d’adresse de
 
 **Les données d’Expo Go ne sont pas transférées automatiquement.** Conserver Expo Go et sa sauvegarde. Restaurer une sauvegarde dans l’APK crée des copies indépendantes ; pour conserver une liste partagée, la rejoindre avec une invitation valide. Les deux applications ont des identités d’appareil différentes.
 
-## Après la 0.1.20 — Découpage des listes OCR (pas encore dans un APK)
+## Mise à jour 0.1.21 — Découpage des listes OCR
+
+Version Android 22. Installer par-dessus la version actuelle sans désinstaller.
+Les correctifs caméra et codes-barres sont conservés. Les mises à jour de
+sécurité serveur nécessitent un déploiement séparé ; cet APK ne les installe pas.
+
+[APK 0.1.21](../artifacts/android/poduna-0.1.21-preview.apk) compilé le
+31 octobre : environ 50 Mio, signature identique à la 0.1.20, intégrité et
+constructeurs ML Kit vérifiés. Callbacks de réinitialisation caméra présents
+dans le DEX. Aucune installation sur téléphone ni mise à jour serveur effectuée.
+SHA-256 : `1d1592db008c32b100d298d29eb4f79ba4740d38b5c6e52fb47dff725e3a7f03`.
+
+À tester :
+
+- `Pain / Lait - Œufs. Café` : quatre lignes avant validation.
+- `Chou-fleur / Lait demi-écrémé / Huile 1/2 L` : trois articles, noms conservés.
+- Annuler le découpage, modifier une ligne puis importer : respecter la relecture.
+- Vérifier rapidement codes-barres, lampe après sortie/réouverture et listes conservées.
 
 Les points, slashs, tirets espacés ou répétés, tirets longs, puces et autres
 marqueurs explicites séparent désormais les articles avant l'écran de relecture.
@@ -33,8 +50,8 @@ ajouté sans confirmation. La limite de 50 articles et les quantités continuent
 à être vérifiées. Cette préparation est réservée au résultat OCR : elle ne
 change pas la dictée ni la saisie manuelle. Aucun changement du moteur serveur.
 
-Validation locale : TypeScript, 384 tests Vitest, 278 tests Jest et les quatre
-fichiers de tests de configuration réussis. Les tests couvrent la préparation,
+Validation du 31 octobre : TypeScript, 384 tests Vitest, 278 tests Jest et
+43 tests de configuration réussis. Les tests couvrent la préparation,
 la relecture, l'annulation, les quantités et l'absence de redécoupage à l'import.
 
 ## Mise à jour 0.1.20 — Réinitialisation de la session caméra
@@ -69,7 +86,7 @@ de la lampe et du flash. SHA-256 vérifié :
 Installer par-dessus l'app actuelle sans désinstallation. Aucun déploiement
 ADB effectué.
 
-Cette révision doit encore être testée physiquement dans un nouvel APK :
+Scénarios de non-régression caméra à conserver pour les prochains APK :
 lampe allumée → Produit → Scanner, Code-barres ↔ Liste écrite, fermeture du
 panneau puis réouverture, arrière-plan puis retour. Vérifier l'absence d'éclair
 fugitif, la réactivation manuelle de la lampe et la lecture répétée des codes.

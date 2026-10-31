@@ -11,8 +11,8 @@ test('Poduna changes presentation, never the installed app or invitation identit
   assert.equal(base.ios.bundleIdentifier, 'com.smartshopping.app');
   assert.equal(base.scheme, 'smartshopping');
   assert.equal(base.slug, 'shopping-list-app');
-  assert.equal(base.version, '0.1.20');
-  assert.equal(base.android.versionCode, 21);
+  assert.equal(base.version, '0.1.21');
+  assert.equal(base.android.versionCode, 22);
   const fs = require('node:fs');
   const path = require('node:path');
   const splash = base.plugins.find((entry) => Array.isArray(entry) && entry[0] === 'expo-splash-screen')[1];
