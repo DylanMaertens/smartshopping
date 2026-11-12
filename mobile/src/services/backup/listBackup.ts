@@ -16,7 +16,10 @@ const category = z.string().max(100).transform(canonicalCategoryName)
   .refine(value => STORE_CATEGORIES.some(entry => entry.name === value));
 export const preferencesSchema = z.object({
   theme: z.string().refine(isThemeId).optional(),
-  products: z.array(z.object({ barcode: z.string().regex(/^\d{8,14}$/), name, category: category.optional() }).strict()).max(10_000),
+  helpIcons: z.boolean().optional(),
+  products: z.array(z.object({ barcode: z.string().regex(/^\d{8,14}$/), name, category: category.optional(),
+    catalogueName: name.optional(), catalogueReview: z.enum(['pending', 'shown', 'accepted', 'kept']).optional(),
+  }).strict()).max(10_000),
   categories: z.array(z.object({ name, category }).strict()).max(10_000),
 }).strict().refine(value => new Set(value.products.map(entry => entry.barcode)).size === value.products.length
   && new Set(value.categories.map(entry => itemNameKey(entry.name))).size === value.categories.length);
@@ -28,6 +31,7 @@ const common = z.object({
   lists: z.array(z.object({
     name: z.string().trim().min(1).refine((value) => [...value].length <= 200),
     categoryOrder: z.array(z.string().max(80)).max(100),
+    appearance: z.object({ notebook: z.boolean(), showCategories: z.boolean() }).strict().optional(),
     items: z.array(item).max(10_000),
   }).strict()).min(1).max(200),
 });

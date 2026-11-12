@@ -6,8 +6,7 @@ export const useCameraPermissions = () => [granted, refresh, refresh];
 export const CameraView = forwardRef(function CameraView(props: any, ref) {
   useEffect(() => { props.onCameraReady?.(); }, []);
   useImperativeHandle(ref, () => ({ getAvailablePictureSizesAsync: async () => ['1024x1024'], takePictureAsync: async () => ({
-    // One fixture pixel; the preview OCR response also comes from fixtures.
-    base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=',
+    uri: 'fixture://camera', width: 1200, height: 1600,
   }) }));
   return <View style={[props.style, { backgroundColor: '#20242a', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: '#fff' }}>Caméra · à vérifier sur Android</Text></View>;
 });

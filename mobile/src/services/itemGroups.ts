@@ -7,11 +7,11 @@ const timestamp = (item: ShoppingItem) => Math.max(Date.now(), item.updatedAt + 
 
 /** Keep independent additions in storage: materializing their sum would count
  * overlapping offline merges twice. These rows are only a view, never persisted. */
-export function groupEquivalentItems(items: ShoppingItem[]): ShoppingItem[] {
+export function groupEquivalentItems(items: ShoppingItem[], nameOf = (item: ShoppingItem) => item.name): ShoppingItem[] {
   const groups = new Map<string, ShoppingItem[]>();
   for (const item of items) {
     if (item.deletedAt) continue;
-    const key = JSON.stringify([item.listId, itemNameKey(item.name)]);
+    const key = JSON.stringify([item.listId, itemNameKey(nameOf(item))]);
     const group = groups.get(key) ?? [];
     group.push(item);
     groups.set(key, group);
@@ -30,15 +30,15 @@ export function groupEquivalentItems(items: ShoppingItem[]): ShoppingItem[] {
   });
 }
 
-export function getEquivalentItems(items: ShoppingItem[], id: string): ShoppingItem[] {
+export function getEquivalentItems(items: ShoppingItem[], id: string, nameOf = (item: ShoppingItem) => item.name): ShoppingItem[] {
   const target = items.find((item) => item.id === id && !item.deletedAt);
   if (!target) return [];
   return items.filter((item) => !item.deletedAt && item.listId === target.listId
-    && itemNameKey(item.name) === itemNameKey(target.name)).sort(byId);
+    && itemNameKey(nameOf(item)) === itemNameKey(nameOf(target))).sort(byId);
 }
 
-export function incrementGroup(items: ShoppingItem[], id: string, amount = 1, reopen = false): ShoppingItem[] {
-  const group = getEquivalentItems(items, id);
+export function incrementGroup(items: ShoppingItem[], id: string, amount = 1, reopen = false, nameOf = (item: ShoppingItem) => item.name): ShoppingItem[] {
+  const group = getEquivalentItems(items, id, nameOf);
   if (!group.length || amount < 1 || !Number.isInteger(amount)
     || group.reduce((total, item) => total + item.quantity, 0) + amount > 999) return items;
   const ids = new Set(group.map((item) => item.id));
@@ -50,8 +50,8 @@ export function incrementGroup(items: ShoppingItem[], id: string, amount = 1, re
   });
 }
 
-export function decrementGroup(items: ShoppingItem[], id: string): ShoppingItem[] {
-  const group = getEquivalentItems(items, id);
+export function decrementGroup(items: ShoppingItem[], id: string, nameOf = (item: ShoppingItem) => item.name): ShoppingItem[] {
+  const group = getEquivalentItems(items, id, nameOf);
   if (!group.length || group.reduce((total, item) => total + item.quantity, 0) <= 1) return items;
   const target = group.find((item) => item.quantity > 1) ?? group[group.length - 1];
   return items.map((item) => {

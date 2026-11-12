@@ -8,8 +8,8 @@ import { parseOcrItems, type OcrItem } from '@/services/ocrItems';
 import { applyOcrCorrection, type OcrSuggestion } from '@/services/ocrSpelling';
 import { suggestVoiceCorrections } from '@/services/voiceSpelling';
 
-export function VoiceImportPanel({ onCancel, onImport, knownNames, embedded = false, active = true }: {
-  onCancel: () => void; onImport: (items: OcrItem[]) => void; knownNames?: readonly string[]; embedded?: boolean; active?: boolean;
+export function VoiceImportPanel({ onCancel, onImport, knownNames, embedded = false, active = true, showInstructions = true }: {
+  onCancel: () => void; onImport: (items: OcrItem[]) => void; knownNames?: readonly string[]; embedded?: boolean; active?: boolean; showInstructions?: boolean;
 }) {
   const { theme } = useTheme();
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -111,11 +111,11 @@ export function VoiceImportPanel({ onCancel, onImport, knownNames, embedded = fa
 
   if (!active) return null;
   const content = <>
-    <Text>Reconnaissance locale Android · Français</Text>
-    <Text style={{ color: theme.muted }}>Ta voix est traitée sur cet appareil, sans service en ligne. Poduna ne conserve aucun enregistrement audio.</Text>
+    {showInstructions ? <><Text>Reconnaissance locale Android · Français</Text>
+    <Text style={{ color: theme.muted }}>Ta voix est traitée sur cet appareil, sans service en ligne. Poduna ne conserve aucun enregistrement audio.</Text></> : null}
     {available === null ? <Text accessibilityLiveRegion="polite">Vérification du moteur local…</Text> : available === false ?
       <Text accessibilityRole="alert">La dictée locale n’est pas disponible sur cet appareil ou dans cette version de l’app. Elle nécessite Android 12 minimum et un moteur vocal local compatible. Tu peux continuer avec la saisie manuelle.</Text> : <>
-      <Text>Dis par exemple « deux oranges, puis du lait, puis trois yaourts ». Pour séparer les produits, dis « puis ». Les poids et les marques sont à relire.</Text>
+      {showInstructions ? <Text>Dis par exemple « deux oranges, puis du lait, puis trois yaourts ». Pour séparer les produits, dis « puis ». Les poids et les marques sont à relire.</Text> : null}
       <Text accessibilityLiveRegion="polite">{stage === 'starting' ? 'Préparation du microphone…' : stage === 'listening' ? 'Écoute en cours…' : stage === 'finishing' ? 'Fin de la reconnaissance…' : 'Le microphone est arrêté.'}</Text>
       {stage === 'listening' ? <Button label="Terminer la dictée" onPress={() => void stop()} /> :
         <Button label={text ? 'Recommencer la dictée' : 'Commencer la dictée'} disabled={listening} onPress={() => void dictate()} />}
@@ -124,13 +124,13 @@ export function VoiceImportPanel({ onCancel, onImport, knownNames, embedded = fa
     {transcript ? <View style={{ gap: 6 }}><Text style={{ fontWeight: '700' }}>Texte entendu</Text><Text>{transcript}</Text></View> : null}
     {text || transcript ? <View style={{ gap: 12 }}>
       <Text style={{ fontWeight: '700' }}>Vérifier les articles</Text>
-      <Text>Un article par ligne, « 2 x lait » pour une quantité. Corrige les séparations, noms et quantités : aucun ajout sans ta validation.</Text>
+      {showInstructions ? <Text>Un article par ligne, « 2 x lait » pour une quantité. Corrige les séparations, noms et quantités : aucun ajout sans ta validation.</Text> : null}
       <TextInput accessibilityLabel="Articles dictés à vérifier" multiline textAlignVertical="top" style={{ minHeight: 160 }} maxLength={20000}
         editable={!listening} value={text} onChangeText={(value) => { setText(value); setError(null); setBeforeCorrection(null); }} />
       <Button variant="ghost" label={checkingSpelling ? 'Masquer les suggestions' : 'Vérifier l’orthographe'}
         disabled={listening} onPress={() => setCheckingSpelling((value) => !value)} />
       {checkingSpelling ? <View style={{ gap: 8 }}>
-        <Text style={{ color: theme.muted }}>{suggestions.length
+        <Text style={{ color: theme.muted }}>{!showInstructions ? `${suggestions.length} suggestion(s)` : suggestions.length
           ? 'Confusions possibles : choisis les corrections une par une, ou conserve le texte entendu. Aucune correction automatique.'
           : 'Aucune autre suggestion. Relis les noms et les quantités avant l’ajout.'}</Text>
         {suggestions.map((suggestion) => <View key={suggestion.start}

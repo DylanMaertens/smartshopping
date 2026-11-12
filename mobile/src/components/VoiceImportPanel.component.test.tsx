@@ -32,6 +32,22 @@ async function open() {
   return { screen, onImport, onCancel };
 }
 
+it('hides static instructions but keeps microphone status and preserves a draft across help', async () => {
+  const props = { onImport: jest.fn(), onCancel: jest.fn(), showInstructions: false, embedded: true };
+  const screen = render(<VoiceImportPanel {...props} />);
+  await act(async () => {});
+  expect(screen.queryByText(/Dis par exemple/)).toBeNull();
+  expect(screen.queryByText(/Ta voix est traitée/)).toBeNull();
+  screen.getByText('Le microphone est arrêté.');
+  await act(async () => fireEvent.press(screen.getByText('Commencer la dictée')));
+  fireEvent.changeText(screen.getByLabelText('Articles dictés à vérifier'), 'Pain\nLait');
+  screen.rerender(<VoiceImportPanel {...props} active={false} />);
+  expect(speech.cancel).toHaveBeenCalled();
+  screen.rerender(<VoiceImportPanel {...props} />);
+  expect(screen.getByLabelText('Articles dictés à vérifier').props.value).toBe('Pain\nLait');
+  expect(props.onImport).not.toHaveBeenCalled();
+});
+
 it.each([true, false])('keeps the return button outside a single bounded scroll view (embedded=%s)', async (embedded) => {
   const onCancel = jest.fn();
   const screen = render(<VoiceImportPanel embedded={embedded} onImport={jest.fn()} onCancel={onCancel} />);

@@ -4,7 +4,7 @@ L’APK se construit sur le PC, sans compte Expo, sans EAS et sans publication e
 
 ## Installer et essayer
 
-Le fichier produit par le lanceur est `artifacts/android/poduna-0.1.21-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle cible les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent. La dictée locale nécessite Android 12 minimum et un moteur vocal local compatible avec le français.
+Le fichier produit par le lanceur est `artifacts/android/poduna-0.1.23-preview.apk`. C’est une compilation release signée avec une clé locale conservée sur ce PC ; le canal applicatif est `preview`. Elle cible les téléphones ARM 64 bits et ARM 32 bits compatibles avec Android 7 ou plus récent. La dictée locale nécessite Android 12 minimum et un moteur vocal local compatible avec le français.
 
 1. Copier l’APK sur le téléphone et l’ouvrir pour l’installer. Android peut demander d’autoriser cette source d’installation.
 2. Ouvrir Poduna : les listes sont utilisables hors ligne immédiatement.
@@ -17,6 +17,149 @@ Quand le tunnel redémarre, mettre sa nouvelle adresse dans ce réglage sur les 
 Utiliser l’adresse du **même backend SmartShopping** : changer d’adresse de tunnel ne change pas la base ou les identités du serveur. Ne pas utiliser ce réglage pour passer arbitrairement entre différentes bases.
 
 **Les données d’Expo Go ne sont pas transférées automatiquement.** Conserver Expo Go et sa sauvegarde. Restaurer une sauvegarde dans l’APK crée des copies indépendantes ; pour conserver une liste partagée, la rejoindre avec une invitation valide. Les deux applications ont des identités d’appareil différentes.
+
+## 12 novembre — Bloc-notes et aperçu de contribution OCR (prochain APK)
+
+Code préparé, aucun APK généré cette session. TypeScript, 483 Vitest + 348 Jest
+réussis ; aperçu fictif 320/390 px vérifié. À tester sur Android :
+
+1. Liste → ⋯ : activer Bloc-notes, masquer les rayons. Vérifier le même ordre,
+   les quantités, la modification des noms et les cases. Cocher/décocher : aucune
+   ligne ne bouge, y compris la dernière ; même comportement dans la vue classique.
+2. Ouvrir une autre liste : ses réglages sont indépendants. Redémarrer, puis
+   sauvegarder/restaurer : présentation et ordre conservés dans la copie.
+3. Vérifier les thèmes, un long nom/une grande quantité, puis les « i » Liste et
+   Synchronisation ainsi que le masquage global. Une liste locale reste sans sync.
+4. Réglages → Amélioration OCR · aperçu : option initialement désactivée ; annuler
+   l’activation ne change rien. Activer explicitement, photographier une liste
+   fictive, corriger puis ouvrir l’aperçu. Photo et texte affichés, envoi désactivé.
+   Retour conserve la correction ; annulation/reprise de photo abandonne l’aperçu.
+5. Désactiver l’option : plus de proposition lors d’une nouvelle capture. Aucune
+   contribution n’est envoyée ou mise en attente ; la lecture OCR habituelle seule
+   utilise toujours le serveur. L’option n’accorde aucun consentement d’envoi futur.
+
+## Après la 0.1.23 — Membres, contact et premium (prochain APK)
+
+Préparé le 9 novembre, **pas encore dans un APK**. TypeScript, 479 tests Vitest et
+334 tests composants réussis ; aperçu mobile simulé vérifié. Recette Android :
+
+1. Partager → Gérer les membres → Renommer ; fermer/rouvrir et redémarrer.
+   Vérifier le nom privé sur cet appareil, propre à cette liste ; vide le retire.
+2. Ouvrir le « i » du partage, puis masquer/réactiver les aides dans Réglages.
+3. Réglages → Contact : champs invalides, aperçu, retour et fermeture. Aucun
+   envoi possible ; fermeture = brouillon effacé, y compris sans réseau.
+4. Réglages → Mode premium (test) : activer, choisir un thème premium et créer
+   une invitation. Désactiver : thème gratuit de repli, nouvelle invitation
+   bloquée, listes et partages existants conservés. Rejoindre reste gratuit.
+5. Redémarrer pour vérifier le choix de simulation ; réactiver pour retrouver
+   le thème préféré si aucun autre thème n’a été choisi entre-temps.
+
+La simulation ne constitue pas une licence : achats et vérification serveur à
+connecter plus tard. Le switch est absent et sa valeur ignorée en store/direct.
+Les noms des membres et la simulation ne sont pas exportés dans les sauvegardes.
+
+## Après la 0.1.23 — Aides compactes (prochain APK)
+
+Préparé le 9 novembre, non inclus dans l’APK actuel : instructions derrière un
+« i » près de « Mes listes » et « Ajouter un article », adaptées à chaque mode.
+Étendu à « Partager une liste » : aide sur invitation, révocation et membres ;
+144 tests ciblés réussis, erreurs et détails du code toujours visibles.
+Réglages → Afficher les icônes d’aide permet de les masquer/réactiver ; choix
+persistant et sauvegardé. Les erreurs et états caméra/micro restent visibles.
+
+Validation : TypeScript, 466 tests Vitest, 318 tests composants ; aperçu simulé
+390×844 et 320×568. À confirmer sur Android : ouverture/retour sans perte du
+brouillon, lampe éteinte pendant l’aide, dictée interrompue sans reprise automatique,
+masquage après redémarrage et réactivation. Aucun nouvel APK généré.
+
+## Mise à jour 0.1.23 — Partage et noms personnels
+
+[APK 0.1.23](../artifacts/android/poduna-0.1.23-preview.apk) compilé le
+8 novembre, version Android 24, environ 51 Mio. Signature identique à la 0.1.22 :
+installer par-dessus sans désinstaller. Intégrité, trois constructeurs ML Kit
+et callbacks natifs de détachement/réattachement caméra vérifiés dans l’APK.
+SHA-256 : `4e9f6a673d067c59f2051ded720161dfbeb1d989b8ee83e1a5f73ff20dab3aac`.
+
+- Fin du partage : plus de bandeau ni de requêtes automatiques pour la copie
+  locale. Les données restent présentes et le propriétaire peut repartager.
+  Une erreur réseau ne désactive pas la synchronisation.
+- Côté propriétaire, le backend doit confirmer l’absence de membres et
+  d’invitations valides (`sharing_active: false`). Un ancien backend conserve
+  le comportement précédent. Retrait d’un membre : le code révoqué est aussi
+  retiré de l’interface.
+- Produit nommé hors ligne : au prochain scan connecté, proposer une seule fois
+  le nom trouvé au catalogue, avec acceptation ou refus. Les erreurs réseau ne
+  consomment pas cette proposition. Nom personnel et décision sont sauvegardés ;
+  le nom personnel n’est pas envoyé aux autres membres.
+- Recette : nommer hors ligne → rescanner connecté → refuser/accepter → fermer
+  et rouvrir → rescanner dans une autre liste. Renommer aussi un produit connu,
+  vérifier son nom sur un second appareil et refaire sauvegarde/restauration.
+- Validation du 8 novembre : TypeScript, 464 tests unitaires, 311 tests composants,
+  43 tests de configuration, 58 tests Rust, 13 tests PostgreSQL et 4 tests de
+  restauration réussis. Rust retrouvé hors PATH ; détails dans [HANDOFF](HANDOFF.md).
+  Backend recompilé, sans redémarrage ni modification de la base réelle.
+
+### Recette partage — deux installations
+
+Les tests automatisés utilisent deux bases SQLite et deux identités serveur
+sur PostgreSQL jetable. Aucun téléphone connecté ni émulateur disponible le
+8 novembre : les contrôles physiques suivants restent à réaliser.
+
+1. A partage une liste ; B la rejoint. Les deux ajoutent le même produit hors
+   ligne, puis se reconnectent : même contenu et quantité totale, sans doublon
+   supplémentaire après plusieurs synchronisations.
+2. Modifier sur B et supprimer sur A le même article, puis reconnecter : les
+   appareils doivent converger selon les dates des modifications (LWW).
+3. Renommer personnellement un produit scanné sur A : B garde son propre nom.
+4. Retirer B : sa copie et ses modifications restent locales, le bandeau disparaît.
+   A redevient local s’il ne reste ni autre membre ni invitation valide.
+5. A crée une nouvelle invitation ; B rejoint explicitement : partage rétabli.
+
+Pour le point 4 côté propriétaire, démarrer volontairement le nouveau backend
+avec `PODUNA_BACKEND_BIN` vers `.local-dev/security-tools/backend-target/debug/shopping-list-backend`
+(chemin absolu recommandé). Le lanceur peut sinon réutiliser l’ancien binaire
+ou une session déjà ouverte. Aucun serveur en cours n’a été remplacé automatiquement.
+
+### Icônes caméra incluses dans la 0.1.23
+
+- Commande dans le coin inférieur gauche du cadre, sans bouton texte dessous.
+  Éclair barré éteint, éclair plein sur fond jaune allumé ; cible de 48 points
+  minimum et état accessible. Disponible dans les deux formats de scan.
+- Commande bloquée pendant la capture ; réinitialisation du flash conservée.
+  À vérifier sur téléphone avec cet APK : lampe → sortie → réouverture,
+  changement de mode et agrandissement/réduction du cadre.
+- Relance caméra déplacée en haut à gauche du cadre : flèche circulaire,
+  fond sombre et libellé accessible. Le bouton texte sous le cadre est retiré.
+
+## Mise à jour 0.1.22 — Cadre caméra et séparateurs OCR
+
+Version Android 23. Installer par-dessus l’app actuelle sans désinstaller.
+[APK 0.1.22](../artifacts/android/poduna-0.1.22-preview.apk) compilé le
+31 octobre : environ 51 Mio, signature identique à la 0.1.21 et SHA-256 vérifié.
+Constructeurs ML Kit et réinitialisation native caméra présents dans le DEX.
+SHA-256 : `58182f7de7b758dd79af0b0af471ffdd6346076bc9f4647a6ddaa8bb3b895e5a`.
+
+- Icône **Agrandir / Réduire** en bas à droite du cadre, sur fond sombre,
+  cible tactile d’au moins 48 points et libellé accessible ; même
+  caméra conservée, commandes accessibles. Retour Android réduit d’abord le cadre.
+- Photo recadrée localement avant OCR ; codes-barres ignorés hors du cadre.
+  Lampe remise à zéro au changement de format, captures obsolètes abandonnées.
+- Validation : TypeScript, 456 tests unitaires, 289 tests composants,
+  43 tests de configuration et compilation Kotlin Android réussis.
+  Disposition et retour à la relecture vérifiés en aperçu mobile simulé.
+- À confirmer sur téléphone : mots/codes juste dehors puis dedans, dans les
+  deux formats ; photo de relecture fidèle au cadre ; lampe → agrandir/réduire
+  → sortie/réouverture. Aucune installation automatique sur téléphone.
+
+### Séparateurs collés
+
+- `pain-lait_œufs/café.sel` donne cinq lignes, même sans espaces.
+- Dictionnaire français explicite dans `mobile/src/services/ocrCompoundWords.ts` :
+  `chou_fleur`, `chou-fleur` ou `chou _ fleur` deviennent `chou-fleur`.
+- Fractions, décimales, unités, abréviations et parenthèses restent protégées.
+  Un composé absent du dictionnaire sera séparé ; la relecture reste modifiable.
+- L'annulation conserve les séparateurs originaux. Aucun nouveau découpage
+  des lignes corrigées à l'import ; les composés connus sont normalisés.
 
 ## Mise à jour 0.1.21 — Découpage des listes OCR
 

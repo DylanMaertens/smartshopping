@@ -71,6 +71,7 @@ export type SyncPayload = {
 };
 
 export type SyncResponse = {
+  sharing_active?: boolean;
   list_id: string;
   device_id: string;
   server_time: number;

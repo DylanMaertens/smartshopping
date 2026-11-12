@@ -9,6 +9,12 @@ vi.mock('@/db/client', () => ({ getDatabase: () => ({
 }) }));
 beforeEach(() => settings.clear());
 
+it('preserves the catalogue decision when renaming or changing an aisle later', () => {
+  saveProductPreference('12345678', { name: 'Mon produit', catalogueName: 'Nom catalogue', catalogueReview: 'kept' });
+  saveProductPreference('12345678', { name: 'Autre nom', category: 'Boissons' });
+  expect(getProductPreference('12345678')).toEqual({ name: 'Autre nom', category: 'Boissons', catalogueName: 'Nom catalogue', catalogueReview: 'kept' });
+});
+
 it('persists personal names independently of list deletion, cache TTL and module restart', async () => {
   const disk = new Map<string, string>();
   vi.stubGlobal('localStorage', { getItem: (key: string) => disk.get(key) ?? null,

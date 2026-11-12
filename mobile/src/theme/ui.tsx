@@ -49,7 +49,7 @@ export function Button({ label, variant = 'primary', ...props }: Omit<PressableP
       fontWeight: '700', textAlign: 'center' }}>{label}</Text>
   </Pressable>;
 }
-export function PageModal({ title, onClose, children, testID, showBackButton = true, scrollable = true, transitionKey = title }: React.PropsWithChildren<{ title: string; onClose: () => void; testID?: string; showBackButton?: boolean; scrollable?: boolean; transitionKey?: string }>) {
+export function PageModal({ title, titleAccessory, onClose, children, testID, showBackButton = true, hideHeader = false, scrollable = true, transitionKey = title }: React.PropsWithChildren<{ title: string; titleAccessory?: React.ReactNode; onClose: () => void; testID?: string; showBackButton?: boolean; hideHeader?: boolean; scrollable?: boolean; transitionKey?: string }>) {
   const { theme } = useTheme();
   // Android's native Modal already uses adjustResize. A second height-based
   // keyboard adjustment retains stale measurements when switching add modes.
@@ -58,10 +58,12 @@ export function PageModal({ title, onClose, children, testID, showBackButton = t
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <Body style={{ flex: 1 }} {...(Platform.OS === 'ios' ? { behavior: 'padding' as const } : {})}>
         <MotionView replayKey={transitionKey} style={{ flex: 1 }}>
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, gap: 4 }}>
+        <View style={{ display: hideHeader ? 'none' : 'flex', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, gap: 4 }}>
           {showBackButton ? <Pressable onPress={onClose} accessibilityLabel={`Fermer ${title}`} style={{ alignSelf: 'flex-start' }}>
             <Text style={{ color: theme.muted }}>← Retour</Text>
-          </Pressable> : null}<Heading>{title}</Heading>
+          </Pressable> : null}<View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Heading accessibilityRole="header" style={{ flexShrink: 1 }}>{title}</Heading>{titleAccessory}
+          </View>
         </View>
         {scrollable ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 8, gap: 20 }}>
           {children}

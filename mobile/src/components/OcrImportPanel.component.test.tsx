@@ -3,6 +3,8 @@ import { Keyboard, StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { OcrImportPanel } from './OcrImportPanel';
 import { recognizeListPhoto } from '@/services/api/backend';
+let mockContributionPreview = false;
+jest.mock('@/services/storage/ocrContributionSettings', () => ({ readOcrContributionPreview: () => mockContributionPreview }));
 jest.mock('@/services/api/backend', () => ({ recognizeListPhoto: jest.fn(), BackendApiError: class extends Error {} }));
 jest.mock('./BarcodeScannerPanel', () => {
   const React = require('react');
@@ -10,7 +12,56 @@ jest.mock('./BarcodeScannerPanel', () => {
   return { BarcodeScannerPanel: ({ onPhotographed }: { onPhotographed: (image: string) => void }) =>
     <Pressable onPress={() => onPhotographed('image-data')}><Text>Photo test</Text></Pressable> };
 });
-beforeEach(() => jest.mocked(recognizeListPhoto).mockReset().mockResolvedValue({ text: 'Pain\n2 x lait' }));
+beforeEach(() => { mockContributionPreview = false; jest.mocked(recognizeListPhoto).mockReset().mockResolvedValue({ text: 'Pain\n2 x lait' }); });
+it('does not offer contributions by default', async () => {
+  const screen = render(<OcrImportPanel onImport={jest.fn()} onCancel={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  expect(screen.queryByText('Aperçu d’une contribution OCR')).toBeNull();
+});
+it('previews only the current capture and correction without an extra request or import', async () => {
+  mockContributionPreview = true;
+  const props = { onImport: jest.fn(), onCancel: jest.fn() };
+  const fetchSpy = jest.spyOn(global, 'fetch');
+  const screen = render(<OcrImportPanel {...props} />);
+  try {
+    await act(async () => fireEvent.press(screen.getByText('Photo test')));
+    fireEvent.changeText(screen.getByLabelText('Articles reconnus'), 'Pain corrigé');
+    fireEvent.press(screen.getByText('Aperçu d’une contribution OCR'));
+    expect(screen.getByLabelText('Photo de la contribution OCR').props.source.uri).toBe('data:image/jpeg;base64,image-data');
+    screen.getByText('Pain corrigé');
+    const send = screen.getByRole('button', { name: 'Envoyer cette contribution · bientôt' });
+    expect(send.props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(send);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(recognizeListPhoto).toHaveBeenCalledTimes(1);
+    expect(props.onImport).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByText('Revenir à la correction'));
+    expect(screen.getByLabelText('Articles reconnus').props.value).toBe('Pain corrigé');
+    fireEvent.press(screen.getByText('Reprendre une photo'));
+    expect(screen.queryByLabelText('Photo de la contribution OCR')).toBeNull();
+    screen.unmount();
+    const fresh = render(<OcrImportPanel {...props} />);
+    expect(fresh.queryByText('Aperçu d’une contribution OCR')).toBeNull();
+  } finally { fetchSpy.mockRestore(); }
+});
+it('moves instructions to help without hiding the reviewed text or changing it while help is open', async () => {
+  const props = { onImport: jest.fn(), onCancel: jest.fn(), showInstructions: false, embedded: true };
+  const screen = render(<OcrImportPanel {...props} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  expect(screen.queryByText(/Corrige les mots et retire/)).toBeNull();
+  fireEvent.changeText(screen.getByLabelText('Articles reconnus'), 'Pain\nOrange');
+  screen.rerender(<OcrImportPanel {...props} paused />);
+  screen.rerender(<OcrImportPanel {...props} />);
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('Pain\nOrange');
+  expect(props.onImport).not.toHaveBeenCalled();
+});
+it('leaves expanded framing when the captured photo enters review', async () => {
+  const onExpandedChange = jest.fn();
+  const screen = render(<OcrImportPanel expanded onExpandedChange={onExpandedChange} onImport={jest.fn()} onCancel={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  expect(onExpandedChange).toHaveBeenCalledWith(false);
+  screen.getByText('Vérifier les articles');
+});
 it('shows split articles before confirmation without breaking compound names or weights', async () => {
   jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'Chou-fleur / 2 x lait demi-écrémé - Huile 1/2 L. Pain' });
   const onImport = jest.fn();
@@ -23,6 +74,26 @@ it('shows split articles before confirmation without breaking compound names or 
     { name: 'Chou-fleur', quantity: 1 }, { name: 'Lait demi-écrémé', quantity: 2 },
     { name: 'Huile 1/2 l', quantity: 1 }, { name: 'Pain', quantity: 1 },
   ]);
+});
+it('normalizes dictionary underscores, separates tight items and imports the reviewed names', async () => {
+  jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'chou_fleur-pain_lait/essuie_tout' });
+  const onImport = jest.fn();
+  const screen = render(<OcrImportPanel onImport={onImport} onCancel={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('chou-fleur\npain\nlait\nessuie-tout');
+  expect(onImport).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText('Ajouter les 4 lignes'));
+  expect(onImport).toHaveBeenCalledWith([
+    { name: 'Chou-fleur', quantity: 1 }, { name: 'Pain', quantity: 1 },
+    { name: 'Lait', quantity: 1 }, { name: 'Essuie-tout', quantity: 1 },
+  ]);
+});
+it('undo restores the underscore separators without joining words', async () => {
+  jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'pain_lait' });
+  const screen = render(<OcrImportPanel onImport={jest.fn()} onCancel={jest.fn()} />);
+  await act(async () => fireEvent.press(screen.getByText('Photo test')));
+  fireEvent.press(screen.getByText('Annuler la dernière correction'));
+  expect(screen.getByLabelText('Articles reconnus').props.value).toBe('pain_lait');
 });
 it('can undo automatic splitting and never re-splits the reviewed text on import', async () => {
   jest.mocked(recognizeListPhoto).mockResolvedValue({ text: 'Shampooing / douche' });

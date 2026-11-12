@@ -1,5 +1,32 @@
 # Importer une liste depuis une photo
 
+## Contributions volontaires — préparation du 12 novembre 2026
+
+L’utilisateur a demandé de préparer le parcours **sans transmission**. Réglages →
+Amélioration OCR · aperçu, désactivé par défaut : activation après une explication,
+puis aperçu de la photo déjà recadrée et du texte corrigé pendant la relecture.
+Bouton d’envoi désactivé ; aucune API, file d’attente ni persistance d’exemples
+ajoutée. La préférence locale est exclue des sauvegardes et **ne vaut pas accord
+pour un futur envoi**. Le traitement OCR habituel sur serveur reste distinct.
+
+Le moteur actuel utilise RapidOCR et des modèles préentraînés (`backend/ocr/recognize.py`),
+sans boucle d’apprentissage. Proposition pour plus tard : corpus volontaire pour
+reproduire les erreurs, mesurer la reconnaissance et le découpage avant/après
+correction, puis envisager un réentraînement si ces mesures le justifient.
+Collecter des exemples ne renforce pas automatiquement le moteur.
+
+Avant connexion : préciser finalité/destinataire/durée, minimiser les données et
+retirer les métadonnées, protéger l’accès et la suppression, recueillir un accord
+explicite **pour chaque capture**, sans réutiliser l’option d’aperçu comme consentement.
+Séparer les exemples d’évaluation de ceux servant à ajuster les corrections.
+Rien de cette collecte ni de cet apprentissage n’est activé aujourd’hui.
+
+Validation mobile : option désactivée/annulation/activation/échec de stockage,
+aperçu de la bonne capture, absence de requête supplémentaire, retour/correction
+et abandon couverts par les tests ; parcours fictif contrôlé dans l’aperçu web.
+
+## Lecture habituelle
+
 Dans la liste souhaitée, choisir **Scanner une liste écrite**, puis **Photographier et reconnaître**. Relire le résultat, corriger les mots et garder un article par ligne avant **Ajouter les articles**. `2 x lait` et `lait x 2` définissent une quantité. Les noms déjà présents augmentent la quantité, après nettoyage des espaces et comparaison sans distinction de majuscules. Une erreur de validation annule tout le lot. L'import utilise la sauvegarde locale et la synchronisation habituelles.
 
 La capture fonctionne avec la caméra d'Expo Go SDK 54. Une connexion au serveur SmartShopping est nécessaire pour reconnaître le texte. Aucun abonnement OCR ni clé d'API externe n'est requis. Le manuscrit reste moins fiable que l'imprimé : la relecture est obligatoire. Une photo nette, bien éclairée, cadrée sur les articles et une ligne par article donnent les meilleures chances de réussite. Les tableaux et les colonnes peuvent nécessiter une remise en ordre manuelle. L'import depuis la galerie n'est pas inclus.

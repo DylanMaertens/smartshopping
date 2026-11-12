@@ -1,17 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { Heading, Pressable, Text, TextInput } from '@/theme/ui';
+import { Button, Heading, PageModal, Pressable, Text, TextInput } from '@/theme/ui';
+import { readOcrContributionPreview } from '@/services/storage/ocrContributionSettings';
 import { useTheme } from '@/theme/ThemeProvider';
 import { BarcodeScannerPanel } from './BarcodeScannerPanel';
 import { BackendApiError, recognizeListPhoto } from '@/services/api/backend';
 import { cleanOcrText, prepareOcrText, parseOcrItems, type OcrItem } from '@/services/ocrItems';
 import { applyLikelyOcrCorrections, applyOcrCorrection, suggestOcrCorrections } from '@/services/ocrSpelling';
 
-type Props = { onCancel: () => void; onImport: (items: OcrItem[]) => void; knownNames?: readonly string[]; embedded?: boolean; active?: boolean };
-export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = false, active = true }: Props) {
+type Props = { onCancel: () => void; onImport: (items: OcrItem[]) => void; knownNames?: readonly string[]; embedded?: boolean; active?: boolean; paused?: boolean; showInstructions?: boolean; expanded?: boolean; onExpandedChange?: (expanded: boolean) => void };
+export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = false, active = true, paused = false, showInstructions = true, expanded = false, onExpandedChange }: Props) {
   const { theme } = useTheme();
   const [stage, setStage] = useState<'camera' | 'reading' | 'review'>('camera');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [contributionEnabled] = useState(readOcrContributionPreview);
+  const [contributionOpen, setContributionOpen] = useState(false);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -33,6 +36,7 @@ export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = fals
 
   async function recognize(base64: string) {
     if (busy.current) return;
+    onExpandedChange?.(false);
     const requestId = ++recognitionId.current;
     busy.current = true;
     setError(null); setPhoto(`data:image/jpeg;base64,${base64}`); setStage('reading');
@@ -71,6 +75,7 @@ export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = fals
     busy.current = false;
     Keyboard.dismiss();
     setError(null); setPhoto(null); setText(''); setCheckingSpelling(true);
+    setContributionOpen(false);
     setKeptWords([]); setBeforeCorrection(null); setStage('camera');
   }
 
@@ -96,6 +101,7 @@ export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = fals
 
   if (!active) return null;
   if (stage === 'camera') return <BarcodeScannerPanel mode="text" embedded={embedded} onScanned={() => {}}
+    expanded={expanded} onExpandedChange={onExpandedChange} paused={paused} showInstructions={showInstructions}
     onPhotographed={(base64) => void recognize(base64)} onCancel={onCancel} />;
   return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 24, gap: 16 }}>
@@ -104,7 +110,7 @@ export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = fals
     {stage === 'reading' ? <ActivityIndicator accessibilityLabel="Reconnaissance en cours" /> : <>
       {!keyboardVisible ? <>
         {photo ? <Image source={{ uri: photo }} accessibilityLabel="Photo de la liste à relire" resizeMode="contain" style={{ height: 180, borderRadius: theme.radius, backgroundColor: theme.raised }} /> : null}
-        <Text>Corrige les mots et retire les lignes inutiles avant l’ajout. Les séparateurs reconnus sont convertis en retours à la ligne : vérifie le découpage. Un article par ligne ; « 2 x lait » pour une quantité. Aucun ajout sans ta validation.</Text>
+        {showInstructions ? <Text>Corrige les mots et retire les lignes inutiles avant l’ajout. Les séparateurs reconnus sont convertis en retours à la ligne : vérifie le découpage. Un article par ligne ; « 2 x lait » pour une quantité. Aucun ajout sans ta validation.</Text> : null}
       </> : null}
       <TextInput multiline scrollEnabled autoCorrect spellCheck autoCapitalize="sentences" accessibilityLabel="Articles reconnus" value={text} onChangeText={(value) => { setText(value); setError(null); setBeforeCorrection(null); }}
         maxLength={20000} textAlignVertical="top" style={{ height: keyboardVisible ? 150 : 240, padding: 12, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius }} />
@@ -113,7 +119,7 @@ export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = fals
         <Text>{checkingSpelling ? 'Masquer les suggestions' : 'Vérifier l’orthographe'}</Text>
       </Pressable>
       {checkingSpelling ? <View style={{ gap: 8 }}>
-        <Text>{suggestions.length ? 'Corrections proposées, jamais imposées. Les lectures incertaines se choisissent une par une. Tu peux conserver un nom ou une marque.' : 'Aucune autre suggestion. Relis les noms et les marques avant l’ajout.'}</Text>
+        <Text>{showInstructions ? (suggestions.length ? 'Corrections proposées, jamais imposées. Les lectures incertaines se choisissent une par une. Tu peux conserver un nom ou une marque.' : 'Aucune autre suggestion. Relis les noms et les marques avant l’ajout.') : `${suggestions.length} suggestion(s)`}</Text>
         {likelyCount > 0 ? <Pressable accessibilityRole="button" onPress={() => correct(applyLikelyOcrCorrections(text, suggestions))}
           style={{ padding: 12, backgroundColor: theme.raised, borderRadius: theme.radius }}>
           <Text>Appliquer les {likelyCount} corrections probables</Text>
@@ -140,6 +146,19 @@ export function OcrImportPanel({ onCancel, onImport, knownNames, embedded = fals
         <Text style={{ color: theme.onPrimary, fontWeight: '700', textAlign: 'center' }}>Ajouter les {text.split(/\r?\n/).filter((line) => line.trim()).length} lignes</Text>
       </Pressable>
       <Pressable accessibilityRole="button" onPress={resetPhoto}><Text>Reprendre une photo</Text></Pressable>
+      {contributionEnabled && photo ? <Button variant="secondary" label="Aperçu d’une contribution OCR" disabled={!text.trim()}
+        onPress={() => { Keyboard.dismiss(); setContributionOpen(true); }} /> : null}
+      {contributionOpen && photo ? <PageModal title="Contribution OCR · aperçu" onClose={() => setContributionOpen(false)}>
+        <Text style={{ fontWeight: '700' }}>Aucun envoi · aucune mise en attente</Text>
+        <Text>Voici les éléments à vérifier pour cette capture uniquement. Ne contribue pas si la photo contient un nom, une adresse ou toute autre information privée.</Text>
+        <Image source={{ uri: photo }} accessibilityLabel="Photo de la contribution OCR" resizeMode="contain"
+          style={{ height: 220, backgroundColor: theme.raised, borderRadius: theme.radius }} />
+        <Text style={{ fontWeight: '700' }}>Texte corrigé à vérifier</Text>
+        <Text selectable>{text}</Text>
+        <Text>Le service de collecte n’est pas prêt. Aucun consentement d’envoi n’est enregistré ; une confirmation propre à chaque capture sera nécessaire lorsqu’il sera disponible.</Text>
+        <Button label="Envoyer cette contribution · bientôt" disabled />
+        <Button variant="secondary" label="Revenir à la correction" onPress={() => setContributionOpen(false)} />
+      </PageModal> : null}
     </>}
   </ScrollView></KeyboardAvoidingView>;
 }

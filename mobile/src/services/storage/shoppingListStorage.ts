@@ -6,6 +6,7 @@ import type { ShoppingItem, ShoppingList } from '@/types';
 import type { SyncListName } from '@/services/api/backend';
 import { getRememberedCategory } from './productPreferences';
 import { exportPersonalSettings, restorePersonalSettings } from '@/services/backup/personalBackup';
+import { normalizeListAppearance, type ListAppearance } from '@/services/listAppearance';
 
 const ACTIVE_LIST_KEY = 'active-list-id';
 
@@ -31,7 +32,7 @@ export class ShoppingListStorage {
         format: 'smartshopping-lists', version: 2, backupId: newStorageId(), createdAt: new Date().toISOString(),
         preferences: exportPersonalSettings(),
         lists: this.getLists().map((list) => ({
-          name: list.name, categoryOrder: this.getCategoryOrder(list.id),
+          name: list.name, categoryOrder: this.getCategoryOrder(list.id), appearance: this.getListAppearance(list.id),
           items: this.getCurrentList(list.id).filter((item) => !item.deletedAt).map((item) => ({
             name: item.name, quantity: item.quantity, checked: item.checked,
             ...(item.barcode ? { barcode: item.barcode } : {}),
@@ -58,6 +59,7 @@ export class ShoppingListStorage {
         db.runSync('INSERT INTO shopping_lists (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
           listId, source.name, now, now);
         this.saveCategoryOrder(listId, source.categoryOrder);
+        this.saveListAppearance(listId, normalizeListAppearance(source.appearance));
         for (const entry of source.items) {
           const item: ShoppingItem = { ...entry,
             category: !entry.category || entry.category === 'À classer' ? getRememberedCategory(entry.name) ?? entry.category : entry.category,
@@ -76,6 +78,15 @@ export class ShoppingListStorage {
   static getCategoryOrder(listId: string): string[] {
     try { return normalizeCategoryOrder(JSON.parse(getMetadata(`category-order:${listId}`) ?? 'null')); }
     catch { return normalizeCategoryOrder(null); }
+  }
+
+  static getListAppearance(listId: string): ListAppearance {
+    try { return normalizeListAppearance(JSON.parse(getMetadata(`list-appearance:${listId}`) ?? 'null')); }
+    catch { return normalizeListAppearance(null); }
+  }
+
+  static saveListAppearance(listId: string, appearance: ListAppearance): void {
+    setMetadata(`list-appearance:${listId}`, JSON.stringify(normalizeListAppearance(appearance)));
   }
 
   /** Personal display preference: no item edits or synchronization operations. */
@@ -139,6 +150,7 @@ export class ShoppingListStorage {
   /** Fresh lists and restored copies stay local until sharing is requested. */
   static isSyncEnabled(listId: string): boolean {
     if (this.isSyncDisabled(listId)) return false;
+    if (getMetadata(`sync-enabled:${listId}`) === 'local') return false;
     if (getMetadata(`sync-enabled:${listId}`) === 'shared') return true;
     // Older versions synchronized personal and shared lists alike. Keep any
     // evidence of an existing remote relationship rather than break a share.
@@ -163,6 +175,11 @@ export class ShoppingListStorage {
 
   static disableSync(listId: string): void {
     setMetadata(`sync-disabled:${listId}`, 'revoked');
+  }
+
+  /** Only after the server confirms no other members or live invitations. */
+  static makeListLocal(listId: string): void {
+    setMetadata(`sync-enabled:${listId}`, 'local');
   }
 
   static importSharedList(listId: string): ShoppingList {
@@ -232,6 +249,8 @@ export class ShoppingListStorage {
       db.runSync('DELETE FROM app_metadata WHERE key = ?', `sync-enabled:${listId}`);
       db.runSync('DELETE FROM app_metadata WHERE key = ?', `category-order:${listId}`);
       db.runSync('DELETE FROM app_metadata WHERE key = ?', `list-name:${listId}`);
+      db.runSync('DELETE FROM app_metadata WHERE key = ?', `member-aliases:${listId}`);
+      db.runSync('DELETE FROM app_metadata WHERE key = ?', `list-appearance:${listId}`);
     });
     const nextId = this.ensureDefaultList();
     this.setActiveList(nextId);

@@ -57,6 +57,7 @@ pub struct SyncConflict {
 
 #[derive(Serialize)]
 pub struct SyncResponse {
+    pub sharing_active: bool,
     pub list_id: String,
     pub device_id: String,
     pub server_time: i64,
@@ -172,9 +173,15 @@ pub async fn sync_list(
     }
     // Return the complete committed state: offline timestamps can predate last_sync.
 
+    let sharing_active = state
+        .sharing
+        .sharing_active(state.db_pool.as_ref(), &req.list_id, &device_id)
+        .await
+        .map_err(|_| ApiError::internal_server_error("failed to check sharing state"))?;
     state.record_metric(MetricKind::SyncSuccess);
 
     Ok(Json(SyncResponse {
+        sharing_active,
         list_id: req.list_id,
         device_id,
         server_time: now,

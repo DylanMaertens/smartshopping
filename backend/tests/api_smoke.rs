@@ -593,6 +593,11 @@ async fn invitation_grants_sync_access_and_can_be_revoked() {
         .await
         .unwrap();
     assert_eq!(claim.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(claim.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let claimed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(claimed["sharing_active"], false);
 
     let response = app
         .clone()
@@ -612,6 +617,18 @@ async fn invitation_grants_sync_access_and_can_be_revoked() {
         .unwrap();
     let invitation: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let code = invitation["code"].as_str().unwrap();
+
+    let sync = app
+        .clone()
+        .oneshot(sync_request(owner, "shared-list"))
+        .await
+        .unwrap();
+    assert_eq!(sync.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(sync.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let synced: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(synced["sharing_active"], true);
 
     let join = app
         .clone()
@@ -659,6 +676,17 @@ async fn invitation_grants_sync_access_and_can_be_revoked() {
         .await
         .unwrap();
     assert_eq!(removed.status(), StatusCode::OK);
+    let sync = app
+        .clone()
+        .oneshot(sync_request(owner, "shared-list"))
+        .await
+        .unwrap();
+    assert_eq!(sync.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(sync.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let synced: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(synced["sharing_active"], false);
     assert_eq!(
         app.clone()
             .oneshot(sync_request(guest, "shared-list"))

@@ -6,6 +6,8 @@ import { ShoppingItem } from '@/components/ShoppingItem';
 import type { CategorySection as CategorySectionType } from '@/types';
 
 type Props = {
+  notebook?: boolean;
+  showCategories?: boolean;
   getItemBarcodes?: (id: string) => string[];
   onDecreaseQuantity: (id: string) => void;
   onIncreaseQuantity: (id: string) => void;
@@ -16,6 +18,8 @@ type Props = {
 };
 
 export function CategorySection({
+  notebook = false,
+  showCategories = true,
   getItemBarcodes,
   onDecreaseQuantity,
   onIncreaseQuantity,
@@ -27,12 +31,13 @@ export function CategorySection({
   const { theme, headingFont } = useTheme();
   const tint = theme.id === 'pastel' ? ['#E2F1E7', '#FBEADD', '#EEE4FA'][section.orderIndex % 3] : theme.raised;
   return (
-    <View style={{ gap: 8 }}>
-      <View style={{ backgroundColor: tint, borderRadius: theme.radius / 2, paddingHorizontal: 12, paddingVertical: 10 }}><Text accessibilityRole="header" style={{ color: theme.text, fontSize: theme.bodySize, fontWeight: headingFont ? '400' : '700', fontFamily: headingFont }}>{section.categoryName}</Text></View>
+    <View style={{ gap: notebook ? 0 : 8 }}>
+      {showCategories ? <View testID="category-heading" style={{ backgroundColor: notebook ? 'transparent' : tint, borderRadius: notebook ? 0 : theme.radius / 2, paddingHorizontal: 12, paddingVertical: 6 }}><Text accessibilityRole="header" style={{ color: theme.text, fontSize: theme.bodySize, fontWeight: headingFont ? '400' : '700', fontFamily: headingFont }}>{section.categoryName}</Text></View> : null}
       {section.items.map((item) => (
         <ShoppingItem
           key={item.id}
           item={item}
+          notebook={notebook}
           communityBarcodes={getItemBarcodes?.(item.id)}
           onDecreaseQuantity={onDecreaseQuantity}
           onIncreaseQuantity={onIncreaseQuantity}

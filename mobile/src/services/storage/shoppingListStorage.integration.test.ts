@@ -8,7 +8,10 @@ import { ShoppingListStorage as Storage } from './shoppingListStorage';
 import type { ShoppingItem } from '@/types';
 import { rememberProductCategory, getRememberedCategory, getProductPreference, saveProductPreference } from './productPreferences';
 import { PersonalSettings, THEME_STORAGE_KEY } from './personalSettings';
+import { HELP_STORAGE_KEY, readHelpIcons, saveHelpIcons } from './interfaceSettings';
+import { getMemberAliases, saveMemberAlias } from './memberAliases';
 import { LocalKeyValueStorage } from './localKeyValueStorage';
+import { saveOcrContributionPreview, OCR_CONTRIBUTION_PREVIEW_KEY } from './ocrContributionSettings';
 
 let database: Database;
 let createDatabase: (data?: Uint8Array) => Database;
@@ -64,7 +67,112 @@ function startSync() {
   return Storage.getPendingChanges('home');
 }
 
+describe('per-list presentation', () => {
+  it('persists independently without changing items, order or pending synchronization', () => {
+    Storage.saveCurrentList('home', [milk()]);
+    const pending = Storage.getPendingChanges('home');
+    const order = Storage.getCategoryOrder('home');
+    expect(Storage.getListAppearance('home')).toEqual({ notebook: false, showCategories: true });
+    Storage.saveListAppearance('home', { notebook: true, showCategories: false });
+    const disk = database.export(); database.close(); database = createDatabase(disk);
+    expect(Storage.getListAppearance('home')).toEqual({ notebook: true, showCategories: false });
+    expect(Storage.getListAppearance('other')).toEqual({ notebook: false, showCategories: true });
+    expect(Storage.getPendingChanges('home')).toEqual(pending);
+    expect(Storage.getCategoryOrder('home')).toEqual(order);
+    Storage.saveListAppearance('home', { notebook: false, showCategories: false });
+    expect(Storage.getListAppearance('home').showCategories).toBe(false);
+  });
+  it('backs up presentation onto independent restored lists and reads older backups', () => {
+    Storage.saveListAppearance('home', { notebook: true, showCategories: false });
+    const backup = Storage.createBackup();
+    const ids = Storage.restoreBackup(backup);
+    const restored = ids.find(id => Storage.getLists().find(list => list.id === id)?.name === 'home')!;
+    expect(Storage.getListAppearance(restored)).toEqual({ notebook: true, showCategories: false });
+    expect(restored).not.toBe('home');
+    const older = { ...backup, backupId: 'old-backup-without-appearance', lists: backup.lists.map(({ appearance, ...list }) => list) };
+    expect(Storage.restoreBackup(older).every(id => !Storage.getListAppearance(id).notebook)).toBe(true);
+    expect(() => Storage.restoreBackup({ ...backup, lists: [{ ...backup.lists[0], appearance: { notebook: 'yes', showCategories: true } }] })).toThrow();
+  });
+  it('cleans only the deleted list settings and recovers corrupt presentation safely', () => {
+    Storage.saveListAppearance('home', { notebook: true, showCategories: false });
+    Storage.saveListAppearance('other', { notebook: true, showCategories: true });
+    Storage.deleteListPermanently('home');
+    expect(Storage.getListAppearance('home')).toEqual({ notebook: false, showCategories: true });
+    expect(Storage.getListAppearance('other').notebook).toBe(true);
+    database.run("UPDATE app_metadata SET value = 'broken' WHERE key = 'list-appearance:other'");
+    expect(Storage.getListAppearance('other')).toEqual({ notebook: false, showCategories: true });
+  });
+});
+
+describe('help icon preference', () => {
+  it('defaults to visible, persists after restart and restores on a fresh database', () => {
+    expect(readHelpIcons()).toBe(true);
+    saveHelpIcons(false);
+    const disk = database.export(); database.close(); database = createDatabase(disk);
+    expect(readHelpIcons()).toBe(false);
+    const backup = Storage.createBackup();
+    expect(backup.version === 2 && backup.preferences.helpIcons).toBe(false);
+    database.close(); database = createDatabase(); database.run(sqliteSchema);
+    Storage.restoreBackup(backup);
+    expect(readHelpIcons()).toBe(false);
+  });
+  it('preserves an existing choice when restoring and supports backups without the setting', () => {
+    const oldBackup = Storage.createBackup();
+    expect(oldBackup.version === 2 && oldBackup.preferences.helpIcons).toBeUndefined();
+    saveHelpIcons(false);
+    const hiddenBackup = Storage.createBackup();
+    saveHelpIcons(true);
+    Storage.restoreBackup(hiddenBackup);
+    expect(readHelpIcons()).toBe(true);
+    Storage.restoreBackup(oldBackup);
+    expect(PersonalSettings.getString(HELP_STORAGE_KEY)).toBe('true');
+  });
+});
+
+describe('private member labels', () => {
+  it('persists labels per list without exporting member identities or simulation rights', () => {
+    saveMemberAlias('home', 'member-test-id', '  Camille   Test  ');
+    saveMemberAlias('other', 'member-test-id', 'Alex');
+    LocalKeyValueStorage.setString('preview.premium-simulation.v1', 'true');
+    saveOcrContributionPreview(true);
+    const disk = database.export(); database.close(); database = createDatabase(disk);
+    expect(getMemberAliases('home')).toEqual({ 'member-test-id': 'Camille Test' });
+    expect(getMemberAliases('other')).toEqual({ 'member-test-id': 'Alex' });
+    const backup = JSON.stringify(Storage.createBackup());
+    expect(backup).not.toContain('member-test-id');
+    expect(backup).not.toContain('Camille Test');
+    expect(backup).not.toContain('premium-simulation');
+    expect(backup).not.toContain(OCR_CONTRIBUTION_PREVIEW_KEY);
+    expect(Storage.getPendingChanges('home')).toEqual([]);
+    saveMemberAlias('home', 'member-test-id', '');
+    expect(getMemberAliases('home')).toEqual({});
+    expect(() => saveMemberAlias('home', 'id', 'a'.repeat(81))).toThrow();
+    LocalKeyValueStorage.delete('preview.premium-simulation.v1');
+    LocalKeyValueStorage.delete(OCR_CONTRIBUTION_PREVIEW_KEY);
+  });
+  it('cleans aliases only for a permanently deleted list', () => {
+    saveMemberAlias('home', 'member', 'Camille'); saveMemberAlias('other', 'member', 'Alex');
+    Storage.deleteListPermanently('home');
+    expect(getMemberAliases('home')).toEqual({});
+    expect(getMemberAliases('other')).toEqual({ member: 'Alex' });
+  });
+});
+
 describe('local lists and explicit sharing', () => {
+  it('persists a confirmed end of sharing despite legacy sync timestamps and can share again', () => {
+    const sent = startSync();
+    Storage.completeSync('home', sent, [], 1000);
+    Storage.makeListLocal('home');
+    expect(Storage.isSyncEnabled('home')).toBe(false);
+    const disk = database.export(); database.close(); database = createDatabase(disk);
+    expect(Storage.isSyncEnabled('home')).toBe(false);
+    Storage.saveCurrentList('home', [milk({ quantity: 3, updatedAt: 2000 })]);
+    expect(Storage.getCurrentList('home')[0].quantity).toBe(3);
+    expect(Storage.isSyncEnabled('home')).toBe(false);
+    Storage.enableSyncForSharing('home');
+    expect(Storage.isSyncEnabled('home')).toBe(true);
+    expect(Storage.getPendingChanges('home')[0].quantity).toBe(3);
+  });
   it('keeps unsynchronized, new and restored lists local without losing their edits', () => {
     expect(Storage.isSyncEnabled('home')).toBe(false);
     const fresh = Storage.createList('Privée');
@@ -120,6 +228,21 @@ describe('local lists and explicit sharing', () => {
 });
 
 describe('portable list backups', () => {
+  it.each(['pending', 'shown', 'accepted', 'kept'] as const)('restores personal barcode names and catalogue review state (%s)', catalogueReview => {
+    const preference = { name: 'Mon café', catalogueName: 'Café du catalogue', catalogueReview };
+    saveProductPreference('12345678', preference);
+    const backup = Storage.createBackup();
+    database.run('DELETE FROM app_metadata');
+    Storage.restoreBackup(backup);
+    expect(getProductPreference('12345678')).toEqual(preference);
+  });
+  it('keeps the current name when restoring a previously seen proposal without asking again', () => {
+    saveProductPreference('12345678', { name: 'Ancien nom', catalogueName: 'Café du catalogue', catalogueReview: 'shown' });
+    const backup = Storage.createBackup();
+    saveProductPreference('12345678', { name: 'Mon nouveau nom', catalogueReview: 'pending' });
+    Storage.restoreBackup(backup);
+    expect(getProductPreference('12345678')).toMatchObject({ name: 'Mon nouveau nom', catalogueReview: 'kept' });
+  });
   it('exports legacy choices, absent-list preferences and theme, then restores atomically on a fresh device', () => {
     LocalKeyValueStorage.setString('product-category:v1:quinoa', 'Épicerie salée');
     saveProductPreference('12345678', { name: 'Mon café', category: 'Épicerie sucrée' });
@@ -605,4 +728,42 @@ it('converges across two SQLite devices after simultaneous additions, retries an
     const copy = restored.find((id) => Storage.getCurrentList(id).length)!;
     expect(groupEquivalentItems(Storage.getCurrentList(copy))[0].quantity).toBe(1);
   } finally { database = a; b.close(); }
+});
+
+it('keeps barcode aliases private across two SQLite copies, disconnect and explicit rejoin', () => {
+  const a = database;
+  const b = createDatabase(database.export());
+  let second = b;
+  const barcode = '3017620422003';
+  const catalogueItem = milk({ barcode, name: 'Nom catalogue' });
+  try {
+    for (const device of [a, b]) {
+      database = device;
+      Storage.importSharedList('home');
+      Storage.completeSync('home', [], [catalogueItem], 1000);
+    }
+    database = a;
+    saveProductPreference(barcode, { name: 'Mon nom', catalogueName: 'Nom catalogue', catalogueReview: 'kept' });
+    Storage.saveCurrentList('home', incrementGroup(Storage.getCurrentList('home'), 'milk'));
+    const sent = Storage.getPendingChanges('home');
+    expect(sent[0].name).toBe('Nom catalogue');
+    database = b;
+    Storage.completeSync('home', [], sent, 1001);
+    expect(Storage.getCurrentList('home')[0]).toMatchObject({ name: 'Nom catalogue', quantity: 2 });
+    expect(getProductPreference(barcode)).toBeNull();
+    Storage.disableSync('home');
+    Storage.saveCurrentList('home', incrementGroup(Storage.getCurrentList('home'), 'milk'));
+    expect(Storage.isSyncEnabled('home')).toBe(false);
+    expect(Storage.getCurrentList('home')[0].quantity).toBe(3);
+    const saved = b.export();
+    second = createDatabase(saved); b.close(); database = second;
+    expect(Storage.isSyncEnabled('home')).toBe(false);
+    Storage.importSharedList('home');
+    expect(Storage.isSyncEnabled('home')).toBe(true);
+    expect(Storage.getPendingChanges('home')[0]).toMatchObject({ name: 'Nom catalogue', quantity: 3 });
+    database = a;
+    Storage.makeListLocal('home');
+    expect(Storage.isSyncEnabled('home')).toBe(false);
+    expect(getProductPreference(barcode)?.name).toBe('Mon nom');
+  } finally { second.close(); database = a; }
 });

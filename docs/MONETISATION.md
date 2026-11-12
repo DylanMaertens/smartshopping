@@ -1,6 +1,27 @@
 # Monétisation et achat sans compte
 
-Proposition du 3 octobre 2026. Ce document prépare les choix produit ; aucun paiement, blocage payant ou système d’activation n’est activé dans l’app.
+Actualisation du 9 novembre 2026 : une **simulation locale des droits premium**
+est implémentée. Aucun paiement ni système réel de licence n’est connecté.
+
+## Périmètre testable actuellement
+
+- Demandé par Dylan : thèmes **Minimal, Papier, Pastel, Pixel** et création de
+  listes partagées premium ; switch pour tester le mode actif/inactif.
+- Choix d’implémentation : Origine, Nuit, Contraste et les listes locales gratuits ;
+  rejoindre une liste reste gratuit. Le verrou porte sur les nouvelles invitations,
+  pas sur la consultation, la synchronisation ou la gestion des partages existants.
+- Réglages → Mode premium (test), persistant uniquement en preview/développement.
+  Valeur ignorée et switch absent en store/direct ; aucun droit exporté en sauvegarde.
+- Sans droit, un thème premium enregistré affiche Origine sans effacer le choix.
+  Réactiver le mode le restitue, sauf choix explicite d’un autre thème entre-temps.
+- Garde dans le fournisseur de thèmes et avant la préparation/création d’invitation,
+  pas seulement un cadenas visuel. **Pas de contrôle premium côté serveur à ce stade** :
+  un client modifié peut contourner ces gardes. Ne pas commercialiser cette simulation.
+- Restent à décider/connecter : prix, achat unique ou abonnement, paiement,
+  droits vérifiés, restauration d’achat et contrôle serveur des nouvelles invitations.
+
+Les sections suivantes conservent les pistes du 3 octobre : elles ne constituent
+ni une offre commercialisée ni une validation actuelle des règles des boutiques.
 
 ## Orientation retenue : une même application partout
 
@@ -37,11 +58,14 @@ Les fonctions de base locales sont gratuites. Je recommande un achat unique pour
 
 Le partage est une fonction centrale : une autre option serait de regrouper les compléments payants et les services dans une offre annuelle facultative, en conservant le socle gratuit. L’achat unique répond mieux à la demande d’une licence achetable hors store ; les services séparés protègent la pérennité du projet. Aucun tarif n’est fixé ici.
 
-Avant de choisir les prix, mesurer l’hébergement par utilisateur actif, le temps CPU par OCR, la fréquence des synchronisations, les frais de paiement et le support. Calculer la marge nette après taxes et frais, puis vérifier que les revenus annuels des services couvrent leurs coûts. Les fonctions actuelles restent disponibles pendant cette phase de test.
+Avant de choisir les prix, mesurer l’hébergement par utilisateur actif, le temps CPU par OCR, la fréquence des synchronisations, les frais de paiement et le support. Calculer la marge nette après taxes et frais, puis vérifier que les revenus annuels des services couvrent leurs coûts. Le mode de test permet de simuler l’accès aux fonctions premium.
 
 ### Thèmes
 
-Le principe des thèmes fantaisie payants est retenu à la demande de Dylan. Répartition proposée : **Papier, Pastel et Pixel dans Plus** ; **Minimal, Nuit et Contraste gratuits**, pour garder les apparences de base et l’accessibilité disponibles. Aucun verrou n’est ajouté pendant les tests. Le cas d’une distribution libre F-Droid est détaillé plus bas.
+La proposition initiale a été remplacée le 9 novembre : **Minimal, Papier, Pastel
+et Pixel premium** ; **Origine, Nuit et Contraste gratuits**. Les gardes sont
+testables via le switch, sans achat. Le cas d’une distribution libre F-Droid est
+détaillé plus bas et reste à décider.
 
 ## Achat Android hors store
 

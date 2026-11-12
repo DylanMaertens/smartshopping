@@ -4,12 +4,49 @@ import { InvitationSession } from '@/services/api/invitationSession';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { ShareListCard } from './ShareListCard';
 import { createListInvitation, getListMembers, joinListInvitation, revokeListInvitation, removeListMember } from '@/services/api/backend';
+import { getMemberAliases, saveMemberAlias } from '@/services/storage/memberAliases';
+const mockAliases = new Map<string, Record<string, string>>();
+jest.mock('@/services/storage/memberAliases', () => ({
+  getMemberAliases: jest.fn((list: string) => ({ ...mockAliases.get(list) })),
+  saveMemberAlias: jest.fn((list: string, id: string, name: string) => {
+    const result = { ...mockAliases.get(list) };
+    if (name.trim()) result[id] = name.trim(); else delete result[id];
+    mockAliases.set(list, result); return result;
+  }),
+}));
 jest.mock('react-native-qrcode-svg', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/services/identity/deviceIdentity', () => ({ getAnonymousDeviceId: async () => 'owner' }));
 jest.mock('@/services/api/backend', () => ({
   BackendApiError: class extends Error {}, createListInvitation: jest.fn(), getListMembers: jest.fn(), removeListMember: jest.fn(), joinListInvitation: jest.fn(), revokeListInvitation: jest.fn(),
 }));
 const invitation = 'a'.repeat(32);
+it('moves generic instructions out of the card while keeping status, errors and invitation details', async () => {
+  const screen = render(<ShareListCard showInstructions={false} listId="a" onBeforeInvite={async () => true} />);
+  await act(async () => {});
+  expect(screen.queryByText('Le partage reste facultatif et anonyme.')).toBeNull();
+  expect(screen.queryByText(/Révoquer un code bloque/)).toBeNull();
+  await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
+  screen.getByText(invitation);
+  screen.getByText(/Valable jusqu’au/);
+  screen.getByText('Transmets ce code uniquement à une personne de confiance.');
+  jest.mocked(revokeListInvitation).mockRejectedValueOnce(new Error('offline'));
+  await act(async () => fireEvent.press(screen.getByText('Révoquer ce code')));
+  screen.getByText('Partage indisponible.');
+  screen.getByText(invitation);
+});
+it('notifies the parent only after the server has created a usable invitation', async () => {
+  const created = jest.fn();
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} onInvitationCreated={created} />);
+  await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
+  expect(created).toHaveBeenCalledTimes(1);
+});
+it('does not reactivate sharing when invitation creation fails', async () => {
+  jest.mocked(createListInvitation).mockRejectedValueOnce(new Error('network'));
+  const created = jest.fn();
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} onInvitationCreated={created} />);
+  await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
+  expect(created).not.toHaveBeenCalled();
+});
 it('shares the Poduna name with the backwards-compatible invitation scheme', async () => {
   const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
   const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} />);
@@ -22,11 +59,76 @@ it('shares the Poduna name with the backwards-compatible invitation scheme', asy
   share.mockRestore();
 });
 beforeEach(() => {
+  mockAliases.clear();
   jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }));
   jest.mocked(revokeListInvitation).mockResolvedValue({ revoked: true });
   jest.mocked(joinListInvitation).mockResolvedValue({ list_id: 'shared' });
   jest.mocked(createListInvitation).mockResolvedValue({ code: invitation, list_id: 'a', expires_at: Date.now() + 86_400_000 });
   jest.mocked(getListMembers).mockResolvedValue([{ device_id: 'member-a', role: 'editor', joined_at: 1 }]);
+});
+
+it('renames a member privately and keeps the server identity for removal', async () => {
+  let screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} />);
+  await act(async () => fireEvent.press(screen.getByText('Gérer les membres')));
+  fireEvent.press(screen.getByLabelText('Renommer Membre 1'));
+  fireEvent.changeText(screen.getByLabelText('Nom du membre'), 'Camille');
+  fireEvent.press(screen.getByText('Enregistrer le nom'));
+  screen.getByText('Camille');
+  expect(saveMemberAlias).toHaveBeenCalledWith('a', 'member-a', 'Camille');
+  screen.unmount();
+  screen = render(<ShareListCard listId="a" canCreateInvitation={false} onBeforeInvite={async () => true} />);
+  await act(async () => fireEvent.press(screen.getByText('Gérer les membres')));
+  screen.getByText('Camille');
+  await act(async () => fireEvent.press(screen.getByText('Retirer')));
+  expect(removeListMember).toHaveBeenCalledWith('owner', 'a', 'member-a');
+});
+
+it('keeps the rename editor on storage failure and cancellation does not write', async () => {
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={async () => true} />);
+  await act(async () => fireEvent.press(screen.getByText('Gérer les membres')));
+  fireEvent.press(screen.getByLabelText('Renommer Membre 1'));
+  fireEvent.changeText(screen.getByLabelText('Nom du membre'), 'Camille');
+  jest.mocked(saveMemberAlias).mockImplementationOnce(() => { throw new Error('disk'); });
+  fireEvent.press(screen.getByText('Enregistrer le nom'));
+  screen.getByText('Impossible d’enregistrer ce nom. Réessaie.');
+  expect(screen.getByLabelText('Nom du membre').props.value).toBe('Camille');
+  fireEvent.press(screen.getByText('Annuler'));
+  expect(saveMemberAlias).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('Camille')).toBeNull();
+});
+
+it('blocks new invitation creation in free mode without blocking member management', async () => {
+  const before = jest.fn(async () => true);
+  const screen = render(<ShareListCard canCreateInvitation={false} listId="a" onBeforeInvite={before} />);
+  await act(async () => {});
+  expect(screen.getByText('Créer un code · Premium')).toBeDisabled();
+  fireEvent.press(screen.getByText('Créer un code · Premium'));
+  expect(before).not.toHaveBeenCalled();
+  expect(createListInvitation).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(screen.getByText('Gérer les membres')));
+  screen.getByText('Retirer');
+});
+
+it('rechecks premium after an asynchronous preparation, before creating the invitation', async () => {
+  let finish!: (value: boolean) => void;
+  const before = jest.fn(() => new Promise<boolean>(resolve => { finish = resolve; }));
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={before} />);
+  await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
+  screen.rerender(<ShareListCard listId="a" onBeforeInvite={before} canCreateInvitation={false} />);
+  await act(async () => finish(true));
+  expect(createListInvitation).not.toHaveBeenCalled();
+  screen.getByText('Création annulée : le mode premium n’est plus actif.');
+});
+
+it('keeps an existing invitation usable after returning to free mode', async () => {
+  const before = jest.fn(async () => true);
+  const screen = render(<ShareListCard listId="a" onBeforeInvite={before} />);
+  await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
+  screen.rerender(<ShareListCard listId="a" onBeforeInvite={before} canCreateInvitation={false} />);
+  screen.getByText(invitation);
+  screen.getByText('Partager avec une application');
+  await act(async () => fireEvent.press(screen.getByText('Révoquer ce code')));
+  expect(screen.getByText('Créer un code · Premium')).toBeDisabled();
 });
 it('clears invitation and members when selecting another list', async () => {
   const callbacks = { onBeforeInvite: jest.fn(async () => true) };
@@ -205,10 +307,15 @@ it('explains that revoking a code keeps existing members synchronized', async ()
 });
 
 it('describes member removal as disconnecting the retained local copy', async () => {
-  const screen = render(<ShareListCard listId="a" {...callbacks} />);
+  const changed = jest.fn();
+  const screen = render(<ShareListCard listId="a" {...callbacks} onSharingChanged={changed} />);
+  await act(async () => fireEvent.press(screen.getByText('Créer un code d’invitation')));
   await act(async () => fireEvent.press(screen.getByText('Gérer les membres')));
   await act(async () => fireEvent.press(screen.getByText('Retirer')));
   expect(removeListMember).toHaveBeenCalledWith('owner', 'a', 'member-a');
   expect(screen.queryByText('member-a')).toBeNull();
+  expect(screen.queryByText(invitation)).toBeNull();
+  screen.getByText('Créer un code d’invitation');
+  expect(changed).toHaveBeenCalledTimes(1);
   screen.getByText('Synchronisation coupée pour ce membre. Sa copie locale reste sur son appareil.');
 });

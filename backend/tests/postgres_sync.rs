@@ -110,12 +110,20 @@ async fn invitations_are_durable_authorized_and_revocable() {
         .unwrap();
     assert_ne!(rotated, auth_secret);
     let sharing = SharingService::default();
+    assert!(!sharing
+        .sharing_active(Some(&pool), &list_id, &owner)
+        .await
+        .unwrap());
 
     let invitation = sharing
         .create_invitation(Some(&pool), &list_id, &owner)
         .await
         .expect("failed to create invitation")
         .expect("owner should be authorized");
+    assert!(sharing
+        .sharing_active(Some(&pool), &list_id, &owner)
+        .await
+        .unwrap());
     assert_eq!(
         sharing
             .join(Some(&pool), &invitation.code, &guest)
@@ -133,6 +141,15 @@ async fn invitations_are_durable_authorized_and_revocable() {
         .unwrap()
         .unwrap();
     assert_eq!(members.len(), 1);
+    // Revoking the invitation alone does not disconnect an existing member.
+    sharing
+        .revoke(Some(&pool), &invitation.code, &owner)
+        .await
+        .unwrap();
+    assert!(sharing
+        .sharing_active(Some(&pool), &list_id, &owner)
+        .await
+        .unwrap());
     assert_eq!(
         sharing
             .remove_member(Some(&pool), &list_id, &owner, &guest)
@@ -140,6 +157,10 @@ async fn invitations_are_durable_authorized_and_revocable() {
             .unwrap(),
         Some(true)
     );
+    assert!(!sharing
+        .sharing_active(Some(&pool), &list_id, &owner)
+        .await
+        .unwrap());
     assert!(!sharing
         .authorize_or_claim(Some(&pool), &list_id, &guest)
         .await
@@ -231,6 +252,134 @@ fn sync_item(id: &str, list_id: &str, name: &str, updated_at: i64) -> SyncItem {
         updated_at,
         deleted_at: None,
     }
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable PostgreSQL database"]
+async fn two_devices_reconcile_offline_changes_then_revoke_and_share_again() {
+    use shopping_list_backend::services::persistent_sync::sync_authorized_items;
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&std::env::var("TEST_DATABASE_URL").unwrap())
+        .await
+        .unwrap();
+    prepare_database(&pool).await.unwrap();
+    let list = format!("two-devices-{}", Uuid::new_v4());
+    let owner = Uuid::new_v4().to_string();
+    let guest = Uuid::new_v4().to_string();
+    let sharing = SharingService::default();
+    sync_authorized_items(&pool, &owner, &list, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!sharing
+        .sharing_active(Some(&pool), &list, &owner)
+        .await
+        .unwrap());
+    let invitation = sharing
+        .create_invitation(Some(&pool), &list, &owner)
+        .await
+        .unwrap()
+        .unwrap();
+    sharing
+        .join(Some(&pool), &invitation.code, &guest)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Two offline additions have distinct identities, even with the same name.
+    let a = sync_item(&Uuid::new_v4().to_string(), &list, "Pain", 100);
+    let b = sync_item(&Uuid::new_v4().to_string(), &list, "Pain", 100);
+    let sent_a = [a.clone()];
+    let sent_b = [b.clone()];
+    let (first, second) = tokio::join!(
+        sync_authorized_items(&pool, &owner, &list, &sent_a),
+        sync_authorized_items(&pool, &guest, &list, &sent_b),
+    );
+    first.unwrap().unwrap();
+    second.unwrap().unwrap();
+    // Lost acknowledgement and reconnect must not duplicate the same addition.
+    sync_authorized_items(&pool, &guest, &list, &sent_b)
+        .await
+        .unwrap()
+        .unwrap();
+    let loaded = sync_authorized_items(&pool, &owner, &list, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(loaded.len(), 2);
+    assert_eq!(loaded.iter().map(|item| item.quantity).sum::<i32>(), 2);
+
+    let mut deletion = a.clone();
+    deletion.updated_at = 300;
+    deletion.deleted_at = Some(300);
+    let mut older_edit = a.clone();
+    older_edit.updated_at = 200;
+    older_edit.quantity = 4;
+    let deleting = [deletion];
+    let editing = [older_edit];
+    let (removed, edited) = tokio::join!(
+        sync_authorized_items(&pool, &owner, &list, &deleting),
+        sync_authorized_items(&pool, &guest, &list, &editing),
+    );
+    removed.unwrap().unwrap();
+    edited.unwrap().unwrap();
+    let loaded = sync_authorized_items(&pool, &guest, &list, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        loaded
+            .iter()
+            .find(|item| item.id == a.id)
+            .unwrap()
+            .deleted_at,
+        Some(300)
+    );
+
+    // A concurrent rejoin cannot undo removal using the now-revoked code.
+    let (removal, rejoin) = tokio::join!(
+        sharing.remove_member(Some(&pool), &list, &owner, &guest),
+        sharing.join(Some(&pool), &invitation.code, &guest),
+    );
+    assert_eq!(removal.unwrap(), Some(true));
+    rejoin.unwrap();
+    assert!(!sharing
+        .sharing_active(Some(&pool), &list, &owner)
+        .await
+        .unwrap());
+    assert!(sync_authorized_items(&pool, &guest, &list, &sent_b)
+        .await
+        .unwrap()
+        .is_none());
+
+    // The owner can publish again; an explicit fresh invitation restores access.
+    let fresh = sharing
+        .create_invitation(Some(&pool), &list, &owner)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(sharing
+        .sharing_active(Some(&pool), &list, &owner)
+        .await
+        .unwrap());
+    sharing
+        .join(Some(&pool), &fresh.code, &guest)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        sync_authorized_items(&pool, &guest, &list, &[])
+            .await
+            .unwrap()
+            .unwrap()
+            .len(),
+        2
+    );
+    sharing
+        .delete_list(Some(&pool), &list, &owner)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

@@ -4,6 +4,7 @@ import { LocalKeyValueStorage } from './localKeyValueStorage';
 export const THEME_STORAGE_KEY = 'appearance.theme.v1';
 const prefix = 'personal-setting:';
 export const isPersonalKey = (key: string) => key === THEME_STORAGE_KEY
+  || key === 'interface.help-icons.v1'
   || key.startsWith('product-preference:v1:') || key.startsWith('product-category:v1:');
 
 /** Same SQLite transaction as lists; legacy KV values remain readable after upgrade. */

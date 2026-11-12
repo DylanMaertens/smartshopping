@@ -3,7 +3,7 @@
     "name": "Poduna",
     "slug": "shopping-list-app",
     "scheme": "smartshopping",
-    "version": "0.1.21",
+    "version": "0.1.23",
     "icon": "./assets/brand/icon.png",
     "orientation": "portrait",
     "platforms": [
@@ -33,7 +33,7 @@
       "./plugins/withMlKitRegistrars.cjs"
     ],
     "android": {
-      "versionCode": 22,
+      "versionCode": 24,
       "package": "com.smartshopping.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/adaptive-foreground.png",

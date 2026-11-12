@@ -43,6 +43,44 @@ pub struct ListMember {
 }
 
 impl SharingService {
+    /// Only a confirmed owner without members or usable invitations can go local.
+    /// Unknown/non-owner callers stay conservative; authorization is enforced by sync.
+    pub async fn sharing_active(
+        &self,
+        pool: Option<&PgPool>,
+        list_id: &str,
+        device_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let now = Utc::now().timestamp_millis();
+        if let Some(pool) = pool {
+            let mut tx = pool.begin().await?;
+            crate::services::persistent_sync::lock_list(&mut tx, list_id).await?;
+            let active = sqlx::query_scalar(
+                "SELECT NOT EXISTS(SELECT 1 FROM shared_lists WHERE id=$1 AND owner_device_id=$2)
+                 OR EXISTS(SELECT 1 FROM list_members WHERE list_id=$1 AND device_id<>$2)
+                 OR EXISTS(SELECT 1 FROM list_invitations WHERE list_id=$1 AND revoked_at IS NULL AND expires_at>$3)"
+            )
+            .bind(list_id)
+            .bind(device_id)
+            .bind(now)
+            .fetch_one(&mut *tx)
+            .await?;
+            tx.commit().await?;
+            return Ok(active);
+        }
+        let state = self.state.lock().await;
+        Ok(state
+            .owners
+            .get(list_id)
+            .is_none_or(|owner| owner != device_id)
+            || state
+                .members
+                .keys()
+                .any(|(list, member)| list == list_id && member != device_id)
+            || state.invitations.values().any(|invite| {
+                invite.list_id == list_id && !invite.revoked && invite.expires_at > now
+            }))
+    }
     /// Called inside memory_list_operations, after authorization.
     pub(crate) async fn sync_memory_name(
         &self,
@@ -302,11 +340,17 @@ impl SharingService {
         };
 
         if let Some(pool) = pool {
+            let mut tx = pool.begin().await?;
+            crate::services::persistent_sync::lock_list(&mut tx, list_id).await?;
             let inserted = sqlx::query(
                 r#"
                 INSERT INTO list_invitations (code, list_id, created_by, created_at, expires_at)
                 SELECT $1, $2, $3, $4, $5
-                WHERE EXISTS(SELECT 1 FROM shared_lists WHERE id = $2)
+                WHERE EXISTS(SELECT 1 FROM shared_lists WHERE id = $2 AND (
+                    owner_device_id = $3 OR EXISTS(
+                        SELECT 1 FROM list_members WHERE list_id = $2 AND device_id = $3
+                    )
+                ))
                 "#,
             )
             .bind(&invitation.code)
@@ -314,12 +358,24 @@ impl SharingService {
             .bind(device_id)
             .bind(now)
             .bind(invitation.expires_at)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
+            tx.commit().await?;
             return Ok((inserted.rows_affected() == 1).then_some(invitation));
         }
 
-        self.state.lock().await.invitations.insert(
+        let mut state = self.state.lock().await;
+        if state
+            .owners
+            .get(list_id)
+            .is_none_or(|owner| owner != device_id)
+            && !state
+                .members
+                .contains_key(&(list_id.to_string(), device_id.to_string()))
+        {
+            return Ok(None);
+        }
+        state.invitations.insert(
             invitation.code.clone(),
             MemoryInvitation {
                 list_id: list_id.to_string(),
@@ -351,6 +407,20 @@ impl SharingService {
                 return Ok(None);
             };
             let list_id: String = invitation.try_get("list_id")?;
+            crate::services::persistent_sync::lock_list(&mut tx, &list_id).await?;
+            // Recheck after the lock: removal/revocation may have happened while
+            // resolving the invitation. A late join must not revive a local list.
+            let now = Utc::now().timestamp_millis();
+            let valid: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM list_invitations WHERE code=$1 AND revoked_at IS NULL AND expires_at>$2)",
+            )
+            .bind(code)
+            .bind(now)
+            .fetch_one(&mut *tx)
+            .await?;
+            if !valid {
+                return Ok(None);
+            }
             sqlx::query(
                 "INSERT INTO list_members (list_id, device_id, joined_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
             )
@@ -367,6 +437,7 @@ impl SharingService {
         let Some(invitation) = state.invitations.get(code) else {
             return Ok(None);
         };
+        let now = Utc::now().timestamp_millis();
         if invitation.revoked || invitation.expires_at <= now {
             return Ok(None);
         }
@@ -384,6 +455,16 @@ impl SharingService {
         device_id: &str,
     ) -> Result<bool, sqlx::Error> {
         if let Some(pool) = pool {
+            let mut tx = pool.begin().await?;
+            let list_id: Option<String> =
+                sqlx::query_scalar("SELECT list_id FROM list_invitations WHERE code=$1")
+                    .bind(code)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+            let Some(list_id) = list_id else {
+                return Ok(false);
+            };
+            crate::services::persistent_sync::lock_list(&mut tx, &list_id).await?;
             let result = sqlx::query(
                 r#"
                 UPDATE list_invitations SET revoked_at = $1
@@ -398,8 +479,9 @@ impl SharingService {
             .bind(Utc::now().timestamp_millis())
             .bind(code)
             .bind(device_id)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
+            tx.commit().await?;
             return Ok(result.rows_affected() == 1);
         }
 
@@ -422,6 +504,56 @@ impl SharingService {
 #[cfg(test)]
 mod tests {
     use super::SharingService;
+
+    #[tokio::test]
+    async fn sharing_stays_active_until_members_and_live_invitations_are_gone() {
+        let sharing = SharingService::default();
+        assert!(sharing.sharing_active(None, "list", "owner").await.unwrap());
+        sharing
+            .authorize_or_claim(None, "list", "owner")
+            .await
+            .unwrap();
+        assert!(!sharing.sharing_active(None, "list", "owner").await.unwrap());
+        assert!(sharing
+            .sharing_active(None, "list", "stranger")
+            .await
+            .unwrap());
+        let invitation = sharing
+            .create_invitation(None, "list", "owner")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(sharing.sharing_active(None, "list", "owner").await.unwrap());
+        sharing
+            .join(None, &invitation.code, "member")
+            .await
+            .unwrap();
+        sharing
+            .revoke(None, &invitation.code, "owner")
+            .await
+            .unwrap();
+        assert!(sharing.sharing_active(None, "list", "owner").await.unwrap());
+        sharing
+            .remove_member(None, "list", "owner", "member")
+            .await
+            .unwrap();
+        assert!(!sharing.sharing_active(None, "list", "owner").await.unwrap());
+        let next = sharing
+            .create_invitation(None, "list", "owner")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(sharing.sharing_active(None, "list", "owner").await.unwrap());
+        sharing
+            .state
+            .lock()
+            .await
+            .invitations
+            .get_mut(&next.code)
+            .unwrap()
+            .expires_at = 0;
+        assert!(!sharing.sharing_active(None, "list", "owner").await.unwrap());
+    }
 
     #[tokio::test]
     async fn deleted_list_cannot_be_claimed_again() {

@@ -1,7 +1,7 @@
 import { TestServerCard } from '@/components/TestServerCard';
 import { canConfigureTestServer, getTestServerUrl } from '@/services/api/testServer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, BackHandler, Keyboard, Linking, Modal, ScrollView, type TextInputInstance, View } from 'react-native';
+import { Alert, AppState, BackHandler, Keyboard, Linking, Modal, ScrollView, Switch, type TextInputInstance, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Heading, PageModal, Pressable, Text, TextInput } from '@/theme/ui';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -9,8 +9,14 @@ import { MotionView } from '@/theme/motion';
 import { BasketIllustration } from '@/components/BasketIllustration';
 import { PodunaMark } from '@/components/PodunaMark';
 import { AppearancePicker } from '@/components/AppearancePicker';
+import { ContactForm } from '@/components/ContactForm';
+import { PremiumPanel } from '@/components/PremiumPanel';
+import { usePremium } from '@/premium/PremiumProvider';
+import { PageHelp, type HelpTopic } from '@/components/PageHelp';
+import { readHelpIcons, saveHelpIcons } from '@/services/storage/interfaceSettings';
 import { parseInvitationCode } from '@/services/api/invitationCode';
 import { OcrImportPanel } from '@/components/OcrImportPanel';
+import { OcrContributionSettings } from '@/components/OcrContributionSettings';
 import { VoiceImportPanel } from '@/components/VoiceImportPanel';
 import { mergeOcrItems, type OcrItem } from '@/services/ocrItems';
 import { BarcodeScannerPanel } from '@/components/BarcodeScannerPanel';
@@ -36,18 +42,28 @@ import { useExpiringMessage } from '@/hooks/useExpiringMessage';
 import { getProductPreference, getRememberedCategory, rememberProductCategory, saveProductPreference } from '@/services/storage/productPreferences';
 import { itemNameKey, normalizeItemName, truncateUtf8 } from '@/services/itemValidation';
 import { groupItemsByCategory } from '@/services/categorization/categoryOrder';
-import { groupEquivalentItems, getEquivalentItems, incrementGroup, decrementGroup } from '@/services/itemGroups';
-import { sortItemsForDisplay } from '@/services/itemOrder';
+import { groupEquivalentItems as groupRows, getEquivalentItems as equivalentRows, incrementGroup as incrementRows, decrementGroup as decrementRows } from '@/services/itemGroups';
+import type { ListAppearance } from '@/services/listAppearance';
 import type { ShoppingItem, ShoppingList } from '@/types';
 
 const ALPHABETICAL_CATEGORIES = [...STORE_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
+const personalName = (item: ShoppingItem) => (item.barcode ? getProductPreference(item.barcode)?.name : undefined) ?? item.name;
+const groupEquivalentItems = (items: ShoppingItem[]) => groupRows(items, personalName).map(item => ({ ...item, name: personalName(item) }));
+const getEquivalentItems = (items: ShoppingItem[], id: string) => equivalentRows(items, id, personalName);
+const incrementGroup = (items: ShoppingItem[], id: string, amount = 1, reopen = false) => incrementRows(items, id, amount, reopen, personalName);
+const decrementGroup = (items: ShoppingItem[], id: string) => decrementRows(items, id, personalName);
+
 export function HomeScreen() {
   const { theme } = useTheme();
+  const { isPremium } = usePremium();
   const serverMissing = canConfigureTestServer() && !getTestServerUrl();
-  const [panel, setPanel] = useState<'add' | 'share' | 'settings' | 'sync' | 'options' | 'backup' | 'join' | null>(null);
+  const [panel, setPanel] = useState<'add' | 'share' | 'settings' | 'sync' | 'options' | 'backup' | 'join' | 'contact' | null>(null);
   const [listOpen, setListOpen] = useState(false);
-  const [checkedExpanded, setCheckedExpanded] = useState(false);
+  const [helpIcons, setHelpIcons] = useState(readHelpIcons);
+  const [helpTopic, setHelpTopic] = useState<HelpTopic | null>(null);
+  const [helpSettingsError, setHelpSettingsError] = useState<string | null>(null);
+  const [appearanceError, setAppearanceError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('1');
   const [addedMessage, setAddedMessage] = useExpiringMessage();
   const [invitationSession] = useState(() => new InvitationSession());
@@ -58,6 +74,7 @@ export function HomeScreen() {
   const backgroundSyncRef = useRef<Promise<void> | null>(null);
   const previousOnlineRef = useRef<boolean | null>(null);
   const syncInFlightRef = useRef<{ listId: string; promise: Promise<boolean> } | null>(null);
+  const sharingGeneration = useRef(new Map<string, number>());
   const [inputValue, setInputValue] = useState('');
   const [inputCategory, setInputCategory] = useState<string | null>(null);
   const [choosingInputCategory, setChoosingInputCategory] = useState(false);
@@ -65,15 +82,28 @@ export function HomeScreen() {
   const [ocrListId, setOcrListId] = useState<string | null>(null);
   const [voiceListId, setVoiceListId] = useState<string | null>(null);
   const [addMode, setAddMode] = useState<'product' | 'barcode' | 'text' | 'voice'>('product');
+  const [cameraExpanded, setCameraExpanded] = useState(false);
   const [scanMode, setScanMode] = useState<'barcode' | 'text'>('barcode');
+  useEffect(() => { setHelpTopic(null); }, [panel, addMode, listOpen]);
   const scannerVisible = panel === 'add' && addMode === 'barcode';
   const pendingProductLookups = useRef(new Set<string>());
   const [unknownProducts, setUnknownProducts] = useState<{ id: string; barcode: string; listId: string; suggestions: CommunitySuggestion[]; communityAvailable: boolean }[]>([]);
   const [scanStatus, setScanStatus] = useExpiringMessage();
+  const [sharingNotice, setSharingNotice] = useExpiringMessage();
+  const [preferenceRevision, setPreferenceRevision] = useState(0);
+  const [catalogueOffer, setCatalogueOffer] = useState<{ barcode: string; name: string; personalName: string; listId: string } | null>(null);
+  const catalogueOfferRef = useRef(false);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
+  const pendingCatalogueLookups = useRef(new Set<string>());
+  const scannerActiveRef = useRef(scannerVisible);
+  scannerActiveRef.current = scannerVisible && foreground && scanMode === 'barcode' && !helpTopic;
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [syncPhase, setSyncPhase] = useState<SyncPhase>('idle');
   const [lists, setLists] = useState<ShoppingList[]>(() => ShoppingListStorage.getLists());
   const [activeListId, setActiveListId] = useState(() => ShoppingListStorage.getActiveListId());
+  const [listAppearance, setListAppearance] = useState(() => ShoppingListStorage.getListAppearance(activeListId));
   const activeListIdRef = useRef(activeListId);
   const [categoryOrder, setCategoryOrder] = useState(() => ShoppingListStorage.getCategoryOrder(activeListId));
   const [orderingListId, setOrderingListId] = useState<string | null>(null);
@@ -86,12 +116,17 @@ export function HomeScreen() {
   );
   const itemsRef = useRef(items);
   const unknownProduct = unknownProducts.find((product) => product.listId === activeListId
+    && !getProductPreference(product.barcode)
     && items.some((item) => item.id === product.id && !item.deletedAt && item.name === `Produit ${product.barcode}`));
   useEffect(() => { setUnknownProducts([]); }, [activeListId]);
+  useEffect(() => {
+    setCatalogueOffer(null); catalogueOfferRef.current = false;
+  }, [activeListId, scannerVisible]);
 
-  const visibleItems = useMemo(() => groupEquivalentItems(items), [items]);
-  const ocrKnownNames = useMemo(() => items.filter((item) => !item.deletedAt).map((item) => item.name), [items]);
-  const sections = useMemo(() => groupItemsByCategory(visibleItems.filter((item) => !item.checked), categoryOrder), [visibleItems, categoryOrder]);
+  // Aliases are only projected for display, never persisted into shared rows.
+  const visibleItems = useMemo(() => groupEquivalentItems(items), [items, preferenceRevision]);
+  const ocrKnownNames = useMemo(() => visibleItems.map((item) => item.name), [visibleItems]);
+  const sections = useMemo(() => groupItemsByCategory(visibleItems, categoryOrder), [visibleItems, categoryOrder]);
   const remainingCount = visibleItems.filter((item) => !item.checked).length;
   const pendingChangesCount = ShoppingListStorage.getPendingChangesCount(activeListId);
   const syncEnabledListIds = JSON.stringify(lists.filter((list) => ShoppingListStorage.isSyncEnabled(list.id)).map((list) => list.id).sort());
@@ -210,19 +245,20 @@ export function HomeScreen() {
 
   async function addItemFromBarcode(barcode: string) {
     if (!/^[0-9]{8,14}$/.test(barcode)) return;
+    void offerCatalogueName(barcode);
     const existing = itemsRef.current.find((item) => !item.deletedAt && item.barcode === barcode);
     if (existing) {
       if (getEquivalentItems(itemsRef.current, existing.id).reduce((sum, item) => sum + item.quantity, 0) >= 999) setScanStatus('La quantité maximale de cet article est déjà atteinte (999).');
       else {
         incrementExistingItem(existing.id);
-        setScanStatus(`Quantité augmentée : ${normalizeItemName(existing.name)}`);
+        setScanStatus(`Quantité augmentée : ${personalName(existing)}`);
       }
-      if (existing.name === `Produit ${barcode}` && !pendingProductLookups.current.has(existing.id)) offerProductName(existing.id, barcode, []);
+      if (existing.name === `Produit ${barcode}` && !getProductPreference(barcode) && !pendingProductLookups.current.has(existing.id)) offerProductName(existing.id, barcode, []);
       return;
     }
     const preference = getProductPreference(barcode);
     if (preference) {
-      updateItems((current) => [createShoppingItem(preference.name, {
+      updateItems((current) => [createShoppingItem(preference.catalogueName ?? `Produit ${barcode}`, {
         barcode, category: getRememberedCategory(preference.name) ?? preference.category ?? classifyProductLocally(preference.name).categoryName,
       }), ...current]);
       setScanStatus(`Ajouté : ${preference.name}`);
@@ -259,10 +295,12 @@ export function HomeScreen() {
         if (categoryChosenWhileWaiting && added.category && added.name !== pendingItem.name) {
           try {
             rememberProductCategory(added.name, added.category);
-            saveProductPreference(barcode, { name: added.name, category: added.category });
+            const preference = getProductPreference(barcode);
+            saveProductPreference(barcode, { ...preference, name: preference?.name ?? added.name, category: added.category,
+              catalogueName: added.name });
           } catch { warning = ' · Rayon conservé dans la liste, mais non mémorisé pour les prochains ajouts.'; }
         }
-        setScanStatus(`Ajouté : ${added.name}${warning}`);
+        setScanStatus(`Ajouté : ${personalName(added)}${warning}`);
       }
     } catch (error) {
       if (activeListIdRef.current !== scannedListId) return;
@@ -289,9 +327,50 @@ export function HomeScreen() {
   }
 
   function offerProductName(id: string, barcode: string, suggestions: CommunitySuggestion[], communityAvailable = false) {
+    if (getProductPreference(barcode)) return;
     const listId = activeListIdRef.current;
     setUnknownProducts((current) => current.some((product) => product.id === id)
       ? current : [...current, { id, barcode, listId, suggestions: suggestions.slice(0, 3), communityAvailable }]);
+  }
+
+  async function offerCatalogueName(barcode: string) {
+    const preference = getProductPreference(barcode);
+    if (preference?.catalogueReview !== 'pending' || pendingCatalogueLookups.current.has(barcode)
+      || serverMissing || networkState.isConnected !== true || networkState.isInternetReachable === false) return;
+    const listId = activeListIdRef.current;
+    pendingCatalogueLookups.current.add(barcode);
+    try {
+      const product = await getProduct(barcode);
+      const name = normalizeItemName(truncateUtf8(normalizeItemName(product.product_name), 200));
+      if (!mountedRef.current || !scannerActiveRef.current || catalogueOfferRef.current || activeListIdRef.current !== listId
+        || !name || name === `Produit ${barcode}`
+        || !itemsRef.current.some(item => item.barcode === barcode && !item.deletedAt)) return;
+      const latest = getProductPreference(barcode);
+      if (!latest || latest.catalogueReview !== 'pending' || latest.name !== preference.name) return;
+      const same = itemNameKey(latest.name) === itemNameKey(name);
+      // Persist before showing: a dismissed dialog or restart must not ask again.
+      saveProductPreference(barcode, { ...latest, catalogueName: name, catalogueReview: same ? 'accepted' : 'shown' });
+      if (!same) {
+        catalogueOfferRef.current = true;
+        setCatalogueError(null);
+        setCatalogueOffer({ barcode, name, personalName: latest.name, listId });
+      }
+    } catch { /* Network failures and unknown products leave the proposal pending. */ }
+    finally { pendingCatalogueLookups.current.delete(barcode); }
+  }
+
+  function decideCatalogueName(accept: boolean) {
+    if (!catalogueOffer) return;
+    try {
+      const preference = getProductPreference(catalogueOffer.barcode);
+      if (preference && preference.name === catalogueOffer.personalName) {
+        saveProductPreference(catalogueOffer.barcode, { ...preference,
+          name: accept ? catalogueOffer.name : preference.name, catalogueReview: accept ? 'accepted' : 'kept' });
+        setPreferenceRevision(value => value + 1);
+      }
+      catalogueOfferRef.current = false;
+      setCatalogueOffer(null);
+    } catch { setCatalogueError('Impossible de mémoriser ce choix. Réessaie.'); }
   }
 
   function dismissUnknownProduct() {
@@ -329,6 +408,29 @@ export function HomeScreen() {
     if (!name || truncateUtf8(name, 200) !== name) return;
     if (selectedCategory !== undefined && !STORE_CATEGORIES.some((category) => category.name === selectedCategory)) return;
     const ids = new Set(getEquivalentItems(itemsRef.current, id).map((item) => item.id));
+    const codedItems = itemsRef.current.filter(item => ids.has(item.id) && item.barcode && !item.deletedAt);
+    if (codedItems.length) {
+      for (const item of codedItems) {
+        // Choosing an aisle while lookup is running is not a personal rename.
+        if (name === `Produit ${item.barcode}`) continue;
+        const previous = getProductPreference(item.barcode!);
+        const catalogueName = previous?.catalogueName ?? (item.name !== `Produit ${item.barcode}` ? item.name : undefined);
+        saveProductPreference(item.barcode!, { name, category: selectedCategory ?? item.category,
+          ...(catalogueName ? { catalogueName } : {}),
+          catalogueReview: previous?.catalogueReview && previous.catalogueReview !== 'pending' ? previous.catalogueReview
+            : catalogueName ? 'kept' : 'pending' });
+      }
+      setPreferenceRevision(value => value + 1);
+      if (selectedCategory !== undefined) rememberProductCategory(name, selectedCategory);
+      // A grouped manual row must not leak this barcode's personal name either.
+      // It retains its shared name and separates visually when the alias changes.
+      if (selectedCategory !== undefined) {
+        updateItems(current => current.map(item => ids.has(item.id) && !item.deletedAt
+          && item.category !== selectedCategory
+          ? { ...item, category: selectedCategory, updatedAt: nextItemTimestamp(item) } : item));
+      }
+      return;
+    }
     updateItems((current) => current.map((item) =>
       ids.has(item.id) && !item.deletedAt && (item.name !== name || (selectedCategory !== undefined && item.category !== selectedCategory))
         ? { ...item, name, category: selectedCategory ?? getRememberedCategory(name) ?? classifyProductLocally(name).categoryName, updatedAt: nextItemTimestamp(item) }
@@ -339,11 +441,6 @@ export function HomeScreen() {
     try {
       if (ids.size && selectedCategory !== undefined && !/^Produit \d{8,14}$/u.test(name)) {
         rememberProductCategory(name, selectedCategory);
-      }
-      for (const item of itemsRef.current) {
-        if (ids.has(item.id) && !item.deletedAt && item.barcode && item.name !== `Produit ${item.barcode}`) {
-          saveProductPreference(item.barcode, { name: item.name, category: item.category });
-        }
       }
     } catch {
       setScanStatus('Article modifié, mais le rayon n’a pas pu être mémorisé pour les prochains ajouts.');
@@ -380,7 +477,7 @@ export function HomeScreen() {
   }
 
   const syncCurrentList = useCallback((
-    trigger: 'manual' | 'reconnect' | 'periodic' | 'pending' | 'foreground' | 'background' = 'manual',
+    trigger: 'manual' | 'reconnect' | 'periodic' | 'pending' | 'foreground' | 'background' | 'sharing' = 'manual',
     listId = activeListIdRef.current,
   ): Promise<boolean> => {
     if (serverMissing) return Promise.resolve(false);
@@ -392,6 +489,7 @@ export function HomeScreen() {
     }
     const run = async (): Promise<boolean> => {
       const syncingListId = listId;
+      const generation = sharingGeneration.current.get(listId);
       const pendingChanges = ShoppingListStorage.getPendingChanges(listId);
       const pendingName = ShoppingListStorage.getPendingListName(listId);
       const pendingCount = pendingChanges.length + Number(!!pendingName);
@@ -428,6 +526,11 @@ export function HomeScreen() {
           pendingName, result.response.list_name,
         );
         if (!mergedItems) return false;
+        if (result.response.sharing_active === false && trigger !== 'sharing'
+          && generation === sharingGeneration.current.get(listId)) {
+          ShoppingListStorage.makeListLocal(syncingListId);
+          if (activeListIdRef.current === syncingListId) setSharingNotice('Le partage est terminé. Ta liste reste disponible en local.');
+        }
         setLists(ShoppingListStorage.getLists());
         if (activeListIdRef.current !== syncingListId) return true;
 
@@ -450,6 +553,7 @@ export function HomeScreen() {
           if (activeListIdRef.current === syncingListId) {
             setSyncPhase('disconnected');
             setSyncStatus(null);
+            setSharingNotice('Le partage est terminé. Ta copie reste disponible en local.');
           }
           return false;
         }
@@ -463,7 +567,7 @@ export function HomeScreen() {
     const promise = run().finally(() => { syncInFlightRef.current = null; });
     syncInFlightRef.current = { listId, promise };
     return promise;
-  }, [syncEngine, serverMissing]);
+  }, [syncEngine, serverMissing, setSharingNotice]);
 
   const pendingSync = useMemo(() => new DebouncedListSync({
     hasPending: (listId) => ShoppingListStorage.getLists().some((list) => list.id === listId)
@@ -586,10 +690,11 @@ export function HomeScreen() {
     setVoiceListId(null);
     setOcrListId(null);
     setListOpen(true);
-    setPanel(null); setInvitationCode(undefined); setInputValue(''); setQuantity('1'); setAddedMessage(null); setCheckedExpanded(false);
+    setPanel(null); setInvitationCode(undefined); setInputValue(''); setQuantity('1'); setAddedMessage(null);
     ShoppingListStorage.setActiveList(listId);
     activeListIdRef.current = listId;
     setActiveListId(listId);
+    setListAppearance(ShoppingListStorage.getListAppearance(listId)); setAppearanceError(null);
     setCategoryOrder(ShoppingListStorage.getCategoryOrder(listId));
     setOrderingListId(null);
     showItems(ShoppingListStorage.getCurrentList(listId));
@@ -635,23 +740,23 @@ export function HomeScreen() {
   }
 
   async function prepareSharing(listId: string) {
+    if (!isPremium) return false;
     if (serverMissing || ShoppingListStorage.isSyncDisabled(listId)) return false;
     // Opening the panel alone must not publish a personal list. This callback
     // runs only after the user explicitly requests an invitation code.
+    sharingGeneration.current.set(listId, (sharingGeneration.current.get(listId) ?? 0) + 1);
     ShoppingListStorage.enableSyncForSharing(listId);
     setLists(ShoppingListStorage.getLists());
-    return syncCurrentList('manual', listId);
+    return syncCurrentList('sharing', listId);
   }
 
   const activeName = lists.find((list) => list.id === activeListId)?.name ?? 'Ma liste';
   const inferredInputCategory = getRememberedCategory(inputValue) ?? classifyProductLocally(inputValue).categoryName;
   const needsInputCategory = !!inputValue.trim() && inferredInputCategory === 'À classer';
-  const checkedItems = sortItemsForDisplay(visibleItems.filter((item) => item.checked));
   const offline = networkState.isConnected === false || networkState.isInternetReachable === false;
   const syncDisabled = ShoppingListStorage.isSyncDisabled(activeListId);
   const syncEnabled = ShoppingListStorage.isSyncEnabled(activeListId);
-  // A revoked share still needs an explanation; a purely local list does not.
-  const showSync = !serverMissing && (syncEnabled || syncDisabled);
+  const showSync = !serverMissing && syncEnabled;
   const statusLabel = serverMissing ? 'Mode local · Serveur à configurer' : syncDisabled ? 'Synchronisation coupée' : syncPhase === 'syncing' ? 'Envoi en cours…'
     : offline || syncPhase === 'offline' ? `Hors ligne${pendingChangesCount ? ` · ${pendingChangesCount} en attente` : ''}`
     : syncPhase === 'error' ? 'Envoi interrompu · Réessayer'
@@ -662,10 +767,12 @@ export function HomeScreen() {
       .map((item) => item.barcode).filter((barcode): barcode is string => !!barcode && /^[0-9]{8,14}$/.test(barcode)))],
     onRenameItem: renameItem, onRemoveItem: removeItem, onToggleItem: toggleItem };
   const closePanel = () => {
+    setCameraExpanded(false);
     Keyboard.dismiss(); setChoosingInputCategory(false); setPanel(null);
     setAddMode('product'); setVoiceListId(null); setOcrListId(null);
   };
   const chooseAddMode = (mode: typeof addMode) => {
+    setCameraExpanded(false);
     Keyboard.dismiss(); setChoosingInputCategory(false); setAddMode(mode);
     if (mode === 'barcode' || mode === 'text') setScanMode(mode);
     if (mode === 'text') setOcrListId(activeListIdRef.current);
@@ -674,6 +781,15 @@ export function HomeScreen() {
   const returnToProduct = () => chooseAddMode('product');
   const openAdd = () => { setAddedMessage(null); setInputError(null); setAddMode('product'); setPanel('add'); };
   const surface = { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: theme.stroke, borderRadius: theme.radius, padding: 16, gap: 12 };
+  const pageHelp = (topic: HelpTopic) => helpIcons ? <PageHelp topic={topic} open={helpTopic === topic}
+    onOpen={() => { Keyboard.dismiss(); setHelpTopic(topic); }} onClose={() => setHelpTopic(null)} /> : null;
+  function changeListAppearance(change: Partial<ListAppearance>) {
+    try {
+      const next = { ...listAppearance, ...change };
+      ShoppingListStorage.saveListAppearance(activeListId, next);
+      setListAppearance(next); setAppearanceError(null);
+    } catch { setAppearanceError('Impossible d’enregistrer la présentation. Réessaie.'); }
+  }
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <MotionView replayKey={`${listOpen}:${activeListId}`} style={{ flex: 1 }}>
@@ -685,13 +801,15 @@ export function HomeScreen() {
               <PodunaMark size={40} />
               <Text style={{ color: theme.primary, fontSize: 23, fontWeight: '700' }}>Poduna</Text>
             </View>
-            <Heading accessibilityRole="header">Mes listes</Heading>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Heading accessibilityRole="header" style={{ flexShrink: 1 }}>Mes listes</Heading>{pageHelp('lists')}
+            </View>
           </View>
           <Pressable accessibilityLabel="Réglages" onPress={() => setPanel('settings')} style={{ alignItems: 'center' }}>
             <Text style={{ fontSize: 26 }}>⚙</Text>
           </Pressable>
         </View>
-        {serverMissing ? <View style={surface}><Text>Tes listes fonctionnent sur cet appareil. Configure le serveur de test dans Réglages pour les partager et les synchroniser.</Text><Button variant="secondary" label="Configurer le serveur" onPress={() => setPanel('settings')} /></View> : null}
+        {serverMissing ? <Button variant="secondary" label="Configurer le serveur" onPress={() => setPanel('settings')} /> : null}
         <ListManager activeListId={activeListId} lists={lists} onArchive={archiveList} onCreate={createList} onRename={renameList} onSelect={selectList} onShare={openShare} />
         <Button variant="secondary" label="Rejoindre une liste" onPress={() => { setInvitationCode(undefined); setPanel('join'); }} />
         <View style={{ flex: 1, minHeight: 24 }} />
@@ -705,7 +823,9 @@ export function HomeScreen() {
               <Text style={{ fontSize: 26 }}>⚙</Text>
             </Pressable>
           </View>
-          <Heading accessibilityRole="header">{activeName}</Heading>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Heading accessibilityRole="header" style={{ flexShrink: 1 }}>{activeName}</Heading>{pageHelp('list')}
+          </View>
           {showSync ? <Pressable accessibilityLabel="État de synchronisation" onPress={() => setPanel('sync')}>
             <Text accessibilityLiveRegion="polite" style={{ color: !syncDisabled && syncPhase === 'error' ? theme.danger : theme.muted, fontSize: 14 }}>
               {syncDisabled ? '' : syncPhase === 'synced' && !pendingChangesCount && !offline ? '✓ ' : '↻ '}{statusLabel}
@@ -721,18 +841,18 @@ export function HomeScreen() {
           <Text accessibilityLiveRegion="polite">{scanStatus}</Text><Text style={{ color: theme.muted, fontSize: 13 }}>Toucher pour masquer</Text>
         </Pressable> : null}
         <Text style={{ color: theme.muted, fontWeight: '600' }}>{remainingCount} article{remainingCount > 1 ? 's' : ''} restant{remainingCount > 1 ? 's' : ''}</Text>
-        {remainingCount === 0 ? <View style={{ alignItems: 'center', paddingVertical: 36, gap: 12 }}>
-          <BasketIllustration complete={checkedItems.length > 0} />
-          <Heading style={{ fontSize: 24, textAlign: 'center' }}>{checkedItems.length ? 'Tout est dans le panier' : 'Ta liste est vide'}</Heading>
-          <Text style={{ color: theme.muted, textAlign: 'center', maxWidth: 280 }}>{checkedItems.length ? 'Tes articles restent ici pour les prochaines courses.' : 'Un mot, un code-barres ou une photo : à toi de choisir.'}</Text>
+        {sharingNotice ? <Text accessibilityLiveRegion="polite">{sharingNotice}</Text> : null}
+        {visibleItems.length === 0 ? <View style={{ alignItems: 'center', paddingVertical: 36, gap: 12 }}>
+          <BasketIllustration complete={false} />
+          <Heading style={{ fontSize: 24, textAlign: 'center' }}>Ta liste est vide</Heading>
+          <Text style={{ color: theme.muted, textAlign: 'center', maxWidth: 280 }}>Un mot, un code-barres ou une photo : à toi de choisir.</Text>
         </View> : null}
-        {sections.map((section) => <CategorySection key={section.categoryName} {...rowCallbacks} section={section} />)}
-        {checkedItems.length ? <View style={{ gap: 12 }}>
-          <Pressable accessibilityRole="button" accessibilityState={{ expanded: checkedExpanded }} onPress={() => setCheckedExpanded((value) => !value)}>
-            <Text style={{ fontWeight: '700', color: theme.muted }}>{checkedExpanded ? '⌃' : '⌄'} Déjà pris · {checkedItems.length}</Text>
-          </Pressable>
-          {checkedExpanded ? <CategorySection {...rowCallbacks} section={{ categoryName: 'Dans le panier', orderIndex: 0, items: checkedItems }} /> : null}
-        </View> : null}
+        <View testID="list-articles" style={listAppearance.notebook ? {
+          backgroundColor: theme.surface, borderColor: theme.border, borderWidth: theme.stroke,
+          borderRadius: theme.radius, paddingHorizontal: 8, paddingVertical: 4, gap: 0,
+        } : { gap: listAppearance.showCategories ? 16 : 8 }}>
+          {sections.map((section) => <CategorySection key={section.categoryName} {...rowCallbacks} {...listAppearance} section={section} />)}
+        </View>
       </ScrollView>
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, backgroundColor: theme.bg, borderTopWidth: 1, borderColor: theme.border }}>
         <Button label="＋ Ajouter" accessibilityLabel="Ajouter un article" onPress={openAdd} />
@@ -740,14 +860,16 @@ export function HomeScreen() {
 
       </>}
       </MotionView>
-      {panel === 'add' ? <PageModal title="Ajouter un article" testID="add-modal" transitionKey={addMode} scrollable={false} onClose={addMode === 'product' ? closePanel : returnToProduct}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 12 }}>
+      {panel === 'add' ? <PageModal title="Ajouter un article" testID="add-modal" transitionKey={addMode} scrollable={false} hideHeader={cameraExpanded}
+        titleAccessory={pageHelp(addMode)}
+        onClose={cameraExpanded ? () => setCameraExpanded(false) : addMode === 'product' ? closePanel : returnToProduct}>
+        <View style={{ display: cameraExpanded ? 'none' : 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 12 }}>
           <Button variant={addMode === 'product' ? 'secondary' : 'ghost'} label="Produit" accessibilityState={{ selected: addMode === 'product' }} onPress={() => { returnToProduct(); inputRef.current?.focus(); }} style={{ flexGrow: 1 }} />
           <Button variant={addMode === 'barcode' || addMode === 'text' ? 'secondary' : 'ghost'} label="Scanner" accessibilityLabel="Scanner un produit ou une liste" accessibilityState={{ selected: addMode === 'barcode' || addMode === 'text' }} onPress={() => chooseAddMode(scanMode)} style={{ flexGrow: 1 }} />
           <Button variant={addMode === 'voice' ? 'secondary' : 'ghost'} label="Dicter" accessibilityLabel="Dicter des articles" accessibilityState={{ selected: addMode === 'voice' }} onPress={() => chooseAddMode('voice')} style={{ flexGrow: 1 }} />
         </View>
         {addMode === 'barcode' || addMode === 'text' ? <View accessibilityRole="radiogroup" accessibilityLabel="Mode de scan"
-          style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: 20, marginBottom: 8, padding: 4, gap: 4, backgroundColor: theme.raised, borderRadius: theme.radius }}>
+          style={{ display: cameraExpanded ? 'none' : 'flex', flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: 20, marginBottom: 8, padding: 4, gap: 4, backgroundColor: theme.raised, borderRadius: theme.radius }}>
           <Button label="Code-barres" accessibilityRole="radio" accessibilityLabel="Scanner un code-barres" accessibilityState={{ checked: addMode === 'barcode' }}
             variant={addMode === 'barcode' ? 'primary' : 'ghost'} onPress={() => chooseAddMode('barcode')} style={{ flexGrow: 1 }} />
           <Button label="Liste écrite" accessibilityRole="radio" accessibilityLabel="Scanner une liste écrite" accessibilityState={{ checked: addMode === 'text' }}
@@ -777,7 +899,6 @@ export function HomeScreen() {
         {needsInputCategory ? <View style={{ gap: 8 }}>
           <Button variant="secondary" label={`Rayon : ${inputCategory ?? 'À classer'}`} accessibilityLabel="Choisir le rayon du produit à ajouter"
             onPress={() => { Keyboard.dismiss(); setChoosingInputCategory(true); }} />
-          <Text style={{ color: theme.muted, fontSize: 14 }}>Facultatif : le rayon choisi sera mémorisé sur cet appareil après l’ajout.</Text>
         </View> : null}
         {inputError ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{inputError}</Text> : null}
         {addedMessage ? <MotionView replayKey={addedMessage}><Text accessibilityLiveRegion="polite" style={{ color: theme.success }}>✓ {addedMessage}</Text></MotionView> : null}
@@ -792,25 +913,53 @@ export function HomeScreen() {
           </Pressable>)}
         </PageModal> : null}
         </ScrollView> : null}
-        {scannerVisible ? <View testID="scanner-panel" style={{ flex: 1 }}><BarcodeScannerPanel embedded paused={!!unknownProduct}
+        {scannerVisible ? <View testID="scanner-panel" style={{ flex: 1 }}><BarcodeScannerPanel embedded showInstructions={false} paused={!!unknownProduct || !!catalogueOffer || !!helpTopic}
+          expanded={cameraExpanded} onExpandedChange={setCameraExpanded}
           onCancel={returnToProduct} onScanned={addItemFromBarcode} statusMessage={scanStatus} /></View> : null}
         {ocrListId ? <View testID={addMode === 'text' ? 'ocr-panel' : undefined} style={{ flex: addMode === 'text' ? 1 : 0 }}>
-          <OcrImportPanel embedded active={addMode === 'text'} knownNames={ocrKnownNames} onCancel={returnToProduct} onImport={importRecognizedItems} />
+          <OcrImportPanel embedded showInstructions={false} paused={!!helpTopic} active={addMode === 'text'} expanded={cameraExpanded} onExpandedChange={setCameraExpanded} knownNames={ocrKnownNames} onCancel={returnToProduct} onImport={importRecognizedItems} />
         </View> : null}
-        {voiceListId ? <VoiceImportPanel embedded active={addMode === 'voice'} knownNames={ocrKnownNames} onCancel={returnToProduct} onImport={importVoiceItems} /> : null}
+        {voiceListId ? <VoiceImportPanel embedded showInstructions={false} active={addMode === 'voice' && !helpTopic} knownNames={ocrKnownNames} onCancel={returnToProduct} onImport={importVoiceItems} /> : null}
         {productNamePrompt}
       </PageModal> : null}
-      {panel === 'share' && sharingListId ? <PageModal title="Partager une liste" onClose={closePanel}>
+      {catalogueOffer ? <PageModal title="Nom du catalogue" onClose={() => decideCatalogueName(false)}>
+        <Text>Ton nom : {catalogueOffer.personalName}</Text>
+        <Text>Nom trouvé : {catalogueOffer.name}</Text>
+        <Text>Ce choix reste personnel et ne te sera proposé qu’une fois pour ce code-barres.</Text>
+        {catalogueError ? <Text accessibilityRole="alert">{catalogueError}</Text> : null}
+        <Button label="Utiliser le nom du catalogue" onPress={() => decideCatalogueName(true)} />
+        <Button label="Garder mon nom" variant="secondary" onPress={() => decideCatalogueName(false)} />
+      </PageModal> : null}
+      {panel === 'share' && sharingListId ? <PageModal title="Partager une liste" titleAccessory={pageHelp('share')} onClose={closePanel}>
         <Text style={{ color: theme.muted }}>{lists.find((list) => list.id === sharingListId)?.name}</Text>
-        {ShoppingListStorage.isSyncDisabled(sharingListId) ? <Text style={{ color: theme.muted }}>Synchronisation coupée. Cette copie reste disponible sur cet appareil. Pour rétablir le partage, rejoins cette liste avec une nouvelle invitation.</Text> : <ShareListCard session={invitationSession} onBeforeInvite={() => prepareSharing(sharingListId)}
-          listId={sharingListId} />}
+        {ShoppingListStorage.isSyncDisabled(sharingListId) ? <Text style={{ color: theme.muted }}>Synchronisation coupée. Cette copie reste disponible sur cet appareil. Pour rétablir le partage, rejoins cette liste avec une nouvelle invitation.</Text> : <ShareListCard canCreateInvitation={isPremium} showInstructions={false} session={invitationSession} onBeforeInvite={() => prepareSharing(sharingListId)}
+          onSharingChanged={() => { void syncCurrentList('manual', sharingListId); }}
+          onInvitationCreated={() => {
+            sharingGeneration.current.set(sharingListId, (sharingGeneration.current.get(sharingListId) ?? 0) + 1);
+            ShoppingListStorage.enableSyncForSharing(sharingListId); setLists(ShoppingListStorage.getLists());
+          }} listId={sharingListId} />}
       </PageModal> : null}
       {panel === 'join' ? <PageModal title="Rejoindre une liste" onClose={() => { setInvitationCode(undefined); closePanel(); }}>
         <JoinListCard key={invitationCode ?? 'manual'} initialCode={invitationCode} onJoined={joinSharedList} />
       </PageModal> : null}
       {panel === 'settings' ? <PageModal title="Réglages" onClose={closePanel}>
+        <View style={surface}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Text style={{ flex: 1, fontWeight: '700' }}>Afficher les icônes d’aide</Text>
+            <Switch accessibilityLabel="Afficher les icônes d’aide" value={helpIcons}
+              trackColor={{ true: theme.primary, false: theme.border }} onValueChange={(visible) => {
+                try { saveHelpIcons(visible); setHelpIcons(visible); setHelpTopic(null); setHelpSettingsError(null); }
+                catch { setHelpSettingsError('Impossible d’enregistrer ce réglage. Réessaie.'); }
+              }} />
+          </View>
+          <Text style={{ color: theme.muted, fontSize: 14 }}>Les « i » à côté des titres ouvrent les instructions. Tu peux les réactiver ici à tout moment.</Text>
+          {helpSettingsError ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{helpSettingsError}</Text> : null}
+        </View>
         <TestServerCard />
+        <PremiumPanel />
         <AppearancePicker />
+        <OcrContributionSettings />
+        <Button variant="secondary" label="Contact" onPress={() => setPanel('contact')} />
         <Button variant="secondary" label="Sauvegarde et restauration" onPress={() => setPanel('backup')} />
         {showSync ? <Button variant="secondary" label="Synchronisation" onPress={() => setPanel('sync')} /> : null}
         <DeviceDiagnosticsCard />
@@ -818,18 +967,33 @@ export function HomeScreen() {
           <Text style={{ color: theme.muted, textAlign: 'center', fontSize: 13 }}>Poduna · Tes courses, à ton rythme.</Text>
         </View>
       </PageModal> : null}
-      {panel === 'sync' && showSync ? <PageModal title="Synchronisation" onClose={closePanel}>
+      {panel === 'contact' ? <PageModal title="Contact" onClose={() => setPanel('settings')}><ContactForm /></PageModal> : null}
+      {panel === 'sync' && showSync ? <PageModal title="Synchronisation" titleAccessory={pageHelp('sync')} onClose={closePanel}>
         {serverMissing ? <TestServerCard /> : <SyncStatusCard lastSyncAt={lastSyncAt} message={syncStatus} networkState={networkState}
           onSync={() => void syncCurrentList('manual')} pendingCount={pendingChangesCount} phase={syncDisabled ? 'disconnected' : syncPhase} />}
       </PageModal> : null}
       {panel === 'backup' ? <PageModal title="Sauvegarde et restauration" onClose={() => setPanel('settings')}>
         <BackupPanel onRestored={(ids) => {
+          setHelpIcons(readHelpIcons());
           setLists(ShoppingListStorage.getLists());
           if (ids[0]) selectList(ids[0]);
           for (const id of ids) pendingSync.schedule(id);
         }} />
       </PageModal> : null}
       {panel === 'options' ? <PageModal title="Options de la liste" onClose={closePanel}>
+        <Text style={{ fontWeight: '700' }}>Présentation de cette liste</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ flex: 1 }}>Bloc-notes</Text>
+          <Switch accessibilityLabel="Bloc-notes" value={listAppearance.notebook} trackColor={{ true: theme.primary, false: theme.border }}
+            onValueChange={notebook => changeListAppearance({ notebook })} />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ flex: 1 }}>Afficher les rayons</Text>
+          <Switch accessibilityLabel="Afficher les rayons" value={listAppearance.showCategories} trackColor={{ true: theme.primary, false: theme.border }}
+            onValueChange={showCategories => changeListAppearance({ showCategories })} />
+        </View>
+        <Text style={{ color: theme.muted, fontSize: 14 }}>Ces choix sont propres à cette liste, sur cet appareil. Masquer les titres conserve l’ordre des rayons. Les articles cochés restent à leur place.</Text>
+        {appearanceError ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{appearanceError}</Text> : null}
         <ListActions key={activeListId} list={{ id: activeListId, name: activeName }} canDelete={lists.length > 1}
           shareDisabled={syncDisabled} onShare={openShare} onRename={renameList} onDelete={archiveList} />
         <Button variant="danger" label="Vider la liste" onPress={() => Alert.alert('Vider la liste ?',

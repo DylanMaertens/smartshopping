@@ -2,7 +2,10 @@ import { PersonalSettings as LocalKeyValueStorage } from './personalSettings';
 import { itemNameKey, normalizeItemName, truncateUtf8 } from '../itemValidation';
 import { canonicalCategoryName, STORE_CATEGORIES } from '../categorization/categoryService';
 
-export type ProductPreference = { name: string; category?: string };
+export type ProductPreference = {
+  name: string; category?: string; catalogueName?: string;
+  catalogueReview?: 'pending' | 'shown' | 'accepted' | 'kept';
+};
 const key = (barcode: string) => `product-preference:v1:${barcode}`;
 
 /** Personal choices outlive both a shopping list and the expiring catalogue cache. */
@@ -12,6 +15,9 @@ export function getProductPreference(barcode: string): ProductPreference | null 
     const value = JSON.parse(LocalKeyValueStorage.getString(key(barcode)) ?? 'null');
     if (!value || typeof value.name !== 'string' || !value.name.trim()) return null;
     return { name: normalizeItemName(truncateUtf8(value.name, 200)),
+      ...(typeof value.catalogueName === 'string' && value.catalogueName.trim()
+        ? { catalogueName: normalizeItemName(truncateUtf8(value.catalogueName, 200)) } : {}),
+      ...(['pending', 'shown', 'accepted', 'kept'].includes(value.catalogueReview) ? { catalogueReview: value.catalogueReview } : {}),
       ...(typeof value.category === 'string' ? { category: canonicalCategoryName(value.category) } : {}) };
   } catch { return null; }
 }
@@ -19,7 +25,7 @@ export function getProductPreference(barcode: string): ProductPreference | null 
 export function saveProductPreference(barcode: string, value: ProductPreference): void {
   const name = normalizeItemName(value.name);
   if (!/^\d{8,14}$/.test(barcode) || !name || truncateUtf8(name, 200) !== name) return;
-  LocalKeyValueStorage.setString(key(barcode), JSON.stringify({ ...value, name,
+  LocalKeyValueStorage.setString(key(barcode), JSON.stringify({ ...getProductPreference(barcode), ...value, name,
     ...(value.category ? { category: canonicalCategoryName(value.category) } : {}) }));
 }
 

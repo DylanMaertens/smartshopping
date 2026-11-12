@@ -20,6 +20,18 @@ La sauvegarde contient les listes présentes sur cet appareil, leurs noms, les a
 
 Le format **version 2** ajoute le thème, les noms/rayons personnalisés par code-barres et les rayons mémorisés par nom, même pour un produit absent des listes. Les anciens choix enregistrés avant cette évolution restent lisibles et exportables.
 
+Le réglage d’affichage des aides est également inclus. Les noms privés des membres
+restent sur l’appareil, mais ne sont pas exportés : ils sont liés aux identités du
+partage, que la restauration ne rétablit pas. Le switch de simulation premium et
+les brouillons de contact sont exclus aussi.
+
+Depuis le 12 novembre, chaque liste sauvegardée conserve aussi sa présentation
+Bloc-notes et l’affichage des titres des rayons. Les anciennes sauvegardes sans
+ces options restent lisibles (vue classique, rayons visibles). L’option d’aperçu
+des contributions OCR n’est pas exportée et n’accorde aucun consentement d’envoi.
+Importer ces nouvelles sauvegardes nécessite une version de l’app qui comprend
+le champ de présentation ; garder l’ancienne app à jour sur l’appareil destinataire.
+
 Le fichier n’est pas chiffré. Il ne contient ni identité d’appareil, ni secret de connexion, ni invitation, ni adresse de serveur, ni licence d’achat. Les listes retirées de l’appareil, articles supprimés et caches temporaires de catalogues sont exclus. Garder le fichier dans un emplacement privé.
 
 ## Restaurer
@@ -30,7 +42,7 @@ Le fichier n’est pas chiffré. Il ne contient ni identité d’appareil, ni se
 
 Les listes sont ajoutées comme **copies indépendantes et locales**, avec de nouveaux identifiants. Les listes déjà présentes, leurs modifications en attente et leurs droits de partage restent inchangés. La restauration fonctionne sans réseau ; aucune synchronisation ne démarre tant que la nouvelle liste n’est pas explicitement partagée.
 
-Les préférences absentes sont ajoutées. En cas de conflit, **le choix actuel du téléphone gagne**, y compris un rayon volontairement remis à « À classer ». Sur un nouvel appareil sans thème enregistré, le thème sauvegardé est appliqué immédiatement. Un thème déjà choisi est conservé. Les fichiers version 1 restent importables sans toucher aux préférences.
+Les préférences absentes sont ajoutées. En cas de conflit, **le choix actuel du téléphone gagne**, y compris un rayon volontairement remis à « À classer ». Sur un nouvel appareil sans thème enregistré, le thème sauvegardé est mémorisé ; s’il nécessite un droit premium absent, Origine s’affiche à sa place. La sauvegarde n’accorde aucun droit premium. Un thème déjà choisi est conservé. Les fichiers version 1 restent importables sans toucher aux préférences.
 
 Pour retrouver une liste partagée avec les autres membres, la rejoindre par invitation. Restaurer son contenu ne rétablit pas l’appartenance ni les droits de propriétaire. Une copie restaurée peut ensuite être partagée séparément.
 

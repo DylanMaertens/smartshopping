@@ -1,4 +1,5 @@
 // Isolated UI fixtures. This preview never contacts the backend or reads device data.
+import { normalizeListAppearance, type ListAppearance } from '@/services/listAppearance';
 let active = 'demo';
 let lists = [{ id: 'demo', name: 'Courses de la semaine', createdAt: 1, updatedAt: 1 }, { id: 'weekend', name: 'Pour le week-end', createdAt: 1, updatedAt: 1 }];
 const seed = [['Pommes', 'Fruits & légumes', 4], ['Tomates', 'Fruits & légumes', 1], ['Pain complet', 'Boulangerie', 1], ['Lait', 'Crémerie & produits laitiers', 2], ['Eau pétillante', 'Boissons', 1], ['Café', 'Épicerie sucrée & petit-déjeuner', 1]];
@@ -6,15 +7,17 @@ const items = new Map<string, any[]>([['demo', seed.map(([name, category, quanti
 const orders = new Map();
 const sharedLists = new Set<string>();
 export const ShoppingListStorage = {
+  getListAppearance: (id: string) => normalizeListAppearance(JSON.parse(LocalKeyValueStorage.getString('list-appearance:' + id) ?? 'null')),
+  saveListAppearance: (id: string, value: ListAppearance) => LocalKeyValueStorage.setString('list-appearance:' + id, JSON.stringify(value)),
   isSyncEnabled: (id: string) => sharedLists.has(id), enableSyncForSharing: (id: string) => { sharedLists.add(id); },
   isSyncDisabled: () => false, disableSync: () => {},
   createBackup: () => ({ format: 'smartshopping-lists', version: 1, backupId: crypto.randomUUID(), createdAt: new Date().toISOString(),
-    lists: lists.map((list) => ({ name: list.name, categoryOrder: orders.get(list.id) ?? [], items: (items.get(list.id) ?? []).filter((i) => !i.deletedAt)
+    lists: lists.map((list) => ({ name: list.name, categoryOrder: orders.get(list.id) ?? [], appearance: ShoppingListStorage.getListAppearance(list.id), items: (items.get(list.id) ?? []).filter((i) => !i.deletedAt)
       .map(({ name, quantity, checked, category }) => ({ name, quantity, checked, category })) })) }),
   restoreBackup: (backup: any) => backup.lists.map((source: any) => {
     const id = crypto.randomUUID(); lists = [...lists, { id, name: source.name, createdAt: 1, updatedAt: 1 }];
     items.set(id, source.items.map((entry: any) => ({ ...entry, id: crypto.randomUUID(), listId: id, updatedAt: 1, syncedAt: 1 })));
-    orders.set(id, source.categoryOrder); return id;
+    orders.set(id, source.categoryOrder); ShoppingListStorage.saveListAppearance(id, normalizeListAppearance(source.appearance)); return id;
   }),
   getLists: () => lists, getActiveListId: () => active, setActiveList: (id: string) => { active = id; },
   getCurrentList: (id = active) => items.get(id) ?? [], getPendingChanges: (id: string) => (items.get(id) ?? []).filter((i) => i.updatedAt > (i.syncedAt ?? 0)),
@@ -39,6 +42,13 @@ export class LocalKeyValueStorage {
   static delete(key: string) { localStorage.removeItem('preview.' + key); }
 }
 export const PersonalSettings = LocalKeyValueStorage;
+export const getMemberAliases = (listId: string): Record<string, string> => JSON.parse(LocalKeyValueStorage.getString('member-aliases:' + listId) ?? '{}');
+export const saveMemberAlias = (listId: string, memberId: string, name: string) => {
+  const aliases = getMemberAliases(listId);
+  if (name.trim()) aliases[memberId] = name.trim(); else delete aliases[memberId];
+  LocalKeyValueStorage.setString('member-aliases:' + listId, JSON.stringify(aliases));
+  return aliases;
+};
 export const THEME_STORAGE_KEY = 'appearance.theme.v1';
 export class BackendApiError extends Error {}
 export const getCommunitySuggestions = async (barcode: string) => ({ barcode, suggestions: [], contributions_enabled: false });
@@ -50,7 +60,7 @@ export const getProduct = async () => ({ product_name: 'Chocolat', categories: [
 export const recognizeListPhoto = async () => ({ text: 'Pommes\n2 x lait\nPain complet' });
 export const createListInvitation = async (_deviceId: string, listId: string) => ({ code: 'a'.repeat(32), list_id: listId, expires_at: Date.now() + 86_400_000 });
 export const deleteSharedList = async () => {};
-export const getListMembers = async () => [];
+export const getListMembers = async () => [{ device_id: 'demo-member-1', role: 'editor', joined_at: 1 }];
 export const joinListInvitation = async () => ({ list_id: 'demo' });
 export const removeListMember = async () => {};
 export const revokeListInvitation = async () => {};

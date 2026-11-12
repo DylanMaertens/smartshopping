@@ -5,6 +5,7 @@ import { Button } from 'react-native';
 import { AppearancePicker } from '@/components/AppearancePicker';
 import { PersonalSettings as LocalKeyValueStorage } from '@/services/storage/personalSettings';
 import { themeIds, themes } from './themes';
+jest.mock('@/premium/PremiumProvider', () => ({ usePremium: () => ({ isPremium: true }) }));
 jest.mock('@/services/storage/personalSettings', () => ({ THEME_STORAGE_KEY: 'appearance.theme.v1', PersonalSettings: { getString: jest.fn(), setString: jest.fn() } }));
 beforeEach(() => { jest.mocked(LocalKeyValueStorage.getString).mockReset().mockReturnValue(null); jest.mocked(LocalKeyValueStorage.setString).mockReset(); });
 it('defaults to Origine without writing over storage', () => {

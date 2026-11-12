@@ -14,8 +14,10 @@ const ctx = await context({ entryPoints: ['preview/index.tsx'], bundle: true, ou
   // Browser assets must resolve through the same registry as react-native-web.
   alias: { '@react-native/assets-registry/registry': 'react-native-web/dist/modules/AssetRegistry/index.js', 'react-native': 'react-native-web', 'react-native-qrcode-svg': native, 'expo-camera': native, 'expo': fixtures },
   plugins: [svgWebCompatibility, { name: 'isolated-preview', setup(build) {
+    build.onResolve({ filter: /^expo-constants$/ }, () => ({ path: resolve('preview/constants.ts') }));
+    build.onResolve({ filter: /services\/cropCameraPhoto$/ }, () => ({ path: resolve('preview/cropCameraPhoto.ts') }));
     build.onResolve({ filter: /services\/backup\/backupFiles$/ }, () => ({ path: resolve('preview/backupFiles.ts') }));
-    build.onResolve({ filter: /(shoppingListStorage|useOfflineSync|localKeyValueStorage|personalSettings|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
+    build.onResolve({ filter: /(shoppingListStorage|memberAliases|useOfflineSync|localKeyValueStorage|personalSettings|services\/api\/backend|services\/api\/testServer|deviceIdentity|deviceDiagnostics)$/ }, () => ({ path: fixtures }));
   } }],
 });
 await ctx.watch();

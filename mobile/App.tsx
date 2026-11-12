@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
+import { PremiumProvider } from './src/premium/PremiumProvider';
 function AppContent() {
   const { theme } = useTheme();
   return <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -13,5 +14,5 @@ function AppContent() {
 }
 export default function App() {
   const [loaded] = useFonts({ Silkscreen: require('./assets/fonts/Silkscreen-Regular.ttf') });
-  return <SafeAreaProvider><ThemeProvider pixelFontReady={loaded}><AppContent /></ThemeProvider></SafeAreaProvider>;
+  return <SafeAreaProvider><PremiumProvider><ThemeProvider pixelFontReady={loaded}><AppContent /></ThemeProvider></PremiumProvider></SafeAreaProvider>;
 }

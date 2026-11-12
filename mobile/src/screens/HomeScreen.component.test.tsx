@@ -4,11 +4,14 @@ import { act, fireEvent, render as renderNative } from '@testing-library/react-n
 import { HomeScreen } from './HomeScreen';
 import { BackendApiError, confirmCommunityProposal, getCommunitySuggestions, getProduct, submitCommunityProposal } from '@/services/api/backend';
 import { ShoppingListStorage as Storage } from '@/services/storage/shoppingListStorage';
-import { getProductPreference, getRememberedCategory, rememberProductCategory } from '@/services/storage/productPreferences';
+import { getProductPreference, getRememberedCategory, rememberProductCategory, saveProductPreference } from '@/services/storage/productPreferences';
 import { PersonalSettings as LocalKeyValueStorage } from '@/services/storage/personalSettings';
+import { HELP_STORAGE_KEY } from '@/services/storage/interfaceSettings';
 import type { ShoppingItem } from '@/types';
 
 let mockActiveList = 'home';
+let mockPremium = true;
+jest.mock('@/premium/PremiumProvider', () => ({ usePremium: () => ({ isPremium: mockPremium, canSimulate: false, setSimulation: jest.fn(), error: null }) }));
 let mockTestServerEnabled = false;
 let mockDisabledLists = new Set<string>();
 let mockLocalLists = new Set<string>();
@@ -34,6 +37,7 @@ jest.mock('@/services/storage/shoppingListStorage', () => ({
   ShoppingListStorage: {
     isSyncEnabled: (id: string) => !mockLocalLists.has(id) && !mockDisabledLists.has(id),
     enableSyncForSharing: jest.fn((id: string) => { mockLocalLists.delete(id); }),
+    makeListLocal: jest.fn((id: string) => { mockLocalLists.add(id); }),
     isSyncDisabled: (id: string) => mockDisabledLists.has(id),
     disableSync: (id: string) => { mockDisabledLists.add(id); },
     importSharedList: (id: string) => { mockLocalLists.delete(id); mockDisabledLists.delete(id); if (!mockItems.has(id)) mockItems.set(id, []); },
@@ -50,6 +54,8 @@ jest.mock('@/services/storage/shoppingListStorage', () => ({
     getPendingChangesCount: (id: string) => mockDisabledLists.has(id) ? 0 : (mockItems.get(id)?.filter((item) => item.syncedAt === undefined).length ?? 0) + Number(!!require('@/services/storage/shoppingListStorage').ShoppingListStorage.getPendingListName(id)),
     getLastSyncTimestamp: () => 0,
     getCategoryOrder: (id: string) => mockCategoryOrders.get(id) ?? [],
+    getListAppearance: (id: string) => JSON.parse(mockPreferencesDisk.get('list-appearance:' + id) ?? '{"notebook":false,"showCategories":true}'),
+    saveListAppearance: jest.fn((id: string, value: unknown) => { mockPreferencesDisk.set('list-appearance:' + id, JSON.stringify(value)); }),
     saveCategoryOrder: jest.fn((id: string, order: string[]) => { mockCategoryOrders.set(id, order); }),
     saveCurrentList: jest.fn((id: string, items: ShoppingItem[]) => { mockItems.set(id, items.map((item) => ({ ...item }))); }),
     completeSync: jest.fn((id: string) => mockItems.get(id)?.map((item) => ({ ...item })) ?? null),
@@ -65,8 +71,9 @@ jest.mock('@/services/api/backend', () => ({
 jest.mock('@/components/BarcodeScannerPanel', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
-  return { BarcodeScannerPanel: ({ onScanned }: { onScanned: (barcode: string) => void }) => (
-    <Pressable onPress={() => onScanned('3017620422003')}><Text>Simuler scan</Text></Pressable>
+  return { BarcodeScannerPanel: ({ onScanned, expanded, onExpandedChange }: { onScanned: (barcode: string) => void; expanded?: boolean; onExpandedChange?: (expanded: boolean) => void }) => (
+    <><Pressable onPress={() => onScanned('3017620422003')}><Text>Simuler scan</Text></Pressable>
+    {onExpandedChange ? <Pressable onPress={() => onExpandedChange(!expanded)}><Text>{expanded ? 'Réduire test' : 'Agrandir test'}</Text></Pressable> : null}</>
   ) };
 });
 jest.mock('@/components/OcrImportPanel', () => {
@@ -97,9 +104,10 @@ jest.mock('@/components/JoinListCard', () => {
 jest.mock('@/components/ShareListCard', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
-  return { ShareListCard: ({ listId, onBeforeInvite }: { listId: string; onBeforeInvite: () => Promise<boolean> }) => <>
+  return { ShareListCard: ({ listId, onBeforeInvite, onInvitationCreated }: { listId: string; onBeforeInvite: () => Promise<boolean>; onInvitationCreated?: () => void }) => <>
     <Text>{`Partage cible : ${listId}`}</Text>
     <Pressable onPress={() => void onBeforeInvite()}><Text>Préparer partage test</Text></Pressable>
+    <Pressable onPress={onInvitationCreated}><Text>Invitation créée test</Text></Pressable>
   </> };
 });
 jest.mock('@/components/ListManager', () => {
@@ -116,13 +124,15 @@ jest.mock('@/components/ListManager', () => {
 jest.mock('@/components/CategorySection', () => {
   const React = require('react');
   const { Pressable, Text, View } = require('react-native');
-  return { CategorySection: ({ section, getItemBarcodes, onIncreaseQuantity, onDecreaseQuantity, onToggleItem, onRemoveItem, onRenameItem }: {
+  return { CategorySection: ({ section, notebook, showCategories, getItemBarcodes, onIncreaseQuantity, onDecreaseQuantity, onToggleItem, onRemoveItem, onRenameItem }: {
+    notebook?: boolean; showCategories?: boolean;
     getItemBarcodes?: (id: string) => string[];
     section: { categoryName: string; items: ShoppingItem[] }; onIncreaseQuantity: (id: string) => void;
     onRenameItem: (id: string, name: string, category?: string) => void;
     onDecreaseQuantity: (id: string) => void; onToggleItem: (id: string) => void; onRemoveItem: (id: string) => void;
-  }) => <View testID={`section-${section.categoryName}`}>{section.items.map((item) => <View key={item.id}>
+  }) => <View testID={`section-${section.categoryName}`} accessibilityLabel={`${notebook ? 'notebook' : 'cards'}:${showCategories ? 'titles' : 'hidden'}`}>{section.items.map((item) => <View key={item.id}>
     <Text testID={`barcodes-${item.id}`}>{getItemBarcodes?.(item.id).join(',')}</Text>
+    <Text testID={`name-${item.id}`}>{item.name}</Text>
     <Pressable testID={`decrease-${item.id}`} onPress={() => onDecreaseQuantity(item.id)}><Text>Diminuer</Text></Pressable>
     <Pressable testID={`toggle-${item.id}`} onPress={() => onToggleItem(item.id)}><Text>Cocher</Text></Pressable>
     <Pressable testID={`remove-${item.id}`} onPress={() => onRemoveItem(item.id)}><Text>Supprimer</Text></Pressable>
@@ -154,6 +164,7 @@ function deferred<T>() {
 }
 const success = { synced: true, response: { server_time: 1000, conflicts: [] }, remoteItems: [] };
 beforeEach(() => {
+  mockPremium = true;
   jest.clearAllMocks();
   jest.mocked(getCommunitySuggestions).mockReset().mockResolvedValue({ barcode: '3017620422003', suggestions: [], contributions_enabled: true });
   jest.mocked(submitCommunityProposal).mockReset().mockResolvedValue({ proposal_ids: [], publication_status: 'received' });
@@ -181,6 +192,138 @@ it('shows Poduna on the lists home without renaming existing lists', async () =>
   expect(screen.queryByText('SmartShopping')).toBeNull();
   expect(Storage.renameList).not.toHaveBeenCalled();
   screen.unmount();
+});
+
+describe('contextual page help', () => {
+  it('does not enable or sync a local list when a free user requests a new invitation', async () => {
+    mockPremium = false;
+    mockLocalLists = new Set(['home', 'other']);
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByText('Partager'));
+    expect(screen.UNSAFE_getByType(require('@/components/ShareListCard').ShareListCard).props.canCreateInvitation).toBe(false);
+    await act(async () => fireEvent.press(screen.getByText('Préparer partage test')));
+    expect(Storage.enableSyncForSharing).not.toHaveBeenCalled();
+    expect(mockSync).not.toHaveBeenCalled();
+  });
+
+  it('allows a free user to join a shared list', async () => {
+    mockPremium = false;
+    const screen = renderNative(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByText('Rejoindre une liste'));
+    await act(async () => fireEvent.press(screen.getByText('Rejoindre liste test')));
+    expect(mockActiveList).toBe('other');
+    expect(mockSync).toHaveBeenCalled();
+  });
+
+  it('opens the disconnected contact form from settings', async () => {
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByLabelText('Réglages'));
+    fireEvent.press(screen.getByText('Contact'));
+    screen.getByText('Formulaire non connecté');
+    fireEvent.press(screen.getByLabelText('Fermer Contact'));
+    screen.getByLabelText('Fermer Réglages');
+  });
+  it('opens sharing help without changing the selected list or closing the sharing panel', async () => {
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByText('Partager'));
+    fireEvent.press(screen.getByLabelText('Aide — Partager une liste'));
+    screen.getByText(/Révoquer un code bloque les nouvelles arrivées/);
+    fireEvent(screen.getByTestId('page-help-modal'), 'requestClose');
+    expect(screen.queryByTestId('page-help-modal')).toBeNull();
+    screen.getByText('Partage cible : home');
+    expect(screen.UNSAFE_getByType(require('@/components/ShareListCard').ShareListCard).props.showInstructions).toBe(false);
+  });
+
+  it('also hides sharing help when help icons are disabled', async () => {
+    mockPreferencesDisk.set(HELP_STORAGE_KEY, 'false');
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByText('Partager'));
+    expect(screen.queryByLabelText('Aide — Partager une liste')).toBeNull();
+    screen.getByText('Partage cible : home');
+  });
+
+  it('opens lists help and closes it with Android back without navigating away', async () => {
+    const screen = renderNative(<HomeScreen />);
+    await act(async () => {});
+    expect(screen.queryByTestId('page-help-modal')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Aide — Mes listes'));
+    screen.getByText(/Seules les listes partagées utilisent la synchronisation/);
+    fireEvent(screen.getByTestId('page-help-modal'), 'requestClose');
+    expect(screen.queryByTestId('page-help-modal')).toBeNull();
+    screen.getByTestId('lists-home');
+  });
+
+  it('keeps the product draft and adapts help to each add mode, pausing capture', async () => {
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    fireEvent.changeText(screen.getByTestId('add-item-input'), 'Zorblax');
+    expect(screen.queryByText(/Facultatif : le rayon choisi/)).toBeNull();
+    fireEvent.press(screen.getByLabelText('Aide — Ajouter un article · Produit'));
+    screen.getByText(/Ce choix facultatif est mémorisé/);
+    fireEvent.press(screen.getByText('Fermer l’aide'));
+    expect(screen.getByTestId('add-item-input').props.value).toBe('Zorblax');
+    openScanner(screen, 'barcode');
+    fireEvent.press(screen.getByLabelText('Aide — Ajouter un article · Code-barres'));
+    const scanner = require('@/components/BarcodeScannerPanel').BarcodeScannerPanel;
+    expect(screen.UNSAFE_getByType(scanner).props.paused).toBe(true);
+    fireEvent.press(screen.getByText('Fermer l’aide'));
+    expect(screen.UNSAFE_getByType(scanner).props.paused).toBe(false);
+    openScanner(screen, 'text');
+    fireEvent.press(screen.getByLabelText('Aide — Ajouter un article · Liste écrite'));
+    expect(screen.UNSAFE_getByType(require('@/components/OcrImportPanel').OcrImportPanel).props.paused).toBe(true);
+    screen.getByText(/Les séparateurs reconnus deviennent/);
+    fireEvent.press(screen.getByText('Fermer l’aide'));
+    fireEvent.press(screen.getByLabelText('Dicter des articles'));
+    fireEvent.press(screen.getByLabelText('Aide — Ajouter un article · Dicter'));
+    expect(screen.UNSAFE_getByType(require('@/components/VoiceImportPanel').VoiceImportPanel).props.active).toBe(false);
+    screen.getByText(/Utilise « puis »/);
+    fireEvent.press(screen.getByText('Fermer l’aide'));
+    expect(screen.UNSAFE_getByType(require('@/components/VoiceImportPanel').VoiceImportPanel).props.active).toBe(true);
+  });
+
+  it('persists hiding every help icon after a restart, and can enable them again', async () => {
+    let screen = renderNative(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByLabelText('Réglages'));
+    fireEvent(screen.getByLabelText('Afficher les icônes d’aide'), 'valueChange', false);
+    expect(mockPreferencesDisk.get(HELP_STORAGE_KEY)).toBe('false');
+    screen.unmount();
+    screen = renderNative(<HomeScreen />);
+    await act(async () => {});
+    expect(screen.queryByLabelText(/^Aide —/)).toBeNull();
+    fireEvent.press(screen.getByText('Ouvrir liste active test'));
+    fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    expect(screen.queryByLabelText(/^Aide —/)).toBeNull();
+    openScanner(screen, 'text');
+    expect(screen.queryByLabelText(/^Aide —/)).toBeNull();
+    fireEvent.press(screen.getByLabelText('Dicter des articles'));
+    expect(screen.queryByLabelText(/^Aide —/)).toBeNull();
+    fireEvent.press(screen.getByText('Produit'));
+    fireEvent.press(screen.getByLabelText('Fermer Ajouter un article'));
+    fireEvent.press(screen.getByLabelText('Réglages'));
+    fireEvent(screen.getByLabelText('Afficher les icônes d’aide'), 'valueChange', true);
+    fireEvent.press(screen.getByLabelText('Fermer Réglages'));
+    fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    screen.getByLabelText('Aide — Ajouter un article · Produit');
+  });
+
+  it('reports a settings write failure without pretending the preference was saved', async () => {
+    const screen = renderNative(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByLabelText('Réglages'));
+    const write = jest.spyOn(LocalKeyValueStorage, 'setString').mockImplementationOnce(() => { throw new Error('disk full'); });
+    fireEvent(screen.getByLabelText('Afficher les icônes d’aide'), 'valueChange', false);
+    screen.getByText('Impossible d’enregistrer ce réglage. Réessaie.');
+    expect(screen.getByLabelText('Afficher les icônes d’aide').props.value).toBe(true);
+    expect(mockPreferencesDisk.has(HELP_STORAGE_KEY)).toBe(false);
+    write.mockRestore();
+  });
 });
 
 describe('HomeScreen during synchronization', () => {
@@ -301,8 +444,7 @@ describe('basic shopping journeys', () => {
     const screen = render(<HomeScreen />);
     fireEvent.press(screen.getByTestId('toggle-home'));
     expect(mockItems.get('home')?.[0].checked).toBe(true);
-    expect(screen.queryByTestId('increase-home')).toBeNull();
-    fireEvent.press(screen.getByText(/Déjà pris/));
+    expect(screen.queryByText(/Déjà pris/)).toBeNull();
     fireEvent.press(screen.getByTestId('increase-home'));
     fireEvent.press(screen.getByTestId('decrease-home'));
     fireEvent.press(screen.getByTestId('decrease-home'));
@@ -389,7 +531,8 @@ it('does not overwrite a user rename when product enrichment finishes later', as
   const scanned = mockItems.get('home')!.find((item) => item.barcode)!;
   fireEvent.press(screen.getByTestId(`rename-${scanned.id}`));
   await act(async () => pending.resolve({ barcode: scanned.barcode!, product_name: 'Chocolat', categories: [], cached: false, stale: false, source: 'test', ttl_seconds: 1 }));
-  expect(mockItems.get('home')!.find((item) => item.id === scanned.id)?.name).toBe('Pain');
+  expect(mockItems.get('home')!.find((item) => item.id === scanned.id)?.name).toBe('Chocolat');
+  expect(screen.getByTestId(`name-${scanned.id}`).props.children).toBe('Pain');
 });
 
 it('keeps the same add modal across modes and Android back, preserving the manual draft', () => {
@@ -429,6 +572,25 @@ it('opens the scanner inside the add modal and returns to the form with Android 
   fireEvent(screen.getByTestId('add-modal'), 'requestClose');
   expect(screen.queryByTestId('scanner-panel')).toBeNull();
   expect(screen.queryByText('Simuler scan')).toBeNull();
+});
+it('first reduces an expanded camera on Android back, then restores the manual draft', () => {
+  const screen = render(<HomeScreen />);
+  fireEvent.press(screen.getByLabelText('Ajouter un article'));
+  fireEvent.changeText(screen.getByTestId('add-item-input'), 'Pain');
+  openScanner(screen, 'barcode');
+  const modal = screen.getByTestId('add-modal');
+  fireEvent.press(screen.getByText('Agrandir test'));
+  screen.getByText('Réduire test');
+  expect(screen.queryByText('Ajouter un article')).toBeNull();
+  expect(screen.queryByLabelText('Scanner un code-barres')).toBeNull();
+  fireEvent(modal, 'requestClose');
+  screen.getByText('Agrandir test');
+  screen.getByLabelText('Scanner un code-barres');
+  expect(screen.getByTestId('add-modal')).toBe(modal);
+  fireEvent(modal, 'requestClose');
+  expect(screen.getByTestId('add-item-input').props.value).toBe('Pain');
+  openScanner(screen, 'barcode');
+  screen.getByText('Agrandir test');
 });
 
 describe('automatic synchronization of pending changes', () => {
@@ -897,11 +1059,61 @@ it('rejects invalid quantities and keeps the draft editable', () => {
   }
   expect(screen.getByTestId('add-item-input').props.value).toBe('Pain');
 });
-it('lets a checked item return to its original aisle without deleting it', () => {
+it('stores independent list presentation switches, keeps aisle order and persists on remount', async () => {
+  mockItems.set('home', [{ ...milk(), category: 'Boulangerie' }, { ...milk(), id: 'apple', name: 'Pomme', category: 'Fruits & légumes' }]);
+  let screen = render(<HomeScreen />);
+  await act(async () => {});
+  const before = screen.getAllByTestId(/^quantity-/).map(node => node.props.testID);
+  fireEvent.press(screen.getByLabelText('Options de la liste'));
+  fireEvent(screen.getByLabelText('Bloc-notes'), 'valueChange', true);
+  fireEvent(screen.getByLabelText('Afficher les rayons'), 'valueChange', false);
+  fireEvent.press(screen.getByLabelText('Fermer Options de la liste'));
+  expect(screen.getAllByTestId(/^section-/).every(node => node.props.accessibilityLabel === 'notebook:hidden')).toBe(true);
+  expect(screen.getAllByTestId(/^quantity-/).map(node => node.props.testID)).toEqual(before);
+  expect(Storage.saveCurrentList).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByTestId('toggle-home'));
+  expect(screen.getAllByTestId(/^quantity-/).map(node => node.props.testID)).toEqual(before);
+  fireEvent.press(screen.getByText('← Mes listes'));
+  fireEvent.press(screen.getByText('Choisir autre liste'));
+  fireEvent.press(screen.getByLabelText('Options de la liste'));
+  expect(screen.getByLabelText('Bloc-notes').props.value).toBe(false);
+  expect(screen.getByLabelText('Afficher les rayons').props.value).toBe(true);
+  screen.unmount(); mockActiveList = 'home'; screen = render(<HomeScreen />);
+  expect(screen.getAllByTestId(/^section-/).every(node => node.props.accessibilityLabel === 'notebook:hidden')).toBe(true);
+  screen.unmount();
+});
+
+it('does not apply unsaved presentation after a storage failure', () => {
+  const screen = render(<HomeScreen />);
+  jest.mocked(Storage.saveListAppearance).mockImplementationOnce(() => { throw new Error('disk full'); });
+  fireEvent.press(screen.getByLabelText('Options de la liste'));
+  fireEvent(screen.getByLabelText('Bloc-notes'), 'valueChange', true);
+  expect(screen.getByLabelText('Bloc-notes').props.value).toBe(false);
+  screen.getByText('Impossible d’enregistrer la présentation. Réessaie.');
+});
+
+it('provides list and sync help respecting the global help preference', () => {
+  const screen = render(<HomeScreen />);
+  fireEvent.press(screen.getByLabelText('Aide — Liste de courses'));
+  screen.getByText(/Il reste à sa place, barré/);
+  fireEvent.press(screen.getByText('Fermer l’aide'));
+  fireEvent.press(screen.getByLabelText('État de synchronisation'));
+  fireEvent.press(screen.getByLabelText('Aide — Synchronisation'));
+  screen.getByText(/La synchronisation n’est pas une sauvegarde/);
+  fireEvent.press(screen.getByText('Fermer l’aide'));
+  fireEvent.press(screen.getByLabelText('Fermer Synchronisation'));
+  fireEvent.press(screen.getByLabelText('Réglages'));
+  fireEvent(screen.getByLabelText('Afficher les icônes d’aide'), 'valueChange', false);
+  fireEvent.press(screen.getByLabelText('Fermer Réglages'));
+  expect(screen.queryByLabelText('Aide — Liste de courses')).toBeNull();
+  fireEvent.press(screen.getByLabelText('État de synchronisation'));
+  expect(screen.queryByLabelText('Aide — Synchronisation')).toBeNull();
+});
+
+it('keeps a checked item in its original aisle and lets it be unchecked immediately', () => {
   const screen = render(<HomeScreen />);
   fireEvent.press(screen.getByTestId('toggle-home'));
-  expect(screen.queryByTestId('toggle-home')).toBeNull();
-  fireEvent.press(screen.getByText(/Déjà pris/));
+  screen.getByTestId('toggle-home');
   fireEvent.press(screen.getByTestId('toggle-home'));
   expect(mockItems.get('home')![0]).toMatchObject({ checked: false });
   expect(mockItems.get('home')![0].deletedAt).toBeUndefined();
@@ -1342,9 +1554,9 @@ it('sorts articles within their aisle and checked items without saving display-o
   try {
     await act(async () => {});
     const order = () => screen.getAllByTestId(/^quantity-/).map((node) => node.props.testID);
-    expect(order()).toEqual(['quantity-pain', 'quantity-riz']);
+    expect(order()).toEqual(['quantity-pain', 'quantity-riz', 'quantity-a', 'quantity-z']);
     expect(Storage.saveCurrentList).not.toHaveBeenCalled();
-    fireEvent.press(screen.getByText(/Déjà pris · 2/));
+    fireEvent.press(screen.getByTestId('toggle-pain'));
     expect(order()).toEqual(['quantity-pain', 'quantity-riz', 'quantity-a', 'quantity-z']);
     fireEvent.press(screen.getByTestId('increase-riz'));
     expect(order()).toEqual(['quantity-pain', 'quantity-riz', 'quantity-a', 'quantity-z']);
@@ -1425,7 +1637,6 @@ describe('simultaneous article additions', () => {
     expect(mockItems.get('home')?.every((item) => item.category === 'Épicerie salée')).toBe(true);
     fireEvent.press(screen.getByTestId('toggle-a'));
     expect(mockItems.get('home')?.every((item) => item.checked)).toBe(true);
-    fireEvent.press(screen.getByText('⌄ Déjà pris · 1'));
     fireEvent.press(screen.getByTestId('toggle-a'));
     expect(mockItems.get('home')?.every((item) => !item.checked)).toBe(true);
     fireEvent.press(screen.getByTestId('remove-a'));
@@ -1435,23 +1646,60 @@ describe('simultaneous article additions', () => {
 });
 
 describe('revoked list membership', () => {
+  it('returns an owner-only list to local mode only on explicit server confirmation', async () => {
+    jest.useFakeTimers();
+    try {
+      mockLocalLists.add('other');
+      mockSync.mockResolvedValue({ ...success, response: { ...success.response, sharing_active: false } });
+      const screen = render(<HomeScreen />);
+      await act(async () => {});
+      expect(Storage.makeListLocal).toHaveBeenCalledWith('home');
+      expect(screen.queryByLabelText('État de synchronisation')).toBeNull();
+      fireEvent.press(screen.getByTestId('increase-home'));
+      expect(screen.getByTestId('quantity-home').props.children).toBe('2');
+      await act(async () => jest.advanceTimersByTimeAsync(60_000));
+      expect(mockSync).toHaveBeenCalledTimes(1);
+      fireEvent.press(screen.getByText('Partager'));
+      await act(async () => fireEvent.press(screen.getByText('Préparer partage test')));
+      expect(mockLocalLists.has('home')).toBe(false);
+      expect(mockSync).toHaveBeenCalledTimes(2);
+      screen.unmount();
+    } finally { jest.useRealTimers(); }
+  });
+  it.each([true, undefined])('keeps synchronization for active or legacy sharing (%s)', async sharing_active => {
+    mockSync.mockResolvedValue({ ...success, response: { ...success.response, sharing_active } });
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    expect(Storage.makeListLocal).not.toHaveBeenCalled();
+    screen.getByLabelText('État de synchronisation');
+  });
+  it('does not let an older sync disable a newly requested invitation', async () => {
+    const request = deferred<typeof success & { response: { sharing_active: boolean } }>();
+    mockSync.mockReturnValueOnce(request.promise);
+    const screen = render(<HomeScreen />);
+    fireEvent.press(screen.getByText('Partager'));
+    fireEvent.press(screen.getByText('Préparer partage test'));
+    await act(async () => request.resolve({ ...success, response: { ...success.response, sharing_active: false } }));
+    expect(Storage.makeListLocal).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByText('Invitation créée test'));
+    expect(mockLocalLists.has('home')).toBe(false);
+  });
   it('preserves edits, disables sharing and stops automatic requests after a sync 403', async () => {
     jest.useFakeTimers();
     try {
       mockSync.mockRejectedValue(new BackendApiError('forbidden', 403, 'ref'));
       const screen = render(<HomeScreen />);
       await act(async () => {});
-      screen.getByText('Synchronisation coupée');
+      expect(screen.queryByLabelText('État de synchronisation')).toBeNull();
+      screen.getByText('Le partage est terminé. Ta copie reste disponible en local.');
       expect(mockDisabledLists.has('home')).toBe(true);
       expect(screen.queryByText(/Envoi interrompu/)).toBeNull();
       fireEvent.press(screen.getByText('Partager'));
       expect(screen.queryByText('Partage cible : home')).toBeNull();
       fireEvent.press(screen.getByTestId('increase-home'));
       expect(screen.getByTestId('quantity-home').props.children).toBe('2');
-      fireEvent.press(screen.getByLabelText('État de synchronisation'));
-      screen.getByText('Cette copie reste disponible sur cet appareil.');
       expect(screen.queryByText(/changement.*en attente/)).toBeNull();
-      fireEvent.press(screen.getByText('Synchroniser maintenant'));
+      expect(screen.queryByText('Synchroniser maintenant')).toBeNull();
       await act(async () => { jest.advanceTimersByTime(60_000); });
       expect(mockSync).toHaveBeenCalledTimes(1);
     } finally { jest.useRealTimers(); }
@@ -1461,7 +1709,7 @@ describe('revoked list membership', () => {
     const screen = render(<HomeScreen />);
     await act(async () => {});
     expect(mockSync).not.toHaveBeenCalled();
-    screen.getByText('Synchronisation coupée');
+    expect(screen.queryByLabelText('État de synchronisation')).toBeNull();
     fireEvent.press(screen.getByText('← Mes listes'));
     fireEvent.press(screen.getByText('Rejoindre une liste'));
     await act(async () => fireEvent.press(screen.getByText('Rejoindre liste test')));
@@ -1605,7 +1853,133 @@ it('reuses a renamed barcode after removal and in another list, even offline', a
   openScanner(restarted, 'barcode');
   await act(async () => fireEvent.press(restarted.getByText('Simuler scan')));
   expect(getProduct).not.toHaveBeenCalled();
-  expect(mockItems.get('other')!.find((item) => item.barcode)).toMatchObject({ name: 'Pain', barcode: scanned.barcode });
+  const reused = mockItems.get('other')!.find((item) => item.barcode)!;
+  expect(reused).toMatchObject({ name: 'Nom commercial', barcode: scanned.barcode });
+  expect(restarted.getByTestId(`name-${reused.id}`).props.children).toBe('Pain');
+});
+
+describe('one-time catalogue proposal and private barcode names', () => {
+  const barcode = '3017620422003';
+  const product = { barcode, product_name: 'Nom catalogue', categories: [], source: 'test', cached: false, stale: false, ttl_seconds: 60 };
+  beforeEach(() => {
+    mockNetwork.isConnected = true; mockNetwork.isInternetReachable = true;
+    mockLocalLists = new Set(['home', 'other']);
+    saveProductPreference(barcode, { name: 'Mon nom', catalogueReview: 'pending' });
+    jest.mocked(getProduct).mockReset().mockResolvedValue(product);
+  });
+  afterEach(() => { mockNetwork.isConnected = true; mockNetwork.isInternetReachable = true; });
+  function start() {
+    const screen = render(<HomeScreen />);
+    fireEvent.press(screen.getByLabelText('Ajouter un article'));
+    openScanner(screen, 'barcode');
+    return screen;
+  }
+  it.each([true, false])('remembers acceptance/refusal (%s) across scans, restarts and lists', async accept => {
+    const screen = start();
+    await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+    screen.getByText('Nom trouvé : Nom catalogue');
+    expect(getProductPreference(barcode)?.catalogueReview).toBe('shown');
+    fireEvent.press(screen.getByText(accept ? 'Utiliser le nom du catalogue' : 'Garder mon nom'));
+    const chosen = accept ? 'Nom catalogue' : 'Mon nom';
+    expect(getProductPreference(barcode)).toMatchObject({ name: chosen, catalogueName: product.product_name, catalogueReview: accept ? 'accepted' : 'kept' });
+    const raw = mockItems.get('home')!.find(item => item.barcode)!;
+    expect(raw.name).toBe(`Produit ${barcode}`);
+    expect(screen.getByTestId(`name-${raw.id}`).props.children).toBe(chosen);
+    await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+    expect(getProduct).toHaveBeenCalledTimes(1);
+    screen.unmount(); mockActiveList = 'other';
+    const restarted = start();
+    await act(async () => fireEvent.press(restarted.getByText('Simuler scan')));
+    expect(getProduct).toHaveBeenCalledTimes(1);
+    expect(restarted.queryByText('Nom trouvé : Nom catalogue')).toBeNull();
+    const reused = mockItems.get('other')!.find(item => item.barcode)!;
+    expect(reused.name).toBe('Nom catalogue');
+    expect(restarted.getByTestId(`name-${reused.id}`).props.children).toBe(chosen);
+  });
+  it('does not consume the offer offline or after a failed lookup', async () => {
+    mockNetwork.isConnected = false;
+    const screen = start();
+    await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+    expect(getProduct).not.toHaveBeenCalled();
+    expect(getProductPreference(barcode)?.catalogueReview).toBe('pending');
+    mockNetwork.isConnected = true;
+    screen.rerender(<HomeScreen />);
+    jest.mocked(getProduct).mockRejectedValueOnce(new Error('network'));
+    await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+    expect(getProductPreference(barcode)?.catalogueReview).toBe('pending');
+    await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+    screen.getByText('Nom trouvé : Nom catalogue');
+  });
+  it('does not ask again after the app was closed while showing the offer', async () => {
+    const screen = start();
+    await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+    screen.unmount();
+    const restarted = start();
+    await act(async () => fireEvent.press(restarted.getByText('Simuler scan')));
+    expect(getProduct).toHaveBeenCalledTimes(1);
+    expect(getProductPreference(barcode)?.name).toBe('Mon nom');
+    expect(restarted.queryByText('Nom trouvé : Nom catalogue')).toBeNull();
+  });
+  it('ignores late answers after leaving the scanner and allows a future retry', async () => {
+    const request = deferred<Awaited<ReturnType<typeof getProduct>>>();
+    jest.mocked(getProduct).mockReturnValueOnce(request.promise);
+    const screen = start();
+    fireEvent.press(screen.getByText('Simuler scan'));
+    fireEvent(screen.getByTestId('add-modal'), 'requestClose');
+    await act(async () => request.resolve(product));
+    expect(getProductPreference(barcode)?.catalogueReview).toBe('pending');
+    expect(screen.queryByText('Nom trouvé : Nom catalogue')).toBeNull();
+  });
+  it('does not show a redundant proposal when normalized names match', async () => {
+    jest.mocked(getProduct).mockResolvedValue({ ...product, product_name: 'MON NOM' });
+    const screen = start();
+    await act(async () => fireEvent.press(screen.getByText('Simuler scan')));
+    expect(getProductPreference(barcode)?.catalogueReview).toBe('accepted');
+    expect(screen.queryByText('Garder mon nom')).toBeNull();
+  });
+  it('keeps a personal rename out of shared rows and subsequent sync requests', async () => {
+    mockLocalLists.delete('home');
+    mockPreferencesDisk.clear();
+    mockItems.set('home', [{ ...milk(), barcode, name: product.product_name }]);
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByTestId('rename-home'));
+    expect(mockItems.get('home')![0].name).toBe(product.product_name);
+    expect(screen.getByTestId('name-home').props.children).toBe('Pain');
+    expect(getProductPreference(barcode)).toMatchObject({ name: 'Pain', catalogueName: product.product_name, catalogueReview: 'kept' });
+    fireEvent.press(screen.getByLabelText('État de synchronisation'));
+    await act(async () => fireEvent.press(screen.getByText('Synchroniser maintenant')));
+    expect(mockSync.mock.calls.every(call => call[1].every((item: ShoppingItem) => item.name === product.product_name))).toBe(true);
+  });
+  it('separates identical catalogue names with different personal names for quantity actions', async () => {
+    mockItems.set('home', [
+      { ...milk(), barcode, name: 'Nom catalogue' },
+      { ...milk(), id: 'second', barcode: '12345678', name: 'Nom catalogue' },
+    ]);
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    expect(screen.getByTestId('name-home').props.children).toBe('Mon nom');
+    expect(screen.getByTestId('name-second').props.children).toBe('Nom catalogue');
+    fireEvent.press(screen.getByTestId('increase-home'));
+    expect(mockItems.get('home')!.map(item => item.quantity)).toEqual([2, 1]);
+    expect(mockItems.get('home')!.every(item => item.name === 'Nom catalogue')).toBe(true);
+  });
+  it('does not leak a barcode alias through a grouped manual row', async () => {
+    mockPreferencesDisk.clear();
+    mockItems.set('home', [
+      { ...milk(), id: 'a', name: 'Nom catalogue' },
+      { ...milk(), id: 'b', barcode, name: 'Nom catalogue' },
+    ]);
+    const screen = render(<HomeScreen />);
+    await act(async () => {});
+    expect(screen.getByTestId('quantity-a').props.children).toBe('2');
+    fireEvent.press(screen.getByTestId('rename-a'));
+    expect(mockItems.get('home')!.every(item => item.name === 'Nom catalogue')).toBe(true);
+    expect(screen.getByTestId('name-a').props.children).toBe('Nom catalogue');
+    expect(screen.getByTestId('name-b').props.children).toBe('Pain');
+    expect(screen.getByTestId('quantity-a').props.children).toBe('1');
+    expect(screen.getByTestId('quantity-b').props.children).toBe('1');
+  });
 });
 
 it('offers naming after a catalogue miss, remembers the choice and keeps the scanner open', async () => {
@@ -1617,8 +1991,8 @@ it('offers naming after a catalogue miss, remembers the choice and keeps the sca
   screen.getByText('Nommer le produit');
   fireEvent.changeText(screen.getByLabelText('Nom du produit scanné'), '  VIN ROUGE ');
   fireEvent.press(screen.getByText('Enregistrer le nom'));
-  expect(mockItems.get('home')!.find((item) => item.barcode)).toMatchObject({ name: 'Vin rouge', category: 'Alcools', quantity: 1 });
-  expect(getProductPreference('3017620422003')).toEqual({ name: 'Vin rouge', category: 'Alcools' });
+  expect(mockItems.get('home')!.find((item) => item.barcode)).toMatchObject({ name: 'Produit 3017620422003', category: 'Alcools', quantity: 1 });
+  expect(getProductPreference('3017620422003')).toEqual({ name: 'Vin rouge', category: 'Alcools', catalogueReview: 'pending' });
   expect(screen.queryByLabelText('Nom du produit scanné')).toBeNull();
   expect(screen.getByTestId('scanner-panel')).toBeTruthy();
 });
@@ -1643,7 +2017,7 @@ it('keeps a community choice private by default and publishes only after explici
   fireEvent.press(screen.getByText('Enregistrer le nom'));
   expect(confirmCommunityProposal).not.toHaveBeenCalled();
   expect(submitCommunityProposal).not.toHaveBeenCalled();
-  expect(getProductPreference('3017620422003')).toEqual({ name: 'Pâte à tartiner', category: 'Épicerie sucrée' });
+  expect(getProductPreference('3017620422003')).toEqual({ name: 'Pâte à tartiner', category: 'Épicerie sucrée', catalogueReview: 'pending' });
 
   mockPreferencesDisk.clear();
   mockItems.set('home', [milk()]);
@@ -1672,7 +2046,7 @@ it('preserves a private name when its public contribution is rejected', async ()
   fireEvent.press(screen.getByLabelText('Participer au catalogue communautaire'));
   await act(async () => fireEvent.press(screen.getByText('Enregistrer le nom')));
   expect(getProductPreference('3017620422003')?.name).toBe('Mon nom privé');
-  expect(mockItems.get('home')!.find((item) => item.barcode)?.name).toBe('Mon nom privé');
+  expect(mockItems.get('home')!.find((item) => item.barcode)?.name).toBe('Produit 3017620422003');
   screen.getByText(/Nom privé conservé, proposition publique non acceptée/);
 });
 

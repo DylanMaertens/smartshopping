@@ -10,9 +10,9 @@ import { CommunityProductPanel } from './CommunityProductPanel';
 
 const ALPHABETICAL_CATEGORIES = [...STORE_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
-type Props = { item: ShoppingItemType; communityBarcodes?: string[]; onDecreaseQuantity: (id: string) => void; onIncreaseQuantity: (id: string) => void;
+type Props = { item: ShoppingItemType; notebook?: boolean; communityBarcodes?: string[]; onDecreaseQuantity: (id: string) => void; onIncreaseQuantity: (id: string) => void;
   onRename: (id: string, name: string, category?: string) => void; onRemove: (id: string) => void; onToggle: (id: string) => void };
-export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.barcode] : [], onDecreaseQuantity, onIncreaseQuantity, onRemove, onRename, onToggle }: Props) {
+export function ShoppingItem({ item, notebook = false, communityBarcodes = item.barcode ? [item.barcode] : [], onDecreaseQuantity, onIncreaseQuantity, onRemove, onRename, onToggle }: Props) {
   const { theme } = useTheme();
   const currentCategory = STORE_CATEGORIES.find((entry) => entry.name === canonicalCategoryName(item.category ?? ''))?.name ?? 'À classer';
   const displayName = normalizeItemName(item.name);
@@ -28,8 +28,9 @@ export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.ba
     try { onRename(item.id, name, category); setEditing(false); }
     catch { setError('La modification n’a pas pu être enregistrée. Réessaie.'); }
   }
-  return <View style={{ borderColor: theme.border, borderRadius: theme.radius, borderWidth: theme.stroke,
-    backgroundColor: theme.surface, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', padding: 4, gap: 2 }}>
+  return <View testID={`shopping-row-${item.id}`} style={{ borderColor: theme.border, borderRadius: notebook ? 0 : theme.radius,
+    borderWidth: notebook ? 0 : theme.stroke, borderBottomWidth: theme.stroke,
+    backgroundColor: theme.surface, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', padding: notebook ? 0 : 4, gap: 2 }}>
     <Pressable accessibilityRole="checkbox" accessibilityLabel={`Cocher ${displayName}`} accessibilityState={{ checked: item.checked }}
       onPress={() => onToggle(item.id)} style={{ alignItems: 'center' }}>
       <View style={{ width: 24, height: 24, borderRadius: theme.id === 'pixel' ? 0 : 7, borderWidth: 2,
@@ -39,8 +40,8 @@ export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.ba
       </View>
     </Pressable>
     <Pressable accessibilityLabel={`Modifier ${displayName}`} accessibilityHint="Permet de modifier le nom, choisir un rayon ou supprimer cet article"
-      onPress={() => { setDraft(displayName); setCategory(currentCategory); setChoosingCategory(false); setCommunityOpen(false); setError(null); setEditing(true); }} style={{ flex: 1, minWidth: 82, paddingVertical: 8 }}>
-      <Text style={{ fontWeight: '600', textDecorationLine: item.checked ? 'line-through' : 'none', color: item.checked ? theme.muted : theme.text }}>{displayName}</Text>
+      onPress={() => { setDraft(displayName); setCategory(currentCategory); setChoosingCategory(false); setCommunityOpen(false); setError(null); setEditing(true); }} style={{ flex: 1, minWidth: notebook ? 48 : 82, paddingVertical: 8 }}>
+      <Text style={{ fontWeight: '600', textDecorationLine: item.checked ? 'line-through' : 'none', color: theme.text }}>{displayName}</Text>
     </Pressable>
     <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 'auto' }}>
       {item.quantity > 1 ? <>
@@ -53,6 +54,7 @@ export function ShoppingItem({ item, communityBarcodes = item.barcode ? [item.ba
     </View>
     {editing ? <PageModal title="Modifier l’article" onClose={() => setEditing(false)}>
       <TextInput autoFocus accessibilityLabel="Nom de l’article" value={draft} onChangeText={setDraft} onSubmitEditing={saveName} returnKeyType="done" />
+      {item.barcode ? <Text style={{ color: theme.muted }}>Le nom de ce produit scanné reste personnel à cet appareil.</Text> : null}
       <Button variant="secondary" label={`Rayon : ${category}`} accessibilityLabel="Choisir le rayon" onPress={() => { Keyboard.dismiss(); setChoosingCategory(true); }} />
       {error ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{error}</Text> : null}
       <Button label="Enregistrer" onPress={saveName} />
